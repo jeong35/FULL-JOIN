@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+
+# Node
+node_modules/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# 실행 산출물 (evals/results/*.json 은 기록이므로 커밋한다)
+*.log
+.cache/

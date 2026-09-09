@@ -1,0 +1,149 @@
+# FULL JOIN 미니 온톨로지 (강의 2 산출물 2)
+#
+# ┌─ 상태 ────────────────────────────────────────────────────────────────┐
+# │ version: 0 = 인터뷰 전 후보 목록. 제출본이 아니다.                     │
+# │ 아직 로그가 없어 evidence를 달 수 없으므로 모든 항목이 status: candidate │
+# │ 이고 evidence는 비어 있다. 지침상 근거 없는 항목은 확정 온톨로지에 둘 수 │
+# │ 없다 — 로그 10건을 채운 뒤 이 파일을 version: 1로 "다시 쓴다".          │
+# └───────────────────────────────────────────────────────────────────────┘
+#
+# 규칙
+#   1. evidence: 는 docs/research/interviews.md B절의 로그 번호(관찰은 '관찰 N').
+#      근거로 역추적되지 않는 항목은 version: 1에 두지 않는다.
+#   2. relations의 대상은 반드시 이 파일에 정의된 클래스여야 한다(미정의 클래스 참조 금지).
+#   3. 클래스는 로그에서 반복된 명사, 관계는 반복된 동사에서만 온다.
+#   4. 여기서 정의하는 것은 클래스(개념 유형)다. 개별 사례(특정 원피스, 특정 제품)는
+#      인스턴스이자 데이터이므로 정의하지 않는다.
+#   5. examples: 의 값은 인터뷰이가 쓴 말을 그대로 쓴다. 우리 말로 바꾸지 않는다.
+#
+# version: 1로 넘어갈 때 할 일
+#   - 로그에서 반복되지 않은 후보 클래스·속성·관계는 삭제한다.
+#   - 로그에서 반복됐는데 여기 없는 명사는 대표어를 정해 추가한다.
+#   - 동의어를 대표어 하나로 합치고, 무엇을 무엇으로 합쳤는지 주석에 남긴다.
+#   - status: candidate 를 전부 지우고 evidence를 채운다. 못 채우면 항목을 지운다.
+
+version: 0
+status: draft_pre_interview   # ← version: 1에서 이 줄을 지운다
+
+classes:
+
+  AspiredStyle:
+    description: 사용자가 되고 싶어 하는 이미지(추구미). 한 사람이 여러 갈래를 동시에 가질 수 있다.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 6·7에서 확인)
+    attributes:
+      id: {type: string, key: true}
+      label: {type: string}                       # TODO 사람들이 이걸 뭐라고 부르는지 로그에서 확인
+      mood_tags: {type: list, examples: [], evidence: []}   # TODO 인터뷰이가 쓴 형용사 그대로
+      source: {type: string, examples: [], evidence: []}    # TODO 어디에 저장해 두는지
+    relations:
+      - applies_to: Occasion   # 자리에 따라 다른 추구미를 쓰는가 (서브 가설 3)
+        evidence: []
+    note: |
+      AspiredStyle(되고 싶은 이미지)과 PersonalProfile(바꿀 수 없는 조건)은 반드시 갈라 둔다.
+      이 둘의 충돌을 조정하는 것이 제품의 본체다.
+
+  PersonalProfile:
+    description: 사용자의 바꿀 수 없는 조건. 체형·인상·톤·피부 등.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 4·8·9)
+    attributes:
+      user_id: {type: string, key: true}
+      body_type: {type: string, examples: [], evidence: []}
+      impression: {type: string, examples: [], evidence: []}   # '순해 보인다' 류
+      skin_state: {type: string, examples: [], evidence: []}
+      diagnosis_used: {type: bool, evidence: []}               # 진단을 '받았다'가 아니라 '썼다'
+    note: |
+      퍼스널 컬러·골격 진단 결과를 여기 넣을지는 서브 가설 2의 결과에 달렸다.
+      로그에서 "마지막으로 써먹은 때"가 안 나오면 이 속성은 version: 1에서 뺀다.
+
+  Occasion:
+    description: 사용자가 나가는 자리. 기준을 상황별로 가른다.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 1·5)
+    attributes:
+      kind: {type: string, examples: [], evidence: []}   # TODO 로그에 실제로 나온 자리 이름
+      formality: {type: string, evidence: []}
+      companions: {type: string, evidence: []}
+      season: {type: string, evidence: []}
+
+  Constraint:
+    description: 사용자가 절대 피하는 것. 노출·색·성분·핏 등.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 4·8)
+    attributes:
+      kind: {type: string, examples: [], evidence: []}
+      value: {type: string, evidence: []}
+      origin: {type: string, evidence: []}   # 실패 경험에서 왔는지 (서브 가설 4)
+
+  Item:
+    description: 추천의 개별 대상. 옷·화장품·헤어·이너뷰티를 category로 분기한다.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 4·5·10)
+    attributes:
+      id: {type: string, key: true}
+      category: {type: string, examples: [], evidence: []}   # TODO 사람들이 실제로 쓰는 구분 축
+      name: {type: string}
+      fit_tags: {type: list, examples: [], evidence: []}
+      mood_tags: {type: list, examples: [], evidence: []}
+    note: |
+      Item(개별 대상)과 Look(조합)은 이름이 헷갈리기 쉬우니 갈라 둔다.
+      추천의 최종 단위가 Item인지 Look인지는 로그에서 정한다.
+
+  Look:
+    description: 한 자리를 위해 함께 쓰는 Item 조합. 추천의 최종 단위 후보.
+    status: candidate
+    evidence: []              # TODO 로그 __ (서브 가설 5가 참일 때만 살아남는다)
+    relations:
+      - includes: Item
+        evidence: []
+    note: |
+      서브 가설 5(옷·화장·전날 관리를 한 덩어리로 준비한다)가 거짓이면 이 클래스는 삭제한다.
+      카테고리를 통합할 이유 자체가 없어지기 때문이다.
+
+  RequestContext:
+    description: 한 번의 요청에 담기는 조건 묶음. 사용자 발화를 파싱한 결과.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 1~3)
+    relations:
+      - has: Occasion
+        evidence: []
+      - has: AspiredStyle
+        evidence: []
+      - has: PersonalProfile
+        evidence: []
+      - has: Constraint
+        evidence: []
+    note: |
+      강의 3의 출력 스키마 필드가 이 클래스에서 나온다.
+      어휘 없는 사용자(비동아리 대조군)가 실제로 뭐라고 입력하는지가 파싱 설계의 근거다.
+
+  Recommendation:
+    description: 요청에 대한 제안 결과.
+    status: candidate
+    evidence: []              # TODO 로그 __
+    relations:
+      - answers: RequestContext
+        evidence: []
+      - suggests: Look
+        evidence: []
+      - has: Rationale
+        evidence: []
+
+  Rationale:
+    description: 왜 이 제안인지, 그리고 **어디를 타협했는지**. 추천과 항상 함께 나온다.
+    status: candidate
+    evidence: []              # TODO 로그 __ (질문 11 — 사람이 추천할 때 붙이는 근거)
+    attributes:
+      basis: {type: string, evidence: []}          # 무엇을 근거로 골랐나
+      tradeoff: {type: string, evidence: []}       # 추구미와 조건 중 무엇을 얼마나 양보했나
+    note: |
+      Rationale을 클래스로 둔 이유는 근거 없는 추천을 구조적으로 막기 위해서다.
+      추천 결과에 tradeoff가 비어 있으면 우리 제품이 하는 일이 없는 것과 같다.
+
+# 범위 밖(명시): 결제 / 옷장·화장대 전체 등록 / 이미지 생성 / 시술 예약 / 중고 거래 /
+#                성분 안전성 판정(의학적 조언 영역)
+#
+# 핵심 흐름(후보):
+#   RequestContext --(파싱)--> [AspiredStyle × PersonalProfile × Occasion × Constraint]
+#                --(절충)--> Look --(근거와 함께)--> Recommendation + Rationale
