@@ -5,15 +5,16 @@
 
 ## 1. 제품 맥락
 
-한 줄: 원하는 스타일이 있는 20대 여성이, 지금 있는 옷으로 입을 코디와 더 살 옷을 AI에게 추천받는 앱.
+한 줄: 원하는 스타일이 있는 20대 여성이, 그 스타일과 지금 옷장 사이의 거리를 좁히도록 돕는 앱.
+저장한 사진을 AI가 내 옷장과 비교해, 있는 옷으로 입을 코디와 더 살 옷을 알려 준다.
 
 동작: 사용자가 저장한 스타일 사진(추구미)을 앱에 올리면, AI가 사진 속 아이템을 태깅하고 칩으로 등록한 내 옷장과 대조(갭 분석)해 "가진 옷으로 되는 것 / 새로 사야 하는 것"을 나누고, 가진 옷으로 만든 코디 조합과 새로 살 옷의 쇼핑 링크를 보여 준다. 핵심 가치는 "내 옷장 기준으로 판단". 대상은 20대 여성. AI캡스톤디자인 5팀 저장소.
 
 ## 2. 도메인 용어집 (발췌 — 전체 구조는 `docs/ontology.yaml`)
 
 - User: `id`, `shopping_apps`
-- StyleImage: `id`, `categories`(코디/헤어/메이크업/무드 중 복수 — 네일 없음), `source`(인스타_저장/캡처/DM/핀터레스트/틱톡), `saved_at`
-- Item: `slot`(상의/하의/아우터/신발/가방), `kind`, `color`, `fit`, `gap_status`(활용/구매) — 사진 **안의** 옷 아이템(헤어·메이크업은 Item으로 나누지 않고 `StyleImage.categories`로만 태깅). 스키마에서는 enum으로 닫는다
+- StyleImage: `id`, `categories`(코디/무드 중 복수 — 헤어·메이크업·네일 없음), `source`(인스타_저장/캡처/DM/핀터레스트/틱톡), `saved_at`
+- Item: `slot`(상의/하의/아우터/신발/가방), `kind`, `color`, `fit`, `gap_status`(활용/구매) — 사진 **안의** 옷 아이템(헤어·메이크업은 다루지 않는다). 스키마에서는 enum으로 닫는다
 - Product: `platform`, `match_type`(exact/similar), `url` — 쇼핑몰의 상품. **Item과 Product는 다르다**: Item은 사진 속 것, Product는 살 수 있는 것
 - WardrobeItem: `slot`, `kind`, `color`, `fit` — 사용자가 **이미 가진** 옷(칩으로 등록). Item과 **같은 enum**을 쓴다. Item·Product와 섞어 쓰지 않는다
 - Outfit: 함께 입는 옷의 조합(코디). `WardrobeItem`과 `Item`을 부위별로 담는다
