@@ -23,7 +23,8 @@
 # v0 → v1 변경 (v0는 인터뷰 전 후보. git 이력 참조)
 #   삭제: PersonalProfile, Occasion, Constraint, Look, RequestContext, Recommendation, Rationale
 #         — 이번 로그에서 반복되지 않았거나(체형·진단·자리), 인터뷰 대상이 아닌 개념(대화 요청).
-#         RequestContext는 강의 3 파싱 대상이 정해지면(챗봇 질문 로그 확보 후) 다시 검토한다.
+#         강의 3 파싱 대상은 사진(StyleImage → Item)으로 정했다(src/fulljoin/schemas/style_image.schema.json).
+#         RequestContext(챗봇 질문)는 챗봇 범위가 확정되면 다시 검토한다.
 #   이름 변경: AspiredStyle → StyleImage (사람들은 '추구미'를 개념이 아니라 '저장한 사진'으로 말했다)
 #   추가: Product, WardrobeItem, User, Outfit(갭 분석 결과의 코디 조합)
 
@@ -48,16 +49,16 @@ classes:
     evidence: [로그 1, 로그 3, 로그 4, 로그 5, 로그 6, 로그 7, 로그 8]
     attributes:
       id: {type: string, key: true}
-      categories:
+      style:
         type: list
-        values: [코디, 무드]
-        evidence: [로그 1, 로그 5, 로그 6, 로그 7, 로그 8]
-        note: "한 사진에 여러 값이 붙을 수 있다. 헤어·메이크업은 10/12 팀 결정으로 제외(SPEC 4절 '헤어·메이크업을 뺀 이유'), 네일도 제외. 무드는 '무드를 먼저 본다'(로그 5, 로그 7)에서 나온 값"
+        values: [캐주얼, 미니멀, 러블리, 청순, 엘레강스, 시크, 스트릿, 레트로, 프레피, 스포티, 글램]
+        evidence: [로그 5, 로그 7, 로그 10]
+        note: "사진 전체 코디의 분위기, 0~2개. 사용자는 옷 하나하나보다 무드를 먼저 본다 — '무드가 괜찮아야 이제 제품을 본다'(로그 5), '그 옷의 하나하나보다 무드가 굉장히 중요해서'(로그 10), 무드 참고형(로그 7). 인터뷰에 구체적인 스타일 단어가 거의 없어 단어 목록은 지그재그 스타일 필터(10/12 캡처)에서 가져오고 청순은 팀 결정으로 더했다. 예전의 사진 종류 분류(코디/무드·헤어·메이크업)는 피드 전환과 함께 없앴다(10/12) — 피드 사진은 모두 코디 사진이다"
       source:
         type: enum
-        values: [인스타_저장, 캡처, DM, 핀터레스트, 틱톡]
-        evidence: [로그 1, 로그 3, 로그 4, 로그 5, 로그 6, 로그 7, 로그 8]
-        note: "여러 곳에 흩어져 있다는 것 자체가 페인 2(재탐색)의 원인"
+        values: [쇼핑몰, 인플루언서, 연예인, 자체_촬영]
+        evidence: [팀 결정 10/12]
+        note: "앱이 피드로 올리는 사진의 출처. 사용자에게 사진을 받지 않는다. 자체_촬영은 쇼핑몰·인플루언서 허락을 못 받았을 때 팀이 직접 찍은 사진. 인터뷰에서 사진이 인스타·캡처·DM·핀터레스트에 흩어져 있던 것(로그 1, 3~8 — 페인 2 재탐색)은 앱 안 한곳에 모으는 근거"
       saved_at: {type: date, evidence: [로그 1, 로그 7, 로그 8]}
     relations:
       - contains: Item
@@ -67,18 +68,26 @@ classes:
     description: StyleImage 안에 보이는 개별 옷 아이템(상의·하의·아우터·신발·가방). 찾고 맞춰 보는 단위. 헤어·메이크업은 다루지 않는다(SPEC 4절).
     evidence: [로그 1, 로그 2, 로그 4, 로그 5, 로그 8]
     attributes:
-      slot: {type: enum, values: [상의, 하의, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "부위. 매칭은 부위 단위로 한다 — '바지를 중심으로 위를'(로그 2), '하의 위주로'(로그 9)"}
+      slot: {type: enum, values: [상의, 하의, 원피스, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "부위. 매칭은 부위 단위로 한다 — '바지를 중심으로 위를'(로그 2), '하의 위주로'(로그 9). 원피스는 인터뷰 근거가 없다 — 사진에 원피스가 나오면 담을 칸이 없어 '옷을 찾지 못했어요'라는 틀린 답이 나오므로 넣은 팀 결정(10/12). 원피스는 상의·하의 자리를 한 벌로 채운다"}
       kind: {type: string, examples: [트렌치코트, 블라우스 셔츠, 신발, 니트, 레더자켓], evidence: [로그 1, 로그 2, 로그 4, 로그 5, 로그 8]}
       color: {type: string, examples: [소라색], evidence: [로그 2]}
       fit: {type: string, examples: [레귤러핏, 부해 보임, 통이 넓음], evidence: [로그 1, 로그 3, 로그 7, 로그 8, 로그 10], note: "방치 이유의 주요 축(페인 4)"}
       gap_status:
         type: enum
-        values: [활용, 구매]
+        values: [활용, 비슷함, 구매]
         evidence: [로그 3, 로그 6, 로그 7, 로그 9]
-        note: "갭 분석 결과. 옷장에 같은 역할의 옷이 있으면 활용, 없으면 구매 — '제 옷장에 있는 걸 최대한 찾아서 … 입고 싶은 옷이 있으면 그냥 비슷한 옷으로'(로그 9)"
+        note: "갭 분석 결과(SPEC AC9). 같은 부위·종류에 같은 색이면 활용, 같은 계열 색만 있으면 비슷함, 없으면 구매 — '제 옷장에 있는 걸 최대한 찾아서 … 입고 싶은 옷이 있으면 그냥 비슷한 옷으로'(로그 9). 모델이 아니라 갭 분석 코드가 채운다"
+      brand: {type: string, nullable: true, evidence: [로그 3, 로그 6], note: "캡션·이미지 속 글자에 적혀 있을 때만 채운다(SPEC AC2) — '브랜드가 보이면 공홈 구매'(로그 3 대상), '정보가 있으면 캡처를 해놓거나'(로그 6)"}
+      product_name: {type: string, nullable: true, evidence: [로그 3, 로그 4, 로그 6], note: "근거가 없으면 null(SPEC AC2)"}
+      brand_source:
+        type: enum
+        values: [캡션, 이미지_글자, 사용자_입력, 없음]
+        evidence: [로그 4, 로그 6, 로그 10]
+        note: "정보가 있는지가 저장·탐색 행동을 가른다 — '정보가 안 나와 있어도 일단 저장'(로그 4), '작성자가 정보가 없어요 하면 그냥 포기'(로그 6), '어디서 저장했는지 모르겠는 사진이 많아서'(로그 10)"
     note: |
-      kind·color·fit의 examples는 인터뷰이가 쓴 말 그대로다. 출력 스키마(강의 3, src/fulljoin/schemas/)에서는
+      kind·color·fit의 examples는 인터뷰이가 쓴 말 그대로다. 출력 스키마(강의 3, src/fulljoin/schemas/style_image.schema.json)에서는
       이 속성들을 닫힌 목록(enum)으로 정의하고, 인터뷰 표현은 그 목록 값으로 매핑한다(SPEC AC1).
+      목록의 근거와 매핑표는 src/fulljoin/prompts/parse_query.md "보기 목록과 근거"에 있다(무신사·에이블리·지그재그 중 두 곳 이상이 쓰는 이름).
     relations:
       - found_as: Product
         evidence: [로그 2, 로그 3, 로그 4, 로그 5, 로그 7, 로그 8, 로그 9, 로그 10]
@@ -104,7 +113,7 @@ classes:
     description: 사용자가 이미 가지고 있는 옷. 구매 전 '어울릴지'를 판단하는 기준.
     evidence: [로그 1, 로그 2, 로그 3, 로그 5, 로그 6, 로그 7, 로그 8, 로그 9, 로그 10]
     attributes:
-      slot: {type: enum, values: [상의, 하의, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "Item.slot과 같은 목록"}
+      slot: {type: enum, values: [상의, 하의, 원피스, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "Item.slot과 같은 목록"}
       kind: {type: string, examples: [바지, 청바지, 탑, 아우터], evidence: [로그 1, 로그 2, 로그 5, 로그 6, 로그 9, 로그 10]}
       color: {type: string, examples: [검은색, 청], evidence: [로그 6, 로그 10], note: "'검은색 바지를 주로 입으니까 위에는 좀 밝은 색'(로그 6)"}
       fit: {type: string, evidence: [로그 8], note: "'이런 핏이면 내가 가지고 있는 옷이랑 좀 잘 맞겠는데'(로그 8)"}
