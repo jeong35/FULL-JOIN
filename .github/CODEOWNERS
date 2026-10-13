@@ -1,4 +1,6 @@
 # Changes to completion criteria require review by the repository owner.
 /tests/harness/golden_cases.yaml @jeong35
 /tests/test_gap_analysis_golden.ts @jeong35
+/tests/harness/product_golden_cases.yaml @jeong35
+/tests/test_acceptance_contracts_golden.ts @jeong35
 /scripts/check-agent-harness.mjs @jeong35

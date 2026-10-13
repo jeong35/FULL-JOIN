@@ -2,7 +2,7 @@
   "_meta": {
     "scope": "product_acceptance_contracts_and_ac9_decision_semantics",
     "source": "docs/SPEC.md",
-    "status": "review_candidate_2026-10-13",
+    "status": "approved_by_team_2026-10-14",
     "note": "AC9의 승인된 매칭 상세 케이스는 golden_cases.yaml에 유지하고, 비슷함의 사용자 선택 의미만 이 파일에서 보완한다. 각 케이스의 pass_output은 통과 예시, fail_output은 반드시 거부되어야 하는 결함 예시다. 기능 구현 시 동일한 judge를 실제 출력에 연결한다."
   },
   "cases": [

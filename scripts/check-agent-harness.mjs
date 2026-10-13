@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-const approvedCandidateHashes = new Map([
+const approvedHashes = new Map([
   [
     "tests/harness/golden_cases.yaml",
     "0ab6e8c7a1a63c5f50e31bf55f2822f1665bdfad3337a2b9f46c144715f78d2c",
@@ -10,6 +10,14 @@ const approvedCandidateHashes = new Map([
   [
     "tests/test_gap_analysis_golden.ts",
     "c75383df8249574cda624a341cd047c4d715f6fbc08cf00ca06114edbfe31155",
+  ],
+  [
+    "tests/harness/product_golden_cases.yaml",
+    "bd22bae7671e5cc1111474c4362b1fde03cccbb1c455d50e2a6e8247ec1f9a82",
+  ],
+  [
+    "tests/test_acceptance_contracts_golden.ts",
+    "c342311a5c27e436b942f83a79471e91c88809ef9c0fb6fdadf16a5ef5ecb675",
   ],
 ]);
 
@@ -50,7 +58,7 @@ for (const scriptName of [
   );
 }
 
-for (const [path, expectedHash] of approvedCandidateHashes) {
+for (const [path, expectedHash] of approvedHashes) {
   assert.equal(
     await sha256(path),
     expectedHash,
@@ -58,4 +66,4 @@ for (const [path, expectedHash] of approvedCandidateHashes) {
   );
 }
 
-console.log("Agent harness contract and frozen review candidate are valid.");
+console.log("Agent harness contract and approved golden files are valid.");
