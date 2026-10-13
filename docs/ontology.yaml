@@ -36,7 +36,7 @@ classes:
     description: 스타일 사진을 저장하고, 그 스타일을 실제로 사거나 따라 하려는 사람
     evidence: [로그 1, 로그 2, 로그 3, 로그 4, 로그 5, 로그 6, 로그 7, 로그 8]
     attributes:
-      id: {type: string, key: true}
+      id: {type: string, key: true, note: "시스템 식별자 — 인터뷰에서 나온 개념이 아니라 evidence 없음"}
       shopping_apps: {type: list, examples: [무신사, 에이블리, 지그재그, 공홈, 크림, 올리브영], evidence: [로그 2, 로그 3, 로그 4, 로그 5, 로그 6, 로그 7, 로그 9, 로그 10]}
     relations:
       - saves: StyleImage
@@ -48,7 +48,7 @@ classes:
     description: 사용자가 되고 싶은 스타일(추구미)로 저장한 사진 한 장. 사용자에게는 '추구미' = 이 사진들의 모음이다.
     evidence: [로그 1, 로그 3, 로그 4, 로그 5, 로그 6, 로그 7, 로그 8]
     attributes:
-      id: {type: string, key: true}
+      id: {type: string, key: true, note: "시스템 식별자 — 인터뷰에서 나온 개념이 아니라 evidence 없음"}
       style:
         type: list
         values: [캐주얼, 미니멀, 러블리, 청순, 엘레강스, 시크, 스트릿, 레트로, 프레피, 스포티, 글램]
