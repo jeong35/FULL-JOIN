@@ -2,6 +2,8 @@
 
 > 상태: **골든 케이스 팀 승인, 기능 구현·자동 검증 및 최초 push 완료, 테스트 하니스 최종 사람 리뷰 대기**. 2026-10-13에 7개 기대값, `visibility=일부`의 일반 판정 및 실제 일치한 `wardrobe_item_ids`만 반환하는 원칙을 승인받았다. 최초 구현 커밋은 `232cbd2`이다.
 
+> **검증 범위:** 현재 골든 케이스와 테스트 하니스는 AC9의 `classifyGap()` 경계값만 검증한다. FULL JOIN의 모든 수용 기준을 검증하거나 전체 갭 분석 흐름을 구현한 것이 아니다. 이후 AC1·AC2·AC3·AC4·AC5·AC6·AC7·AC10·AC11·AC12·AC13·AC14·AC15에 해당하는 기능을 구현할 때에는 해당 기능의 입력·출력과 판정 방식에 맞는 별도 테스트 하니스 또는 evals를 추가한다.
+
 ## 1. 위임 대상 선정
 
 - 첫 위임 기능: `src/fulljoin/gap_analysis.ts`의 `classifyGap(item, wardrobe)` — 사진 속 Item 하나를 옷장의 WardrobeItem 목록과 대조해 `gap_status`와 근거가 된 `wardrobe_item_ids`를 반환
@@ -62,7 +64,7 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 | 1 | 미구현 상태: 보조 로더 1 passed, 골든 7 skipped | 구현 전이라 `classifyGap`이 없음 | 정상적인 미구현 상태인지 확인. 판정 기준은 변경하지 않음 |
 | 2 | 통과 가능 확인: 8 passed, skipped 0 | — | AC9 규칙을 구현한 임시 코드로 모든 케이스가 실행·통과 가능한지 확인 |
 | 3 | 판정 로직 제거 결함: 5 failed, 3 passed | 모든 입력을 `구매`로 반환 | 기대한 5개 케이스의 `gap_status` 단언문이 실패함을 확인 |
-| 4 | 무관한 옷장 ID 포함 결함: 3 failed, 5 passed | 판정 상태는 유지하되 모든 옷장 ID를 근거로 반환 | 정확한 ID 목록 단언문이 실패하고, `w-loafer-multi` 같은 금지 ID를 검출함을 확인 |
+| 4 | 무관한 옷장 ID 포함 결함: 3 failed, 5 passed | `gap_status` 계산은 그대로 두고, `활용`·`비슷함` 결과의 `wardrobe_item_ids`에 입력으로 받은 옷장 ID를 필터 없이 모두 반환 | 정확한 ID 목록 단언문이 실패하고, `w-loafer-multi` 같은 금지 ID를 검출함을 확인 |
 | 5 | 임시 구현 제거: 보조 로더 1 passed, 골든 7 skipped | 기능 구현 전 상태로 복구 | `src/fulljoin/gap_analysis.ts` 제거, 테스트·골든 케이스 변경 없음 확인 |
 
 실행 명령: `npm run test:golden`
@@ -70,6 +72,13 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 테스트 노드: 골든 케이스 7개 + 로더 보조 검사 1개 = 8개.
 
 결함 주입 중 테스트 파일과 기대값은 수정하지 않았다. 임시 구현은 검출 확인 후 제거했으며 기능 수용으로 보지 않는다.
+
+### ID 결함의 판정 방법
+
+- `gap_status`는 `classifyGap()` 반환값의 `result.gap_status`에서 확인하며, 각 골든 케이스의 `expect_gap_status`와 `assert.equal`로 비교한다.
+- `wardrobe_item_ids`는 해당 상태를 판단할 때 실제로 일치한 옷장 항목의 근거 ID만 담아야 한다. 테스트는 반환 목록과 `expect_wardrobe_item_ids`를 정렬한 뒤 `assert.deepEqual`로 정확히 비교한다.
+- 금지 ID는 해당 판정의 근거로 절대 사용하면 안 되는 ID를 `must_not_use_wardrobe_item_ids`에 명시한 것이다. 현재 `w-loafer-multi`는 사진 속 `스니커즈`와 색은 `멀티`로 같지만 `kind`가 `로퍼`이므로 근거 ID가 될 수 없다.
+- 두 번째 결함 주입은 상태 판정 로직을 일부러 깨뜨린 것이 아니라, 올바른 `gap_status`와 함께 무관한 옷장 ID까지 반환하는 오류를 주입했다. 따라서 상태만 검사하는 테스트로는 놓칠 수 있지만, 정확한 ID 목록과 금지 ID 검사가 이를 잡는지 확인하는 실험이다.
 
 ## 5. 기능 위임 검증 루프
 

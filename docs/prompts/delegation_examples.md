@@ -2,4 +2,4 @@
 
 기능별 실제 프롬프트와 검증 기록은 별도 파일에 보존한다.
 
-- [갭 분석 첫 위임](delegation_gap_analysis.md) — AC9의 `gap_status` 판정
+- [갭 분석 첫 위임](delegation_gap_analysis.md) — AC9의 `gap_status`와 근거 ID 판정만 검증한다. 전체 수용 기준 검증이 아니며, 이후 구현하는 기능마다 관련 AC의 별도 하니스를 추가한다.
