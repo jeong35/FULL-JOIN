@@ -64,6 +64,18 @@
 - `tests/harness/golden_cases.yaml` — AC 번호 기반 골든 케이스(강의 5)
 - `evals/` — 정량 평가(강의 7)
 
+## 8. 에이전트 하니스 실행 계약
+
+새 작업 세션은 아래 순서를 따른다.
+
+1. 저장소 루트의 `AGENTS.md`와 작업에 관련된 `docs/SPEC.md` AC를 읽는다. Claude Code는 `CLAUDE.md`의 `@AGENTS.md` 로드 여부를 `/context`에서 확인한다.
+2. 구현 전 `npm run check:harness`를 실행해 지침 연결과 승인된 테스트 기준의 해시를 확인한다.
+3. 구현 중에는 `tests/test_gap_analysis_golden.ts`와 `tests/harness/golden_cases.yaml`을 수정하지 않는다. 변경이 필요하면 구현을 중단하고 사람의 승인을 요청한다.
+4. 같은 원인으로 검증에 두 번 실패하거나, SPEC에 없는 판정·규칙 충돌·완료 기준 변경이 필요하면 더 수정하지 말고 원인과 선택지를 보고한다.
+5. 완료 전 `npm run check`를 실행한다. 통과 결과는 자동 수용이 아니며 최종 수용은 사람이 한다.
+
+허용된 기본 검증 명령은 `npm run check:harness`, `npm run check:syntax`, `npm run check:types`, `npm run test:golden`, `npm run check`이다. 커밋·push·외부 API 호출과 테스트 기준 변경은 사람의 지시나 승인이 있어야 한다.
+
 진행 상태
 
 - 구현 진행 상태는 이 문서에 적지 않는다 — 테스트 결과와 커밋 이력이 원천이다.

@@ -1,6 +1,6 @@
 # 갭 분석 위임 프롬프트와 검증 루프 기록
 
-> 상태: **골든 케이스 팀 승인 및 기능 구현 검증 완료, 팀 커밋·최종 코드 리뷰 전**. 2026-10-13에 7개 기대값, `visibility=일부`의 일반 판정 및 실제 일치한 `wardrobe_item_ids`만 반환하는 원칙을 승인받았다.
+> 상태: **골든 케이스 팀 승인, 기능 구현·자동 검증 및 최초 push 완료, 테스트 하니스 최종 사람 리뷰 대기**. 2026-10-13에 7개 기대값, `visibility=일부`의 일반 판정 및 실제 일치한 `wardrobe_item_ids`만 반환하는 원칙을 승인받았다. 최초 구현 커밋은 `232cbd2`이다.
 
 ## 1. 위임 대상 선정
 
@@ -79,10 +79,10 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 | 2 | 7/7 passed, skipped 0, xfailed 0 | 로더 1/1 passed, 문법·strict 타입 검사 통과 | 테스트 타입 선언 보완 | 테스트 실행 로직과 단언문은 유지하고 구현 타입을 정적으로 연결 |
 
 - 자동 검증 판단: 승인된 7개 케이스 전수 통과, skip·xfail 0건, Node 문법 검사와 `tsc --noEmit` 통과
-- 사람의 최종 수용 판단: 팀 코드 리뷰 및 커밋 전
+- 사람의 최종 수용 판단: 테스트 하니스 최종 코드 리뷰 대기. 자동 검사 통과만으로 수용 처리하지 않는다.
 - 승인 기준 해시: `golden_cases.yaml` = `0ab6e8c7a1a63c5f50e31bf55f2822f1665bdfad3337a2b9f46c144715f78d2c`
 - 최종 테스트 파일 해시: `test_gap_analysis_golden.ts` = `c75383df8249574cda624a341cd047c4d715f6fbc08cf00ca06114edbfe31155`
-- 기준 커밋 / 구현 커밋: 아직 없음. `AGENTS.md`에 따라 팀원이 자기 계정으로 커밋한다.
+- 최초 구현 커밋: `232cbd2` (`test: add AC9 gap analysis golden cases`)
 - 실행 명령: `npm run check:syntax`, `npm run check:types`, `npm run test:golden`
 - 수용 전 비교: `git diff -- tests/ tests/harness/golden_cases.yaml`
 
@@ -94,6 +94,9 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 - 판정 기준 보호: `AGENTS.md` 4절 1~3항. 수용 전 기준 커밋과 `tests/` 변경을 대조한다.
 - 중단 조건: 2회 실패, 규칙 충돌, 미명세 발견, 판정 기준 변경 필요 시 원인과 선택지를 보고한다.
 - 자동 수용 금지: 테스트 통과는 수용 조건일 뿐이며 최종 수용은 팀이 한다.
+- 자체 검사: `npm run check:harness`가 `CLAUDE.md`의 `@AGENTS.md` 연결, 필수 규칙과 중단 조건, 승인 후보 테스트·골든 케이스 해시를 검사한다.
+- 통합 검사: `npm run check`가 하니스 자체 검사, 문법 검사, strict 타입 검사, 골든 테스트를 순서대로 실행한다.
+- CI 연결: `.github/workflows/verify.yml`이 push와 pull request마다 동일한 `npm run check`를 실행한다.
 
 ## 7. 팀 승인 체크리스트
 
@@ -103,3 +106,5 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 - [x] 테스트 하니스의 검사 방향과 결함 주입 결과를 확인했다.
 - [ ] 승인한 기준 커밋을 기록했다.
 - [x] 위 기능 위임 프롬프트를 실제 사용본으로 확정했다.
+- [ ] `tests/test_gap_analysis_golden.ts`의 로더·단언문·skip 조건을 사람이 직접 리뷰하고 최종 수용했다.
+- [ ] 새 Claude Code 세션의 `/context`에서 `CLAUDE.md`와 `AGENTS.md`가 함께 로드됨을 확인했다.
