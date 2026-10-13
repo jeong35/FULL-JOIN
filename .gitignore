@@ -17,3 +17,6 @@ node_modules/
 # 실행 산출물 (evals/results/*.json 은 기록이므로 커밋한다)
 *.log
 .cache/
+
+# 스파이크 사진 원본 (저작권 — 저장소에 올리지 않음)
+spike_photos/

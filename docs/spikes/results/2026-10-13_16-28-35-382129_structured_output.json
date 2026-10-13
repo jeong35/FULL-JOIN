@@ -1,0 +1,71 @@
+{
+  "summary": {
+    "passed": 1,
+    "total": 1,
+    "verdict": "부분 실행"
+  },
+  "records": [
+    {
+      "photo_id": "influencer.jpeg",
+      "model": "gpt-4.1-mini-2025-04-14",
+      "prompt_version": "6",
+      "latency_sec": 6.56,
+      "input_tokens": 7911,
+      "output_tokens": 181,
+      "raw": "{\"style\":[\"캐주얼\",\"스트릿\"],\"items\":[{\"slot\":\"아우터\",\"kind\":\"점퍼\",\"color\":\"베이지\",\"visual_fit\":\"오버사이즈\",\"visibility\":\"전체\",\"brand\":null,\"product_name\":null,\"brand_source\":\"없음\"},{\"slot\":\"하의\",\"kind\":\"코튼팬츠\",\"color\":\"블랙\",\"visual_fit\":\"와이드\",\"visibility\":\"전체\",\"brand\":null,\"product_name\":null,\"brand_source\":\"없음\"},{\"slot\":\"신발\",\"kind\":\"스니커즈\",\"color\":\"화이트\",\"visual_fit\":null,\"visibility\":\"전체\",\"brand\":null,\"product_name\":null,\"brand_source\":\"없음\"},{\"slot\":\"가방\",\"kind\":\"백팩\",\"color\":\"블랙\",\"visual_fit\":null,\"visibility\":\"전체\",\"brand\":null,\"product_name\":null,\"brand_source\":\"없음\"}]}",
+      "parse_ok": true,
+      "schema_ok": true,
+      "schema_errors": [],
+      "output": {
+        "style": [
+          "캐주얼",
+          "스트릿"
+        ],
+        "items": [
+          {
+            "slot": "아우터",
+            "kind": "점퍼",
+            "color": "베이지",
+            "visual_fit": "오버사이즈",
+            "visibility": "전체",
+            "brand": null,
+            "product_name": null,
+            "brand_source": "없음"
+          },
+          {
+            "slot": "하의",
+            "kind": "코튼팬츠",
+            "color": "블랙",
+            "visual_fit": "와이드",
+            "visibility": "전체",
+            "brand": null,
+            "product_name": null,
+            "brand_source": "없음"
+          },
+          {
+            "slot": "신발",
+            "kind": "스니커즈",
+            "color": "화이트",
+            "visual_fit": null,
+            "visibility": "전체",
+            "brand": null,
+            "product_name": null,
+            "brand_source": "없음"
+          },
+          {
+            "slot": "가방",
+            "kind": "백팩",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "전체",
+            "brand": null,
+            "product_name": null,
+            "brand_source": "없음"
+          }
+        ]
+      },
+      "postcheck_notes": [],
+      "pass_": true
+    }
+  ]
+}
