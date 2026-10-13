@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "check:harness": "node scripts/check-agent-harness.mjs",
-    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check tests/test_gap_analysis_golden.ts",
+    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check tests/test_gap_analysis_golden.ts && node --check tests/test_acceptance_contracts_golden.ts",
     "check:types": "tsc --noEmit",
-    "test:golden": "node --test --test-reporter=spec tests/test_gap_analysis_golden.ts",
+    "test:golden": "node --test --test-reporter=spec tests/test_gap_analysis_golden.ts tests/test_acceptance_contracts_golden.ts",
     "check": "npm run check:harness && npm run check:syntax && npm run check:types && npm run test:golden"
   },
   "engines": {
