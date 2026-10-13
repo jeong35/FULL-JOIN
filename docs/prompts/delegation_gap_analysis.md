@@ -1,6 +1,6 @@
 # 갭 분석 위임 프롬프트와 검증 루프 기록
 
-> 상태: **골든 케이스 팀 승인, 기능 구현·자동 검증 및 최초 push 완료, 테스트 하니스 최종 사람 리뷰 대기**. 2026-10-13에 7개 기대값, `visibility=일부`의 일반 판정 및 실제 일치한 `wardrobe_item_ids`만 반환하는 원칙을 승인받았다. 최초 구현 커밋은 `232cbd2`이다.
+> 상태: **골든 케이스 및 테스트 하니스 사람 리뷰·최종 수용 완료, 기능 구현·자동 검증 및 push 완료**. 2026-10-13에 7개 기대값, `visibility=일부`의 일반 판정, 실제 일치한 `wardrobe_item_ids`만 반환하는 원칙과 테스트 하니스의 검사 항목·결함 주입 결과를 확인하고 최종 수용했다. 최초 구현 커밋은 `232cbd2`이다.
 
 > **검증 범위:** 현재 골든 케이스와 테스트 하니스는 AC9의 `classifyGap()` 경계값만 검증한다. FULL JOIN의 모든 수용 기준을 검증하거나 전체 갭 분석 흐름을 구현한 것이 아니다. 이후 AC1·AC2·AC3·AC4·AC5·AC6·AC7·AC10·AC11·AC12·AC13·AC14·AC15에 해당하는 기능을 구현할 때에는 해당 기능의 입력·출력과 판정 방식에 맞는 별도 테스트 하니스 또는 evals를 추가한다.
 
@@ -88,7 +88,7 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 | 2 | 7/7 passed, skipped 0, xfailed 0 | 로더 1/1 passed, 문법·strict 타입 검사 통과 | 테스트 타입 선언 보완 | 테스트 실행 로직과 단언문은 유지하고 구현 타입을 정적으로 연결 |
 
 - 자동 검증 판단: 승인된 7개 케이스 전수 통과, skip·xfail 0건, Node 문법 검사와 `tsc --noEmit` 통과
-- 사람의 최종 수용 판단: 테스트 하니스 최종 코드 리뷰 대기. 자동 검사 통과만으로 수용 처리하지 않는다.
+- 사람의 최종 수용 판단: 2026-10-13에 골든 케이스, 테스트 러너의 검사 항목, skip 조건과 결함 주입 결과를 확인하고 최종 수용했다.
 - 승인 기준 해시: `golden_cases.yaml` = `0ab6e8c7a1a63c5f50e31bf55f2822f1665bdfad3337a2b9f46c144715f78d2c`
 - 최종 테스트 파일 해시: `test_gap_analysis_golden.ts` = `c75383df8249574cda624a341cd047c4d715f6fbc08cf00ca06114edbfe31155`
 - 최초 구현 커밋: `232cbd2` (`test: add AC9 gap analysis golden cases`)
@@ -113,7 +113,7 @@ src/fulljoin/gap_analysis.ts의 classifyGap(item, wardrobe)를 구현해줘.
 - [x] `visibility=일부`의 현재 처리에 동의한다.
 - [x] `expect_wardrobe_item_ids`는 판정에 실제 사용한 옷만 반환하는 것으로 확정했다.
 - [x] 테스트 하니스의 검사 방향과 결함 주입 결과를 확인했다.
-- [ ] 승인한 기준 커밋을 기록했다.
+- [x] 승인한 기준 커밋을 기록했다.
 - [x] 위 기능 위임 프롬프트를 실제 사용본으로 확정했다.
-- [ ] `tests/test_gap_analysis_golden.ts`의 로더·단언문·skip 조건을 사람이 직접 리뷰하고 최종 수용했다.
+- [x] `tests/test_gap_analysis_golden.ts`의 로더·단언문·skip 조건을 사람이 직접 리뷰하고 최종 수용했다.
 - [ ] 새 Claude Code 세션의 `/context`에서 `CLAUDE.md`와 `AGENTS.md`가 함께 로드됨을 확인했다.

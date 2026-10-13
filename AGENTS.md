@@ -74,7 +74,7 @@
 4. 같은 원인으로 검증에 두 번 실패하거나, SPEC에 없는 판정·규칙 충돌·완료 기준 변경이 필요하면 더 수정하지 말고 원인과 선택지를 보고한다.
 5. 완료 전 `npm run check`를 실행한다. 통과 결과는 자동 수용이 아니며 최종 수용은 사람이 한다.
 
-허용된 기본 검증 명령은 `npm run check:harness`, `npm run check:syntax`, `npm run check:types`, `npm run test:golden`, `npm run check`이다. 커밋·push·외부 API 호출과 테스트 기준 변경은 사람의 지시나 승인이 있어야 한다.
+허용된 기본 검증 명령은 `npm run check:harness`, `npm run check:syntax`, `npm run check:types`, `npm run test:golden`, `npm run check`이다. **에이전트는 사용자가 현재 작업에 대해 명시적으로 커밋 또는 push를 요청하기 전에는 커밋·push하지 않는다.** 외부 API 호출과 테스트 기준 변경도 사람의 지시나 승인이 있어야 한다.
 
 진행 상태
 
