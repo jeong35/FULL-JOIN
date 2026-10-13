@@ -4,4 +4,4 @@
 
 | 파일 | 가정 | 상태 |
 |---|---|---|
-| [structured_output.md](structured_output.md) | Anthropic API가 사진을 보고 스키마 형식(칩 목록 값만)으로 결과를 돌려준다 | 실험 전 |
+| [structured_output.md](structured_output.md) | OpenAI API가 사진을 보고 스키마 형식(칩 목록 값만)으로 결과를 돌려준다 | 실험 전 |

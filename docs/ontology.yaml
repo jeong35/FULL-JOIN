@@ -71,7 +71,8 @@ classes:
       slot: {type: enum, values: [상의, 하의, 원피스, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "부위. 매칭은 부위 단위로 한다 — '바지를 중심으로 위를'(로그 2), '하의 위주로'(로그 9). 원피스는 인터뷰 근거가 없다 — 사진에 원피스가 나오면 담을 칸이 없어 '옷을 찾지 못했어요'라는 틀린 답이 나오므로 넣은 팀 결정(10/12). 원피스는 상의·하의 자리를 한 벌로 채운다"}
       kind: {type: string, examples: [트렌치코트, 블라우스 셔츠, 신발, 니트, 레더자켓], evidence: [로그 1, 로그 2, 로그 4, 로그 5, 로그 8]}
       color: {type: string, examples: [소라색], evidence: [로그 2]}
-      fit: {type: string, examples: [레귤러핏, 부해 보임, 통이 넓음], evidence: [로그 1, 로그 3, 로그 7, 로그 8, 로그 10], note: "방치 이유의 주요 축(페인 4)"}
+      visual_fit: {type: string, examples: [레귤러핏, 부해 보임, 통이 넓음], evidence: [로그 1, 로그 3, 로그 7, 로그 8, 로그 10], note: "방치 이유의 주요 축(페인 4)"}
+      visibility: {type: enum, values: [전체, 일부, 판단불가], evidence: [팀 결정 10/13], note: "사진에 보이는 정도. 보이지 않는 하의를 지어내는 오류(parse_query 실패 모드 2)를 구분하려고 둔다"}
       gap_status:
         type: enum
         values: [활용, 비슷함, 구매]
@@ -81,7 +82,8 @@ classes:
       product_name: {type: string, nullable: true, evidence: [로그 3, 로그 4, 로그 6], note: "근거가 없으면 null(SPEC AC2)"}
       brand_source:
         type: enum
-        values: [캡션, 이미지_글자, 사용자_입력, 없음]
+        values: [캡션, 이미지_글자, 쇼핑몰_상품정보, 사용자_입력, 없음]
+        # 모델 출력 스키마에는 캡션·이미지_글자·없음만 있다. 쇼핑몰_상품정보·사용자_입력은 앱 데이터 계층에서 채운다(10/13)
         evidence: [로그 4, 로그 6, 로그 10]
         note: "정보가 있는지가 저장·탐색 행동을 가른다 — '정보가 안 나와 있어도 일단 저장'(로그 4), '작성자가 정보가 없어요 하면 그냥 포기'(로그 6), '어디서 저장했는지 모르겠는 사진이 많아서'(로그 10)"
     note: |
@@ -116,7 +118,7 @@ classes:
       slot: {type: enum, values: [상의, 하의, 원피스, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "Item.slot과 같은 목록"}
       kind: {type: string, examples: [바지, 청바지, 탑, 아우터], evidence: [로그 1, 로그 2, 로그 5, 로그 6, 로그 9, 로그 10]}
       color: {type: string, examples: [검은색, 청], evidence: [로그 6, 로그 10], note: "'검은색 바지를 주로 입으니까 위에는 좀 밝은 색'(로그 6)"}
-      fit: {type: string, evidence: [로그 8], note: "'이런 핏이면 내가 가지고 있는 옷이랑 좀 잘 맞겠는데'(로그 8)"}
+      visual_fit: {type: string, evidence: [로그 8], note: "'이런 핏이면 내가 가지고 있는 옷이랑 좀 잘 맞겠는데'(로그 8)"}
     relations:
       - owned_by: User
         evidence: [로그 1, 로그 8]

@@ -36,7 +36,7 @@
 
 ## 5. 데이터
 
-- `evalset.jsonl` — 한 줄에 사진 1장: `photo_id`, `target_slot`(볼 옷의 부위), 사람 정답(`slot`·`kind`·`color`·`fit`), `owner`(옷장 주인), 정답 `gap_status`, 정답 `wardrobe_item_id`
+- `evalset.jsonl` — 한 줄에 사진 1장: `photo_id`, `target_slot`(볼 옷의 부위), 사람 정답(`slot`·`kind`·`color`·`visual_fit`·`visibility`), `owner`(옷장 주인), 정답 `gap_status`, 정답 `wardrobe_item_id`
 - 시작 세트: 코디 사진 20장에 두 팀원이 정답(속성, 활용/비슷함/구매)을 단다. 프롬프트를 만들 때 쓴 사진은 넣지 않는다. E6용으로 옷이 없는 사진 5장, E4용으로 캡션에 브랜드명이 있는/없는 사진을 섞는다.
 - 원본 사진은 저장소에 올리지 않는다(저작권). `photo_id`만 기록한다.
 - 결과는 `evals/results/`에 날짜별로 저장한다. 실행 방법은 `run_evals.py`(강의 7).

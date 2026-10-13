@@ -1,7 +1,7 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "StyleImageAnalysis",
-  "description": "추구미 앱: 스타일 피드 사진 한 장을 모델이 분석한 결과 (강의 3 산출물). 속성은 온톨로지 StyleImage.style과 Item을 따른다. Item.gap_status는 모델이 아니라 갭 분석 코드가 채우므로 이 스키마에 없다. slot별 kind·fit 짝은 후처리에서 검사한다. 보기 목록의 근거는 src/fulljoin/prompts/parse_query.md 참조.",
+  "description": "추구미 앱: 스타일 피드 사진 한 장을 모델이 분석한 결과 (강의 3 산출물). 속성은 온톨로지 StyleImage.style과 Item을 따른다. Item.gap_status는 모델이 아니라 갭 분석 코드가 채우므로 이 스키마에 없다. slot별 kind·visual_fit 짝은 후처리에서 검사한다. 보기 목록의 근거는 src/fulljoin/prompts/parse_query.md 참조.",
   "type": "object",
   "properties": {
     "style": {
@@ -22,15 +22,14 @@
           "글램"
         ]
       },
-      "uniqueItems": true,
       "maxItems": 2,
-      "description": "사진 전체 코디의 분위기(스타일 키워드) 0~2개. 옷이 없으면 빈 목록. 피드에 올릴 때 팀이 확정하고 모델은 추천한다"
+      "description": "사진 전체 코디의 분위기(스타일 키워드) 0~2개. 옷이 없으면 빈 목록. 피드에 올릴 때 팀이 확정하고 모델은 추천한다. 중복 값은 후처리에서 제거한다(OpenAI strict 모드는 uniqueItems를 지원하지 않음)"
     },
     "items": {
       "type": "array",
       "maxItems": 6,
       "items": {
-        "$ref": "#/definitions/Item"
+        "$ref": "#/$defs/Item"
       },
       "description": "사진에 실제로 보이는 옷 아이템. 하나도 없으면 빈 목록 — 지어내지 않는다 (AC10)"
     }
@@ -40,7 +39,7 @@
     "items"
   ],
   "additionalProperties": false,
-  "definitions": {
+  "$defs": {
     "Item": {
       "type": "object",
       "properties": {
@@ -146,10 +145,13 @@
             "기타",
             null
           ],
-          "description": "색. 조명이나 필터 때문에 판단할 수 없으면 기타. 연청·중청·진청·흑청은 데님 소재에만. 무늬나 여러 색이면 멀티"
+          "description": "색. 가려짐·조명·필터·해상도 때문에 판단할 수 없으면 null, 색은 보이지만 목록에 없으면 기타, 무늬나 여러 색이면 멀티. 연청·중청·진청·흑청은 데님 소재에만"
         },
-        "fit": {
-          "type": "string",
+        "visual_fit": {
+          "type": [
+            "string",
+            "null"
+          ],
           "enum": [
             "슬림",
             "레귤러",
@@ -157,9 +159,19 @@
             "스키니",
             "일자",
             "와이드",
-            "부츠컷"
+            "부츠컷",
+            null
           ],
-          "description": "핏. 상의·원피스·아우터는 슬림·레귤러·오버사이즈, 긴 바지는 스키니·일자·와이드·부츠컷. 분명히 보일 때만 넣고 아니면 키를 생략한다. 숏팬츠·레깅스·스커트·신발·가방에는 쓰지 않는다"
+          "description": "사진에서 보이는 실루엣(실제 착용 핏이 아님). 상의·원피스·아우터·점프수트는 슬림·레귤러·오버사이즈, 긴 바지는 스키니·일자·와이드·부츠컷. 분명히 보일 때만 넣고 아니면 null. 숏팬츠·레깅스·스커트·신발·가방은 항상 null"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "전체",
+            "일부",
+            "판단불가"
+          ],
+          "description": "그 옷이 사진에 보이는 정도. 형태가 거의 다 보이면 전체, 잘리거나 가려져 일부만 보이면 일부, 옷인 것은 알지만 종류·색을 확신할 수 없으면 판단불가. 보이지 않는 옷은 items에 넣지 않는다"
         },
         "brand": {
           "type": [
@@ -180,16 +192,17 @@
           "enum": [
             "캡션",
             "이미지_글자",
-            "사용자_입력",
             "없음"
           ],
-          "description": "brand·product_name의 근거. 근거가 없으면 없음. 사용자_입력은 사용자가 직접 고친 값을 앱이 저장할 때만 쓰고 모델은 쓰지 않는다"
+          "description": "brand·product_name의 근거(모델 출력용). 근거가 없으면 없음. 쇼핑몰_상품정보·사용자_입력은 모델이 쓰지 않고 앱 데이터 계층에서 합친다(ontology Item.brand_source)"
         }
       },
       "required": [
         "slot",
         "kind",
         "color",
+        "visual_fit",
+        "visibility",
         "brand",
         "product_name",
         "brand_source"
