@@ -1,4 +1,107 @@
-# 골든 케이스 (결정 층) — FULL JOIN
-# 상태: 자리만 잡아 둔 파일 (강의 5에서 채운다).
-# 각 케이스는 docs/SPEC.md의 AC 번호를 참조한다.
-cases: []
+{
+  "_meta": {
+    "feature": "gap_analysis",
+    "status": "approved_by_team_2026-10-13",
+    "source": "docs/SPEC.md AC9",
+    "baseline_commit": "66a48ef688db6a5eef26480710dad73aed7e3c83",
+    "note": "이 파일은 YAML 1.2에서 유효한 JSON 호환 문법을 사용한다. 2026-10-13 팀 승인: visibility=일부는 일반 AC9 판정, wardrobe_item_ids에는 실제 일치한 옷만 포함한다. 기준 커밋은 팀원이 커밋할 때 갱신한다."
+  },
+  "cases": [
+    {
+      "name": "exact_color_match_is_reuse",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "상의", "kind": "니트", "color": "블랙", "visual_fit": "레귤러", "visibility": "전체"},
+        "wardrobe": [
+          {"id": "w-knit-black", "slot": "상의", "kind": "니트", "color": "블랙", "visual_fit": "슬림"},
+          {"id": "w-knit-gray", "slot": "상의", "kind": "니트", "color": "그레이", "visual_fit": "레귤러"}
+        ]
+      },
+      "expect_gap_status": "활용",
+      "expect_wardrobe_item_ids": ["w-knit-black"],
+      "note": "같은 slot·kind·color가 있으므로 활용이다. visual_fit은 현재 AC9의 대조 키가 아니다."
+    },
+    {
+      "name": "same_color_family_is_similar",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "하의", "kind": "슬랙스", "color": "차콜", "visual_fit": "일자", "visibility": "전체"},
+        "wardrobe": [
+          {"id": "w-slacks-gray", "slot": "하의", "kind": "슬랙스", "color": "그레이", "visual_fit": "와이드"},
+          {"id": "w-slacks-navy", "slot": "하의", "kind": "슬랙스", "color": "네이비", "visual_fit": "일자"}
+        ]
+      },
+      "expect_gap_status": "비슷함",
+      "expect_wardrobe_item_ids": ["w-slacks-gray"],
+      "note": "차콜과 그레이는 같은 색 계열이며 정확히 같은 색은 없으므로 비슷함이다."
+    },
+    {
+      "name": "different_kind_is_purchase",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "상의", "kind": "셔츠", "color": "화이트", "visual_fit": "레귤러", "visibility": "전체"},
+        "wardrobe": [
+          {"id": "w-blouse-white", "slot": "상의", "kind": "블라우스", "color": "화이트", "visual_fit": "레귤러"},
+          {"id": "w-shirt-black", "slot": "상의", "kind": "셔츠", "color": "블랙", "visual_fit": "레귤러"}
+        ]
+      },
+      "expect_gap_status": "구매",
+      "expect_wardrobe_item_ids": [],
+      "note": "셔츠와 블라우스는 다른 kind이며, 블랙은 화이트와 같은 색 계열이 아니다. 비슷해 보이는 종류를 임의로 대체하지 않는다."
+    },
+    {
+      "name": "cross_slot_cardigan_matches_by_kind",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "아우터", "kind": "카디건", "color": "아이보리", "visual_fit": "오버사이즈", "visibility": "전체"},
+        "wardrobe": [
+          {"id": "w-cardigan-ivory", "slot": "상의", "kind": "카디건", "color": "아이보리", "visual_fit": "레귤러"}
+        ]
+      },
+      "expect_gap_status": "활용",
+      "expect_wardrobe_item_ids": ["w-cardigan-ivory"],
+      "note": "카디건은 두 부위 중복 kind이므로 slot이 달라도 kind와 color가 같으면 활용이다."
+    },
+    {
+      "name": "ordinary_kind_does_not_cross_slots",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "상의", "kind": "니트", "color": "베이지", "visual_fit": "레귤러", "visibility": "전체"},
+        "wardrobe": [
+          {"id": "w-invalid-slot-knit", "slot": "아우터", "kind": "니트", "color": "베이지", "visual_fit": "레귤러"}
+        ]
+      },
+      "expect_gap_status": "구매",
+      "expect_wardrobe_item_ids": [],
+      "note": "중복 kind 네 종류가 아니면 slot까지 같아야 한다. 데이터 오류가 있는 옷을 활용으로 분류하지 않는다."
+    },
+    {
+      "name": "unknown_item_color_is_similar_when_kind_exists",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "가방", "kind": "토트백", "color": null, "visual_fit": null, "visibility": "일부"},
+        "wardrobe": [
+          {"id": "w-tote-brown", "slot": "가방", "kind": "토트백", "color": "브라운", "visual_fit": null}
+        ]
+      },
+      "expect_gap_status": "비슷함",
+      "expect_wardrobe_item_ids": ["w-tote-brown"],
+      "note": "사진 속 색을 판단할 수 없어도 같은 slot·kind의 옷이 있으면 AC9에 따라 활용이 아니라 비슷함이다."
+    },
+    {
+      "name": "multi_color_is_not_family_matched_without_kind",
+      "ac": ["AC9"],
+      "input": {
+        "item": {"slot": "신발", "kind": "스니커즈", "color": "멀티", "visual_fit": null, "visibility": "전체"},
+        "wardrobe": [
+          {"id": "w-loafer-multi", "slot": "신발", "kind": "로퍼", "color": "멀티", "visual_fit": null},
+          {"id": "w-sneakers-white", "slot": "신발", "kind": "스니커즈", "color": "화이트", "visual_fit": null}
+        ]
+      },
+      "expect_gap_status": "비슷함",
+      "expect_wardrobe_item_ids": ["w-sneakers-white"],
+      "must_not_use_wardrobe_item_ids": ["w-loafer-multi"],
+      "note": "멀티는 색 계열 판정을 하지 않지만 같은 slot·kind가 있으면 비슷함이다. color가 같아도 kind가 다른 로퍼는 사용하지 않는다."
+    }
+  ]
+}

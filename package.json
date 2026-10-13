@@ -1,0 +1,17 @@
+{
+  "name": "full-join",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check tests/test_gap_analysis_golden.ts",
+    "check:types": "tsc --noEmit",
+    "test:golden": "node --test --test-reporter=spec tests/test_gap_analysis_golden.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "typescript": "5.9.3"
+  }
+}
