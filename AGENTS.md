@@ -15,7 +15,7 @@
 - User: `id`, `shopping_apps`
 - StyleImage: `id`, `style`(캐주얼/미니멀/러블리/청순/엘레강스/시크/스트릿/레트로/프레피/스포티/글램 중 0~2개), `source`(쇼핑몰/인플루언서/연예인/자체_촬영), `saved_at`
 - Item: `slot`(상의/하의/원피스/아우터/신발/가방), `kind`, `color`, `visual_fit`, `visibility`(전체/일부/판단불가), `brand`, `product_name`, `brand_source`, `gap_status`(활용/비슷함/구매). `비슷함`은 사용자가 활용/구매를 고르는 정보 상태다
-- WardrobeItem: `slot`, `kind`, `color`, `visual_fit`
+- WardrobeItem: `slot`, `kind`, `color`, `visual_fit` — 핏이 있는 종류는 필수, 숏팬츠·레깅스·신발·가방은 null (종류별 핏 표: `src/fulljoin/prompts/parse_query.md` visual_fit)
 - Product: `platform`, `match_type`(exact/similar), `url`
 - Outfit: 함께 입는 옷의 조합(상세 관계는 `docs/ontology.yaml` 참조)
 - `kind`·`color`·`visual_fit`의 닫힌 값 목록은 `src/fulljoin/schemas/style_image.schema.json`을 따른다. Item과 WardrobeItem의 공통 필드는 같은 enum을 쓴다

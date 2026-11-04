@@ -118,7 +118,7 @@ classes:
       slot: {type: enum, values: [상의, 하의, 원피스, 아우터, 신발, 가방], evidence: [로그 1, 로그 2, 로그 5, 로그 9, 로그 10], note: "Item.slot과 같은 목록"}
       kind: {type: string, examples: [바지, 청바지, 탑, 아우터], evidence: [로그 1, 로그 2, 로그 5, 로그 6, 로그 9, 로그 10]}
       color: {type: string, examples: [검은색, 청], evidence: [로그 6, 로그 10], note: "'검은색 바지를 주로 입으니까 위에는 좀 밝은 색'(로그 6)"}
-      visual_fit: {type: string, evidence: [로그 8], note: "'이런 핏이면 내가 가지고 있는 옷이랑 좀 잘 맞겠는데'(로그 8)"}
+      visual_fit: {type: string, nullable: true, evidence: [로그 8], note: "'이런 핏이면 내가 가지고 있는 옷이랑 좀 잘 맞겠는데'(로그 8). 핏이 있는 종류는 필수, 숏팬츠·레깅스·신발·가방은 null — 종류별 보기는 parse_query.md visual_fit 표. 스커트 보기(A라인·H라인·플레어)는 11/4 팀 결정"}
     relations:
       - owned_by: User
         evidence: [로그 1, 로그 8]
