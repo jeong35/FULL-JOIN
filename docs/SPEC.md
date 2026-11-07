@@ -40,7 +40,7 @@ StyleImage ─♡→ 옷장(WardrobeItem)과 대조
 - **포함**
   - **스타일 피드**: 앱이 쇼핑몰·인플루언서·연예인 사진(허락을 못 받으면 팀이 직접 찍은 사진)을 피드로 올리고, 사용자가 ♡하면 `StyleImage`로 저장된다. 사용자에게 사진을 받지는 않는다(10/12 팀 결정 — 사용자 사진 업로드는 나중 확장 후보). 인터뷰에서 사진이 인스타·캡처·DM·핀터레스트에 흩어져 있던 것(로그 1, 3~10)은 "앱 안 한곳에 모은다"는 근거
   - **피드 구성**: 사용자가 스타일 필터를 직접 누르면 그 스타일이 붙은 사진만 업로드 최신순으로 보여 준다. 홈 피드는 온보딩에서 고른 취향 스타일(1~3개) 사진 → 이웃 스타일 사진 → 그 밖의 스타일 사진 순서로 보여 준다(AC15). 각 묶음 안에서는 스타일을 돌아가며 한 장씩 놓고, 같은 스타일 안에서는 업로드 최신순이다. 페이지 나눔 없이 전부 보여 준다. — 취향은 바뀌고(로그 7, 8, 10) 새 스타일 시도가 해결 가설이므로(PROBLEM 4절) 고른 취향만 보여 주지 않는다. 처음 정한 개수 비율(20장 중 14·4·2)은 피드 사진이 적으면 채울 수 없어 순서 규칙으로 바꿨다(11/4 팀 결정, 1차 평가 3-1). 이웃 스타일(10/13 팀 결정): 캐주얼→스트릿·스포티 / 미니멀→시크·청순 / 러블리→청순·프레피 / 청순→러블리·미니멀 / 엘레강스→미니멀·글램 / 시크→미니멀·글램 / 스트릿→캐주얼·스포티 / 레트로→캐주얼·프레피 / 프레피→러블리·레트로 / 스포티→캐주얼·스트릿 / 글램→시크·엘레강스. 개수 비율과 ♡ 반응으로 순서를 바꾸는 것은 나중 확장
-  - **쇼핑몰 상품 정보 저장**: 피드에 올리는 쇼핑몰 사진은 상품명·브랜드·상품 링크를 함께 저장해, 사진 속 옷이 무엇인지 안다(허락받은 쇼핑몰만)
+  - **쇼핑몰 상품 정보 저장**: 피드에 올리는 쇼핑몰 사진은 검증된 정확한 상품 링크가 있으면 사진 속 해당 `Item`에 연결한다(허락받은 쇼핑몰만). MVP에서는 사진당 대표 상품을 0~1개 연결하고, 이후 같은 사진의 다른 `Item`에도 각 상품 링크를 추가할 수 있다. `shop`·`brand`·`product_name`은 링크에서 추출을 시도하되 실패하면 null로 둔다(11/5·11/7 팀 결정)
   - AI 태깅(구조화 출력, 피드에 올릴 때 1회): `StyleImage.style`(스타일 키워드 0~2개 — 피드에 올릴 때 팀이 확정, 모델은 추천), `Item.slot`·`kind`·`color`·`visual_fit` — 헤어·메이크업은 태깅하지 않는다
   - **옷장 등록(칩)**: 부위 → 종류 → 색 → 핏을 칩으로 고른다. 핏은 핏이 있는 종류(상의·원피스·아우터·점프수트, 긴 바지, 스커트)에서 반드시 고르고, 숏팬츠·레깅스·신발·가방은 핏 단계 없이 끝난다(`visual_fit: null`). 종류별 핏 보기는 `src/fulljoin/prompts/parse_query.md`의 visual_fit 표를 따른다. 사진은 받지 않는다 — 옷장 사진 등록은 아래 결정 보류. (팀 결정로그 9/16·11/4. 칩이 등록 부담을 줄인다는 것은 **가설** — 온보딩 완료율로 검증)
   - **갭 분석**: `Item`마다 옷장의 `WardrobeItem`과 대조해 `gap_status`(활용 / 비슷함 / 구매)를 정한다
@@ -74,8 +74,11 @@ StyleImage ─♡→ 옷장(WardrobeItem)과 대조
   - 입력: `{user_id, slot, kind, color, visual_fit}` — 핏이 없는 종류는 `visual_fit: null`
   - 출력: `{wardrobe_item: {id, user_id, slot, kind, color, visual_fit}}`
 - `POST /analyze` — 운영자가 피드에 올릴 사진을 한 번 태깅한다. 사용자가 ♡할 때 다시 호출하지 않는다. 모델 출력 형식은 `src/fulljoin/schemas/style_image.schema.json`, 프롬프트는 `src/fulljoin/prompts/parse_query.md`다.
-  - 입력: `{style_image_id, image_path, source, caption?, shopping_product?: {brand, product_name, url}}` — 서버가 Storage에서 이미지를 읽는다
+  - 입력: `{style_image_id, image_path, source, source_url?, caption?}` — 서버가 Storage에서 이미지를 읽는다. 정확한 상품 링크는 모델이 추측하지 않고 분석 뒤 해당 `item_id`에 별도로 연결한다.
   - 출력: `{style_image_id, style[], items: [{item_id, slot, kind, color, visual_fit, visibility, brand, product_name, brand_source}]}`
+- `PUT /style-images/{style_image_id}/items/{item_id}/product` — 운영자가 검증한 정확한 쇼핑몰 상품을 사진 속 해당 아이템에 연결한다.
+  - 입력: `{product_url, is_representative_product, shop?, brand?, product_name?}`. MVP에서는 대표 상품을 연결할 때만 사진당 최대 하나를 `is_representative_product: true`로 저장하며 DB가 중복을 거부한다. 링크가 없는 사진도 허용한다. 이후 다른 아이템에는 `false`로 각 링크를 추가할 수 있다.
+  - 출력: `{item_id, shop, brand, product_name, product_url, is_representative_product}`
 - `GET /feed?style=` — 홈 피드 또는 선택한 스타일 피드를 가져온다. `style`을 생략하면 AC15의 묶음 순서를 적용한다. 페이지 나눔 없이 전부 준다.
   - 출력: `{style_images: [{id, thumbnail_url, style[], source}]}` — `thumbnail_url`은 서버가 응답마다 만드는 임시 주소(아래 데이터 보관)
 - `POST /style-images/{style_image_id}/heart` — 저장된 태깅 결과를 사용자 옷장과 대조하고 아카이브에 저장한다.
@@ -106,18 +109,17 @@ StyleImage ─♡→ 옷장(WardrobeItem)과 대조
 | `image_path` | Storage 안 경로 |
 | `source` | `StyleImage.source` (쇼핑몰 / 인플루언서 / 연예인 / 자체_촬영) |
 | `source_url` | 사진을 가져온 페이지 (출처 기록) |
-| `shop`, `product_name`, `product_url` | 쇼핑몰 상품 정보, 없으면 null — 앱이 `brand_source: 쇼핑몰_상품정보`로 합친다(AC2) |
 | `permission` | 허락 상태: 미요청 / 요청함 / 허락 / 필요 없음 |
 | `uploaded_at` | 피드에 올린 시각 (AC15 최신순 기준) |
 | `style` | 팀이 확정한 스타일 1~2개 (피드 사진은 최소 1개) |
-| `items` | 모델 출력 그대로(`style_image.schema.json`의 Item) + `item_id` |
+| `items` | 모델 출력(`style_image.schema.json`의 Item) + `item_id`. 검증된 상품이 있으면 해당 아이템에 `shop`, `product_url`, `is_representative_product`를 추가하고 `brand_source: 쇼핑몰_상품정보`로 저장한다 |
 | `tagging` | `{model, prompt_version, tagged_at}` |
 
 ```json
-{"id":"IMG-1","image_path":"feed/IMG-1.jpg","source":"쇼핑몰","source_url":"https://…","shop":"○○몰","product_name":"레이어드 티","product_url":"https://…","permission":"요청함","uploaded_at":"2026-11-06T10:00:00+09:00","style":["청순"],"items":[{"item_id":"IMG-1-1","slot":"상의","kind":"긴소매티셔츠","color":"화이트","visual_fit":"슬림","visibility":"전체","brand":null,"product_name":null,"brand_source":"없음"}],"tagging":{"model":"gpt-4.1-mini-2025-04-14","prompt_version":"7","tagged_at":"2026-11-06T10:00:05+09:00"}}
+{"id":"IMG-1","image_path":"feed/IMG-1.jpg","source":"쇼핑몰","source_url":"https://…","permission":"요청함","uploaded_at":"2026-11-06T10:00:00+09:00","style":["청순"],"items":[{"item_id":"IMG-1-1","slot":"상의","kind":"긴소매티셔츠","color":"화이트","visual_fit":"슬림","visibility":"전체","brand":"○○브랜드","product_name":"레이어드 티","brand_source":"쇼핑몰_상품정보","shop":"○○몰","product_url":"https://…","is_representative_product":true}],"tagging":{"model":"gpt-4.1-mini-2025-04-14","prompt_version":"7","tagged_at":"2026-11-06T10:00:05+09:00"}}
 ```
 
-`items[].brand_source`는 모델 출력(캡션 / 이미지_글자 / 없음)을 그대로 두고, 쇼핑몰 정보는 `shop`·`product_name`에 따로 둔다. 둘을 합치는 건 앱 데이터 계층이 한다(10/13 스키마 결정과 같음).
+`items[].brand_source`의 모델 출력은 캡션 / 이미지_글자 / 없음이다. 운영자가 검증한 쇼핑몰 상품을 해당 아이템에 연결할 때만 `쇼핑몰_상품정보`로 바꾸고 `shop`·`product_url`을 채운다. 사진만 보고 상품 링크를 추측하지 않는다(AC2).
 
 ### 오류 응답 (11/4)
 

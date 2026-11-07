@@ -43,8 +43,11 @@
 ## 아직 구현하지 않은 경로
 
 - `/analyze`
+- `PUT /style-images/{style_image_id}/items/{item_id}/product`
 - `/style-images/{style_image_id}/items/{item_id}/decision`
 - `/archive`
 - `/chat`
 
 11월 11일 핵심 흐름 뒤에 순서대로 연결한다.
+
+정확한 쇼핑몰 링크는 사진 전체가 아니라 분석된 `item_id`에 연결한다. MVP에서는 사진마다 대표 상품을 0~1개 두며, 링크가 없으면 모든 아이템의 `is_representative_product`가 `false`다. DB는 같은 사진에 대표 상품이 둘 생기는 것을 거부한다. 이후에는 다른 아이템에도 `false`로 각자의 정확한 상품 링크를 추가할 수 있다. `shop`·`brand`·`product_name`은 링크에서 추출을 시도하는 선택 정보이며, 추출 실패가 링크 저장을 막지 않는다.
