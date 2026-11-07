@@ -20,6 +20,7 @@
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
+| `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
 | `POST` | `/style-images/{id}/heart` | 하트 저장과 갭 분석 |
 | `DELETE` | `/style-images/{id}/heart` | 하트 취소 |
 
@@ -76,9 +77,25 @@ npm run import:style-images -- --csv /절대/경로/images.csv --apply
 
 처음에는 `--limit 3 --apply`로 세 장만 확인하는 것을 권장한다. 실행 보고서는 `.cache/style-image-import-*.json`에 남는다.
 
+## 대표 상품 연결
+
+사진 속 아이템을 확인한 후 대표 상품 아이템 하나를 명시해 연결한다. `product_url`을 생략하면 쇼핑몰 사진의 `source_url`을 사용한다. 서버는 JSON-LD와 Open Graph에서 `shop`, `brand`, `product_name`을 추출하며, 쇼핑몰이 접근을 막거나 정보가 없어도 정확한 `product_url` 저장은 계속 진행한다.
+
+```bash
+npm run link:item-product -- --image-id IMG-001 --item-id IMG-001-ITEM-01
+```
+
+코디 사진에 다른 상품 링크를 추가할 때는 주소를 명시하고 대표 상품이 아니라고 표시할 수 있다.
+
+```bash
+npm run link:item-product -- --image-id IMG-001 --item-id IMG-001-ITEM-02 \
+  --product-url 'https://shop.example/product/2' --not-representative
+```
+
+링크를 이미지 전체에 자동 연결하지 않고 아이템을 명시하는 이유는, 코디 사진에 여러 아이템이 있어 잘못된 옷에 정확한 상품 정보를 붙이면 AC2를 위반하기 때문이다.
+
 ## 아직 구현하지 않은 경로
 
-- `PUT /style-images/{style_image_id}/items/{item_id}/product`
 - `/style-images/{style_image_id}/items/{item_id}/decision`
 - `/archive`
 - `/chat`

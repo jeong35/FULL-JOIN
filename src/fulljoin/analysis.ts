@@ -69,6 +69,11 @@ export const analyzeInputSchema = z.object({
   caption: z.string().trim().max(2000).optional(),
 }).strict();
 
+export const productLinkInputSchema = z.object({
+  product_url: z.string().url().refine((value) => value.startsWith("https://") || value.startsWith("http://"), "HTTP(S) 주소만 사용할 수 있어요").optional(),
+  is_representative_product: z.boolean().default(true),
+}).strict();
+
 export type StyleImageAnalysis = z.infer<typeof styleImageAnalysisSchema>;
 
 export function normalizeAnalysis(analysis: StyleImageAnalysis): StyleImageAnalysis {

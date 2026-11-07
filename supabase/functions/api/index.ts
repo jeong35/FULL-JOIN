@@ -3,23 +3,26 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   analyzeInputSchema,
   normalizeAnalysis,
+  productLinkInputSchema,
   styleImageAnalysisSchema,
   type StyleImageAnalysis,
 } from "../../../src/fulljoin/analysis.ts";
 import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "../../../src/fulljoin/gap_analysis.ts";
+import { extractProductMetadata, type ProductMetadata } from "../../../src/fulljoin/product_metadata.ts";
 import { ANALYSIS_JSON_SCHEMA, ANALYSIS_SYSTEM_PROMPT } from "./generated_analysis_contract.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "authorization, apikey, content-type, x-admin-token, x-client-info",
-  "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+  "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
 type JsonObject = Record<string, unknown>;
 
 const MAX_ANALYSIS_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_PRODUCT_PAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini-2025-04-14";
 
 function json(body: unknown, status = 200): Response {
@@ -83,6 +86,71 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 function escapeCaption(caption: string): string {
   return caption.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function productUrlIsPublic(url: URL): boolean {
+  if (!(["http:", "https:"] as string[]).includes(url.protocol) || url.username || url.password) return false;
+  if (url.port && !["80", "443"].includes(url.port)) return false;
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.includes(":")) return false;
+  const parts = host.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+  const [a = 0, b = 0] = parts;
+  return !(a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
+}
+
+async function limitedResponseText(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length") ?? "0");
+  if (declaredLength > MAX_PRODUCT_PAGE_BYTES) throw new Error("Product page is too large");
+  if (response.body === null) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > MAX_PRODUCT_PAGE_BYTES) {
+      await reader.cancel();
+      throw new Error("Product page is too large");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+async function fetchProductMetadata(productUrl: string): Promise<ProductMetadata> {
+  let current = new URL(productUrl);
+  for (let redirectCount = 0; redirectCount <= 5; redirectCount += 1) {
+    if (!productUrlIsPublic(current)) throw new Error("Product URL is not public");
+    const response = await fetch(current, {
+      redirect: "manual",
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "user-agent": "FULL-JOIN-MVP/1.0 product-metadata",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (location === null || redirectCount === 5) throw new Error("Invalid product page redirect");
+      current = new URL(location, current);
+      continue;
+    }
+    if (!response.ok) throw new Error(`Product page returned HTTP ${response.status}`);
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
+      throw new Error("Product URL did not return HTML");
+    }
+    return extractProductMetadata(await limitedResponseText(response), current.toString());
+  }
+  throw new Error("Too many product page redirects");
 }
 
 function keepOnlyCaptionEvidence(analysis: StyleImageAnalysis, caption: string): StyleImageAnalysis {
@@ -263,6 +331,68 @@ async function handleAnalyze(request: Request, db: SupabaseClient): Promise<Resp
   }
 }
 
+async function handleProductLink(
+  request: Request,
+  styleImageId: string,
+  itemId: string,
+  db: SupabaseClient,
+): Promise<Response> {
+  if (request.method !== "PUT") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  if (!adminTokenIsValid(request)) return apiError(401, "admin_token_required", "분석 관리자 토큰을 확인해 주세요");
+  const body = await bodyAsObject(request);
+  if (body === null) return apiError(400, "invalid_request", "요청 본문을 확인해 주세요");
+  const input = productLinkInputSchema.safeParse(body);
+  if (!input.success) {
+    const field = input.error.issues[0]?.path[0];
+    return apiError(400, "invalid_request", input.error.issues[0]?.message ?? "요청 값을 확인해 주세요", typeof field === "string" ? field : undefined);
+  }
+
+  const [{ data: styleImage, error: imageError }, { data: item, error: itemError }] = await Promise.all([
+    db.from("style_images").select("id,source,source_url").eq("id", styleImageId).maybeSingle(),
+    db.from("style_image_items").select("item_id").eq("style_image_id", styleImageId).eq("item_id", itemId).maybeSingle(),
+  ]);
+  if (imageError !== null) throw imageError;
+  if (itemError !== null) throw itemError;
+  if (styleImage === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
+  if (item === null) return apiError(404, "style_image_item_not_found", "해당 사진에서 아이템을 찾을 수 없어요");
+
+  const productUrl = input.data.product_url ?? (styleImage.source === "쇼핑몰" ? styleImage.source_url : null);
+  if (typeof productUrl !== "string") {
+    return apiError(400, "product_url_required", "쇼핑몰 상품 주소가 필요해요", "product_url");
+  }
+  const parsedUrl = new URL(productUrl);
+  if (!productUrlIsPublic(parsedUrl)) return apiError(400, "invalid_product_url", "공개된 상품 페이지 주소만 사용할 수 있어요", "product_url");
+
+  let metadata: ProductMetadata = {
+    shop: parsedUrl.hostname.replace(/^www\./, ""),
+    brand: null,
+    product_name: null,
+  };
+  let metadataStatus: "extracted" | "unavailable" = "extracted";
+  try {
+    metadata = await fetchProductMetadata(parsedUrl.toString());
+  } catch (error) {
+    metadataStatus = "unavailable";
+    console.warn("Product metadata extraction failed", { styleImageId, itemId, error });
+  }
+
+  const { error: saveError } = await db.rpc("set_style_image_item_product", {
+    p_style_image_id: styleImageId,
+    p_item_id: itemId,
+    p_product_url: parsedUrl.toString(),
+    p_shop: metadata.shop,
+    p_brand: metadata.brand,
+    p_product_name: metadata.product_name,
+    p_is_representative_product: input.data.is_representative_product,
+  });
+  if (saveError !== null) throw saveError;
+  const { data: updated, error: updatedError } = await db.from("style_image_items")
+    .select("item_id,style_image_id,shop,brand,product_name,product_url,brand_source,is_representative_product")
+    .eq("item_id", itemId).single();
+  if (updatedError !== null) throw updatedError;
+  return json({ item: updated, metadata_status: metadataStatus });
+}
+
 async function handleWardrobe(request: Request, url: URL, db: SupabaseClient): Promise<Response> {
   if (request.method === "GET") {
     const userId = url.searchParams.get("user_id")?.trim();
@@ -394,6 +524,10 @@ export default {
       if (path === "/analyze") return await handleAnalyze(request, db);
       if (path === "/wardrobe") return await handleWardrobe(request, url, db);
       if (path === "/feed" && request.method === "GET") return await handleFeed(url, db);
+      const productMatch = path.match(/^\/style-images\/([^/]+)\/items\/([^/]+)\/product$/);
+      if (productMatch?.[1] !== undefined && productMatch[2] !== undefined) {
+        return await handleProductLink(request, decodeURIComponent(productMatch[1]), decodeURIComponent(productMatch[2]), db);
+      }
       const heartMatch = path.match(/^\/style-images\/([^/]+)\/heart$/);
       if (heartMatch?.[1] !== undefined) return await handleHeart(request, decodeURIComponent(heartMatch[1]), db);
       return apiError(404, "route_not_found", "요청한 API를 찾을 수 없어요");

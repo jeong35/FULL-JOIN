@@ -220,6 +220,9 @@ for (const [index, row] of rows.entries()) {
     record.analysis = body.already_analyzed ? "existing" : "created";
     record.style_review_required = body.style_review_required ?? false;
     record.item_count = Array.isArray(body.items) ? body.items.length : 0;
+    record.items = Array.isArray(body.items)
+      ? body.items.map(({ item_id, slot, kind, color, visual_fit, visibility }) => ({ item_id, slot, kind, color, visual_fit, visibility }))
+      : [];
     console.log(`[${index + 1}/${rows.length}] ${row.image_id}: ${record.storage}, 분석 ${record.analysis}`);
   } catch (error) {
     record.error = error instanceof Error ? error.message : String(error);
