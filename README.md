@@ -61,7 +61,7 @@ flowchart LR
 ### 준비
 
 1. Node.js 22.18 이상과 Supabase CLI, Docker 호환 런타임을 설치한다.
-2. `.env.example`을 참고해 로컬 전용 `.env`를 만든다. 실제 service-role 키는 커밋하지 않는다.
+2. `.env.example`을 참고해 로컬 전용 `.env`를 만든다. 실제 service-role 키·OpenAI 키·분석 관리자 토큰은 커밋하지 않는다.
 3. 프로젝트 루트에서 `supabase start`와 `supabase db reset`을 실행한다.
 4. `supabase functions serve api --env-file .env`로 API를 실행한다.
 
@@ -78,4 +78,6 @@ npm ci
 npm run check
 ```
 
-`npm run check`는 승인된 하네스 해시, 문법, TypeScript, 골든 계약 47개, 서버 계약 테스트를 차례로 검사한다. Supabase 통합 검증은 로컬 스택을 실행한 뒤 별도로 수행한다.
+`npm run check`는 승인된 하네스 해시, 분석 계약 동기화, 문법, TypeScript, 골든 계약 47개, 서버 계약 테스트를 차례로 검사한다. Supabase 통합 검증은 로컬 스택을 실행한 뒤 별도로 수행한다.
+
+피드 JPG와 Google Sheets CSV 일괄 등록 방법은 [`docs/API_MVP.md`](docs/API_MVP.md#사진-분석과-csv-일괄-등록)를 따른다. 기본 실행은 검증 전용이며 `--apply`를 명시해야 외부 서비스에 반영된다.

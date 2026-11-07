@@ -19,6 +19,7 @@
 | `GET` | `/wardrobe?user_id=` | 사용자의 옷장 조회 |
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
+| `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `POST` | `/style-images/{id}/heart` | 하트 저장과 갭 분석 |
 | `DELETE` | `/style-images/{id}/heart` | 하트 취소 |
 
@@ -40,9 +41,43 @@
 
 하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
 
+## 사진 분석과 CSV 일괄 등록
+
+`POST /analyze`는 `x-admin-token` 헤더와 아래 JSON을 받는다. `image_path`는 비공개 `feed-images` 버킷 안의 경로이며 파일명(확장자 제외)은 `image_id`와 같아야 한다.
+
+```json
+{
+  "image_id": "IMG-001",
+  "image_path": "feed/IMG-001.jpg",
+  "source": "쇼핑몰",
+  "source_url": "https://example.com/product/1",
+  "permission": "미요청",
+  "approved_style": ["미니멀"]
+}
+```
+
+`approved_style`이 없으면 모델의 추천을 임시로 저장하고 응답의 `style_review_required`가 `true`가 된다. 모든 신규 사진은 `published=false`로 저장되므로 팀 검토 전 피드에 나오지 않는다. 옷이 없는 사진은 `422 no_clothing_items`로 거절하며 DB에 저장하지 않는다. 같은 `image_id`를 다시 요청하면 OpenAI를 다시 호출하지 않고 기존 결과를 반환한다(AC4). 여러 업로더가 동시에 같은 사진을 요청해도 DB의 사진별 claim을 먼저 획득한 하나만 OpenAI를 호출하며, 나머지는 완료를 기다렸다가 저장된 결과를 재사용한다.
+
+공유 Google Sheets URL을 직접 넘기거나 CSV로 내려받아 먼저 검증한다. 시트에는 `image_id,file_name,page_url,permission,notes,source` 열이 필요하고 `style`은 선택이다. `notes`는 팀 메모라 모델이나 DB로 보내지 않는다.
+
+```bash
+npm run import:style-images -- --sheet-url 'https://docs.google.com/spreadsheets/d/문서_ID/edit?gid=0'
+# 또는
+npm run import:style-images -- --csv /절대/경로/images.csv --photos /절대/경로/jpg
+```
+
+검증 후 실제 Storage 업로드와 분석을 실행한다. 이미 Storage에 올린 경우 `--photos`를 생략해도 되며 기본 경로는 `feed/<file_name>`이다.
+
+```bash
+npm run import:style-images -- --sheet-url 'https://docs.google.com/spreadsheets/d/문서_ID/edit?gid=0' --apply
+# 또는
+npm run import:style-images -- --csv /절대/경로/images.csv --apply
+```
+
+처음에는 `--limit 3 --apply`로 세 장만 확인하는 것을 권장한다. 실행 보고서는 `.cache/style-image-import-*.json`에 남는다.
+
 ## 아직 구현하지 않은 경로
 
-- `/analyze`
 - `PUT /style-images/{style_image_id}/items/{item_id}/product`
 - `/style-images/{style_image_id}/items/{item_id}/decision`
 - `/archive`
