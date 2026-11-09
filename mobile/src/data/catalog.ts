@@ -32,38 +32,38 @@ export const BASE_COLORS = [
 export const DENIM_COLORS = ['연청', '중청', '진청', '흑청'] as const;
 export type Color = (typeof BASE_COLORS)[number] | (typeof DENIM_COLORS)[number];
 
-// 7절 칩 색값. 데님 4색은 7절에 값이 없어 임시로 정함(중청만 22-tab-closet.html의 #5B7DB1).
+// 칩·옷 그림 색값. 11/9 옷 그림 v4(가는 선 · 차분한 색)에 맞춰 7절 색을 조금 차분하게 낮췄다.
 export const COLOR_HEX: Record<Exclude<Color, '멀티' | '기타'>, string> = {
-  블랙: '#1E1E1E',
-  화이트: '#FFFFFF',
-  아이보리: '#F3EBDD',
-  그레이: '#9E9E9E',
-  차콜: '#3F3F46',
-  베이지: '#D8C3A5',
-  브라운: '#7A5235',
-  카키: '#7D7A4F',
-  네이비: '#1F2A4D',
-  블루: '#2F5DB8',
-  스카이블루: '#8EC1E8',
-  민트: '#A8DCCB',
-  그린: '#3E7D4F',
-  레드: '#C83A3A',
-  와인: '#6E1F33',
-  핑크: '#F2B5C4',
-  라벤더: '#C9B8EC',
-  퍼플: '#6B3FA0',
-  옐로우: '#F2D45C',
-  오렌지: '#E8853A',
-  실버: '#C0C0C8',
-  골드: '#C9A94E',
-  연청: '#9DB8DA',
-  중청: '#5B7DB1',
-  진청: '#2C3E66',
-  흑청: '#23262E',
+  블랙: '#2B2A2B',
+  화이트: '#FBFAF7',
+  아이보리: '#F1EADB',
+  그레이: '#A3A2A2',
+  차콜: '#4B4A50',
+  베이지: '#D7C5AA',
+  브라운: '#7E5B42',
+  카키: '#807D5C',
+  네이비: '#2D3651',
+  블루: '#46689F',
+  스카이블루: '#9DBDD8',
+  민트: '#ABD1C3',
+  그린: '#587E60',
+  레드: '#B9524B',
+  와인: '#6F2F3D',
+  핑크: '#E9BAC3',
+  라벤더: '#C4B8DE',
+  퍼플: '#6F5590',
+  옐로우: '#EBD27C',
+  오렌지: '#D98B52',
+  실버: '#C4C5CB',
+  골드: '#C4A65C',
+  연청: '#A0B7D2',
+  중청: '#6784AD',
+  진청: '#35476B',
+  흑청: '#2C2F37',
 };
 
 // 멀티 칩의 4색 칸(21-add-item-2-color-fit.html).
-export const MULTI_SWATCH = ['#C83A3A', '#2F5DB8', '#F2D45C', '#3E7D4F'] as const;
+export const MULTI_SWATCH = ['#B9524B', '#46689F', '#EBD27C', '#587E60'] as const;
 
 // 흰 바탕에서 칩 경계가 안 보이는 밝은 색.
 export const LIGHT_COLORS: ReadonlySet<Color> = new Set<Color>(['화이트', '아이보리']);
