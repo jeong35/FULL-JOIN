@@ -14,11 +14,28 @@ assert.deepEqual(extractProductMetadata(jsonLd, "https://shop.example/products/1
   product_name: "브라운 & 코트",
 });
 
-const openGraph = `<meta content='ZIGZAG' property='og:site_name'><meta name="twitter:title" content="트위드 재킷 &quot;블랙&quot;">`;
+const openGraph = `<meta content='ZIGZAG' property='og:site_name'><meta name="twitter:title" content="바이안 트위드 재킷 &quot;블랙&quot;">`;
 assert.deepEqual(extractProductMetadata(openGraph, "https://zigzag.kr/catalog/products/1"), {
   shop: "ZIGZAG",
-  brand: null,
+  brand: "바이안",
   product_name: '트위드 재킷 "블랙"',
+});
+
+const explicitBrandPrefix = `
+  <script type="application/ld+json">
+    {"@type":"Product","name":"더핑크 워싱 후드 집업","brand":{"name":"더핑크"}}
+  </script>`;
+assert.deepEqual(extractProductMetadata(explicitBrandPrefix, "https://thepinkmall.com/product/1"), {
+  shop: "thepinkmall.com",
+  brand: "더핑크",
+  product_name: "워싱 후드 집업",
+});
+
+const nonZigzagTitle = `<meta property="og:title" content="보헴므 스웨이드 뷔스티에 원피스">`;
+assert.deepEqual(extractProductMetadata(nonZigzagTitle, "https://nicehue.co.kr/product/1"), {
+  shop: "nicehue.co.kr",
+  brand: null,
+  product_name: "보헴므 스웨이드 뷔스티에 원피스",
 });
 
 const fallback = `<script type="application/ld+json">not json</script><title>상품 페이지</title>`;

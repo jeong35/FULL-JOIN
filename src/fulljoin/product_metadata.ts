@@ -79,14 +79,42 @@ function brandName(product: Record<string, unknown> | null): string | null {
   return null;
 }
 
+function splitProductIdentity(
+  productName: string | null,
+  explicitBrand: string | null,
+  pageUrl: string,
+): { brand: string | null; product_name: string | null } {
+  if (productName === null) return { brand: explicitBrand, product_name: null };
+
+  if (explicitBrand !== null) {
+    const prefix = `${explicitBrand} `;
+    return {
+      brand: explicitBrand,
+      product_name: productName.startsWith(prefix) ? cleanText(productName.slice(prefix.length), 300) : productName,
+    };
+  }
+
+  const hostname = new URL(pageUrl).hostname.replace(/^www\./, "");
+  if (hostname !== "zigzag.kr") return { brand: null, product_name: productName };
+
+  const match = productName.match(/^([^\s\[\]]+)\s+(.+)$/u);
+  if (match === null) return { brand: null, product_name: productName };
+  return {
+    brand: cleanText(match[1], 200),
+    product_name: cleanText(match[2], 300),
+  };
+}
+
 export function extractProductMetadata(html: string, pageUrl: string): ProductMetadata {
   const metadata = metaValues(html);
   const product = productFromJsonLd(html);
   const titleMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
   const hostname = new URL(pageUrl).hostname.replace(/^www\./, "");
+  const explicitBrand = brandName(product) ?? cleanText(metadata.get("product:brand"), 200);
+  const productName = cleanText(product?.name, 300) ?? cleanText(metadata.get("og:title") ?? metadata.get("twitter:title") ?? titleMatch?.[1], 300);
+  const identity = splitProductIdentity(productName, explicitBrand, pageUrl);
   return {
     shop: cleanText(metadata.get("og:site_name"), 200) ?? hostname,
-    brand: brandName(product) ?? cleanText(metadata.get("product:brand"), 200),
-    product_name: cleanText(product?.name, 300) ?? cleanText(metadata.get("og:title") ?? metadata.get("twitter:title") ?? titleMatch?.[1], 300),
+    ...identity,
   };
 }
