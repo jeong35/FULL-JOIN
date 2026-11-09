@@ -8,6 +8,7 @@ import {
   type StyleImageAnalysis,
 } from "../../../src/fulljoin/analysis.ts";
 import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
+import { itemDecisionInputSchema, itemDecisionResponse, type DecisionItem } from "../../../src/fulljoin/decision.ts";
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "../../../src/fulljoin/gap_analysis.ts";
 import { heartItemResponse, representativeProductFields, type HeartItemRow } from "../../../src/fulljoin/heart.ts";
@@ -598,6 +599,45 @@ async function handleHeart(
   return json({ style_image_id: styleImageId, saved_at: heart.saved_at, items, outfits: [], products: [], ...representativeProduct });
 }
 
+async function handleItemDecision(
+  request: Request,
+  styleImageId: string,
+  itemId: string,
+  db: SupabaseClient,
+): Promise<Response> {
+  if (request.method !== "POST") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  const body = await bodyAsObject(request);
+  if (body === null) return apiError(400, "invalid_request", "요청 본문을 확인해 주세요");
+  const input = itemDecisionInputSchema.safeParse(body);
+  if (!input.success) {
+    const field = input.error.issues[0]?.path[0];
+    return apiError(400, "invalid_decision", input.error.issues[0]?.message ?? "선택 값을 확인해 주세요", typeof field === "string" ? field : undefined);
+  }
+
+  const [{ data: styleImage, error: imageError }, { data: item, error: itemError }, { data: heart, error: heartError }, { data: wardrobeRows, error: wardrobeError }] = await Promise.all([
+    db.from("style_images").select("id").eq("id", styleImageId).maybeSingle(),
+    db.from("style_image_items")
+      .select("item_id,slot,kind,color,visual_fit,visibility,shop,product_url")
+      .eq("style_image_id", styleImageId).eq("item_id", itemId).maybeSingle(),
+    db.from("hearts").select("style_image_id").eq("user_id", input.data.user_id).eq("style_image_id", styleImageId).maybeSingle(),
+    db.from("wardrobe_items").select("id,slot,kind,color,visual_fit").eq("user_id", input.data.user_id).order("id"),
+  ]);
+  if (imageError !== null) throw imageError;
+  if (itemError !== null) throw itemError;
+  if (heartError !== null) throw heartError;
+  if (wardrobeError !== null) throw wardrobeError;
+  if (styleImage === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
+  if (item === null) return apiError(404, "style_image_item_not_found", "해당 사진에서 아이템을 찾을 수 없어요");
+  if (heart === null) return apiError(409, "heart_required", "사진을 먼저 저장해 주세요");
+
+  const wardrobe = (wardrobeRows ?? []) as WardrobeItemForGapAnalysis[];
+  const gap = classifyGap(item as ItemForGapAnalysis, wardrobe);
+  if (gap.gap_status !== "비슷함") {
+    return apiError(409, "decision_not_available", "비슷함으로 판정된 아이템만 선택할 수 있어요", "decision");
+  }
+  return json(itemDecisionResponse(item as DecisionItem, gap, input.data.decision));
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -618,6 +658,10 @@ export default {
       const productMatch = path.match(/^\/style-images\/([^/]+)\/items\/([^/]+)\/product$/);
       if (productMatch?.[1] !== undefined && productMatch[2] !== undefined) {
         return await handleProductLink(request, decodeURIComponent(productMatch[1]), decodeURIComponent(productMatch[2]), db);
+      }
+      const decisionMatch = path.match(/^\/style-images\/([^/]+)\/items\/([^/]+)\/decision$/);
+      if (decisionMatch?.[1] !== undefined && decisionMatch[2] !== undefined) {
+        return await handleItemDecision(request, decodeURIComponent(decisionMatch[1]), decodeURIComponent(decisionMatch[2]), db);
       }
       const reviewMatch = path.match(/^\/style-images\/([^/]+)\/review$/);
       if (reviewMatch?.[1] !== undefined) {

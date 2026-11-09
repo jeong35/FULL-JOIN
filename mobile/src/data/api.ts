@@ -2,7 +2,7 @@
 // 이 주소는 누구나 부를 수 있는 공개 주소라 앱에 넣어도 된다.
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import type { Color, Kind, Slot, VisualFit } from './catalog';
-import type { HeartResult, StyleImage, WardrobeItem } from './types';
+import type { HeartResult, ItemDecisionResult, StyleImage, WardrobeItem } from './types';
 
 const DEFAULT_API_URL = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/api';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, '');
@@ -108,4 +108,16 @@ export function postHeart(styleImageId: string): Promise<HeartResult> {
   return request<HeartResult>('POST', `/style-images/${encodeURIComponent(styleImageId)}/heart`, {
     user_id: USER_ID,
   });
+}
+
+export function postItemDecision(
+  styleImageId: string,
+  itemId: string,
+  decision: '활용' | '구매',
+): Promise<ItemDecisionResult> {
+  return request<ItemDecisionResult>(
+    'POST',
+    `/style-images/${encodeURIComponent(styleImageId)}/items/${encodeURIComponent(itemId)}/decision`,
+    { user_id: USER_ID, decision },
+  );
 }

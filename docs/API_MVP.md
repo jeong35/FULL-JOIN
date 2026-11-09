@@ -25,6 +25,7 @@
 | `PUT` | `/style-images/{id}/publish` | 검수된 사진만 피드에 공개하거나 공개 취소 |
 | `POST` | `/style-images/{id}/heart` | 하트 저장과 갭 분석 |
 | `DELETE` | `/style-images/{id}/heart` | 하트 취소 |
+| `POST` | `/style-images/{id}/items/{item_id}/decision` | `비슷함` 아이템의 활용·구매 선택에 따른 코디·상품 응답 |
 
 ## 옷장 등록 예시
 
@@ -43,6 +44,19 @@
 ## 하트와 빈 옷장
 
 하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 각 `items[]`에는 갭 판정뿐 아니라 결과 화면에 필요한 `slot`, `kind`, `color`, `visual_fit`, `visibility`, 근거가 있는 상품 식별 정보가 함께 온다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 대표상품이 있으면 응답 최상위의 `shop`, `product_name`, `product_url`로 정확한 상품 페이지를 제공한다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
+
+## 비슷한 아이템 선택
+
+하트 응답에서 `gap_status`가 `비슷함`인 아이템만 활용 또는 구매를 선택할 수 있다. 선택은 저장하지 않으므로 사진을 다시 열면 다시 두 선택지가 보인다.
+
+```json
+{
+  "user_id": "demo-user",
+  "decision": "활용"
+}
+```
+
+`활용`은 현재 옷장에 실제 등록된 매칭 아이템별 코디를 반환한다. `구매`는 해당 사진 아이템에 검증된 상품 링크가 있으면 그 정확한 상품만 반환하고, 링크가 없으면 근거 없는 상품을 만들지 않고 빈 목록을 반환한다. 하트하지 않은 사진은 `409 heart_required`, 현재 옷장 기준으로 더 이상 `비슷함`이 아닌 아이템은 `409 decision_not_available`이다.
 
 ## 사진 분석과 CSV 일괄 등록
 
@@ -148,7 +162,6 @@ npm run publish:style-image -- --image-id IMG-001 --unpublish
 
 ## 아직 구현하지 않은 경로
 
-- `/style-images/{style_image_id}/items/{item_id}/decision`
 - `/archive`
 - `/chat`
 

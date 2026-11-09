@@ -39,11 +39,25 @@ export type HeartItem = {
   brand_source?: '캡션' | '이미지_글자' | '쇼핑몰_상품정보' | '없음';
 };
 
-// 비슷한 상품. 서버가 아직 빈 목록을 준다.
+// 정확한 상품 또는 비슷한 상품 검색 결과.
 export type Product = {
-  product_url: string;
-  name?: string | null;
-  shop?: string | null;
+  item_id: string;
+  platform: string;
+  url: string;
+  match_type: 'exact' | 'similar';
+};
+
+export type Outfit = {
+  outfit_id: string;
+  wardrobe_item_ids: string[];
+  item_ids: string[];
+};
+
+export type ItemDecisionResult = {
+  item_id: string;
+  decision: '활용' | '구매';
+  outfits: Outfit[];
+  products: Product[];
 };
 
 // POST /style-images/{id}/heart. shop~product_url은 사진 출처(쇼핑몰 상품)로, 서버가 줄 때만 온다.

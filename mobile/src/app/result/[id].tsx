@@ -9,9 +9,10 @@ import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, PrimaryButton, SmallWhiteButton } from '@/components/ui';
+import { errorMessage, postItemDecision } from '@/data/api';
 import type { Kind } from '@/data/catalog';
 import { heartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
-import type { GapStatus, HeartItem, HeartResult, StyleImage, WardrobeItem } from '@/data/types';
+import type { GapStatus, HeartItem, HeartResult, ItemDecisionResult, StyleImage, WardrobeItem } from '@/data/types';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // 저장 후 결과(옷장 대조). 모양은 design/screens/14-save-result.html을 따른다.
@@ -91,7 +92,7 @@ function SaveResult({ id, image, heart }: { id: string; image: StyleImage | unde
       <View style={[styles.sheet, { top: SHEET_TOP + insets.top }]}>
         <View style={styles.handle} />
         {result !== null ? (
-          <ResultBody result={result} />
+          <ResultBody key={id} imageId={id} result={result} />
         ) : heart?.status === 'error' ? (
           <View style={styles.center}>
             <Text style={styles.centerText}>{heart.error}</Text>
@@ -108,10 +109,13 @@ function SaveResult({ id, image, heart }: { id: string; image: StyleImage | unde
   );
 }
 
-function ResultBody({ result }: { result: HeartResult }) {
+function ResultBody({ imageId, result }: { imageId: string; result: HeartResult }) {
   const insets = useSafeAreaInsets();
   const wardrobe = useWardrobe();
   const [choices, setChoices] = useState<Record<string, SimilarChoice>>({});
+  const [decisions, setDecisions] = useState<Record<string, ItemDecisionResult>>({});
+  const [pendingItems, setPendingItems] = useState<Record<string, boolean>>({});
+  const [decisionErrors, setDecisionErrors] = useState<Record<string, string>>({});
 
   const items = result.items.filter(hasKind);
   const missingInfo = result.items.length > 0 && items.length === 0;
@@ -119,15 +123,46 @@ function ResultBody({ result }: { result: HeartResult }) {
 
   // '비슷한 ○○ 찾기'는 구매할 첫 아이템 기준. 비슷함에서 '새로 찾기'를 고른 것도 구매로 본다.
   const firstToBuy = items.find((item) => item.gap_status === '구매' || choices[item.item_id] === '구매');
-  const product = result.products[0];
+  const decisionProduct = Object.values(decisions)
+    .find((decision) => choices[decision.item_id] === '구매' && decision.decision === '구매' && decision.products.length > 0)
+    ?.products[0];
+  const product = decisionProduct ?? result.products[0];
   const productUrl = result.product_url ?? null;
 
+  const choose = async (itemId: string, value: SimilarChoice) => {
+    const previousChoice = choices[itemId];
+    setChoices((current) => ({ ...current, [itemId]: value }));
+    setPendingItems((current) => ({ ...current, [itemId]: true }));
+    setDecisionErrors((current) => ({ ...current, [itemId]: '' }));
+    try {
+      const decision = await postItemDecision(imageId, itemId, value);
+      setDecisions((current) => ({ ...current, [itemId]: decision }));
+    } catch (error) {
+      setChoices((current) => {
+        if (previousChoice !== undefined) return { ...current, [itemId]: previousChoice };
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+      setDecisionErrors((current) => ({ ...current, [itemId]: errorMessage(error) }));
+    } finally {
+      setPendingItems((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+    }
+  };
+
   let footerButton = null;
-  if (product !== undefined && firstToBuy !== undefined) {
+  if (product !== undefined) {
+    const item = items.find((candidate) => candidate.item_id === product.item_id) ?? firstToBuy;
     footerButton = (
       <PrimaryButton
-        label={`비슷한 ${firstToBuy.kind} 찾기`}
-        onPress={() => WebBrowser.openBrowserAsync(product.product_url)}
+        label={product.match_type === 'exact'
+          ? `${product.platform}에서 이 상품 보기`
+          : `비슷한 ${item?.kind ?? '상품'} 찾기`}
+        onPress={() => WebBrowser.openBrowserAsync(product.url)}
       />
     );
   } else if (productUrl !== null) {
@@ -168,7 +203,9 @@ function ResultBody({ result }: { result: HeartResult }) {
               wardrobe={wardrobe}
               thumbColor={index % 2 === 0 ? colors.line : '#DFD5F0'}
               choice={choices[item.item_id] ?? null}
-              onChoose={(value) => setChoices((prev) => ({ ...prev, [item.item_id]: value }))}
+              pending={pendingItems[item.item_id] === true}
+              error={decisionErrors[item.item_id] || null}
+              onChoose={(value) => choose(item.item_id, value)}
             />
           ))}
         </View>
@@ -212,12 +249,16 @@ function ResultCard({
   wardrobe,
   thumbColor,
   choice,
+  pending,
+  error,
   onChoose,
 }: {
   item: ShownItem;
   wardrobe: readonly WardrobeItem[];
   thumbColor: string;
   choice: SimilarChoice | null;
+  pending: boolean;
+  error: string | null;
   onChoose: (value: SimilarChoice) => void;
 }) {
   const fit = item.visual_fit ?? null;
@@ -247,15 +288,21 @@ function ResultCard({
               <Pressable
                 key={option.value}
                 onPress={() => onChoose(option.value)}
+                disabled={pending}
                 accessibilityRole="button"
-                accessibilityState={{ selected }}
+                accessibilityState={{ selected, disabled: pending }}
                 style={[styles.choiceItem, selected && styles.choiceItemSelected]}>
-                <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{option.label}</Text>
+                {pending && selected ? (
+                  <ActivityIndicator size="small" color={colors.textPurple} />
+                ) : (
+                  <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{option.label}</Text>
+                )}
               </Pressable>
             );
           })}
         </View>
       )}
+      {error !== null && <Text style={styles.choiceError}>{error}</Text>}
     </GlassView>
   );
 }
@@ -478,6 +525,13 @@ const styles = StyleSheet.create({
   },
   choiceTextSelected: {
     color: colors.onPurpleFill,
+  },
+  choiceError: {
+    marginTop: 6,
+    marginLeft: 55,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: '#A23B3B',
   },
   note: {
     marginTop: 10,
