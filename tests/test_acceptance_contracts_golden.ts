@@ -157,6 +157,7 @@ function evaluate(entry: ContractCase, output: JsonObject): boolean {
       if (!Array.isArray(records)) return false;
       const expected = records
         .map((record) => asObject(record, "record"))
+        .filter((record) => record.hearted !== false)
         .filter((record) => asStringArray(record.style, "record.style").includes(selectedStyle))
         .sort((left, right) => String(right.saved_at).localeCompare(String(left.saved_at)))
         .map((record) => String(record.id));
@@ -223,15 +224,36 @@ function evaluate(entry: ContractCase, output: JsonObject): boolean {
         productIdentityIsGrounded({ has_product_evidence: false }, product)
       );
     }
-    case "feed_mix_and_filter": {
-      const counts = asObject(output.home_counts, "home_counts");
-      const styles = asStringArray(output.filtered_styles, "filtered_styles");
+    case "feed_order_matches_human_expected":
       return (
-        counts.preferred === judge.preferred_count &&
-        counts.neighbor === judge.neighbor_count &&
-        counts.other === judge.other_count &&
-        Number(counts.preferred) + Number(counts.neighbor) + Number(counts.other) === entry.input.feed_size &&
-        styles.every((style) => style === entry.input.selected_filter)
+        JSON.stringify(output.home_ids) === JSON.stringify(entry.input.expected_home_ids) &&
+        JSON.stringify(output.filtered_ids) === JSON.stringify(entry.input.expected_filtered_ids)
+      );
+    case "wardrobe_fit_by_kind": {
+      if (!Array.isArray(judge.groups) || !Array.isArray(output.wardrobe_items)) return false;
+      const fitsByKind = new Map<string, unknown[]>();
+      for (const raw of judge.groups) {
+        const group = asObject(raw, "fit group");
+        const fits = Array.isArray(group.fits) ? group.fits : [];
+        for (const kind of asStringArray(group.kinds, "group.kinds")) fitsByKind.set(kind, fits);
+      }
+      return output.wardrobe_items.every((raw) => {
+        const item = asObject(raw, "wardrobe item");
+        const fits = fitsByKind.get(String(item.kind));
+        if (fits === undefined) return false;
+        if (fits.length === 0) return item.visual_fit === null;
+        return fits.includes(item.visual_fit);
+      });
+    }
+    case "error_response": {
+      const body = asObject(output.body, "body");
+      if (body.error === undefined) return false;
+      const error = asObject(body.error, "error");
+      return (
+        output.status === judge.status &&
+        error.code === judge.code &&
+        error.field === judge.field &&
+        typeof error.message === "string"
       );
     }
     default:
@@ -260,6 +282,21 @@ test("contract golden cases are uniquely named and machine-judgeable", () => {
     assert.ok(entry.feature.length > 0, `${entry.name}: feature is required`);
     assert.ok(entry.note.trim().length > 0, `${entry.name}: note is required`);
     assert.ok(entry.judge.type.length > 0, `${entry.name}: judge type is required`);
+  }
+});
+
+test("wardrobe fit groups cover every schema kind exactly once", () => {
+  const entry = contracts.cases.find((item) => item.judge.type === "wardrobe_fit_by_kind");
+  assert.ok(entry, "wardrobe_fit_by_kind case is required");
+  const groups = (entry.judge.groups as JsonObject[]).map((group) => asObject(group, "fit group"));
+  const kinds = groups.flatMap((group) => asStringArray(group.kinds, "group.kinds"));
+  assert.deepEqual([...kinds].sort(), [...(enumValues("kind") as string[])].sort());
+  assert.equal(new Set(kinds).size, kinds.length, "each kind must appear exactly once");
+  const allowedFits = enumValues("visual_fit");
+  for (const group of groups) {
+    for (const fit of group.fits as unknown[]) {
+      assert.ok(allowedFits.includes(fit), `unknown fit ${String(fit)}`);
+    }
   }
 });
 

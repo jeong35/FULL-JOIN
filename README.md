@@ -53,3 +53,31 @@ flowchart LR
 `로그 9 "제 옷장에 있는 걸 최대한 찾아서 이제 그거를 이용을 하려는 편이어서 … 입고 싶은 옷이 있으면 그냥 비슷한 옷으로"` → 페인 3 (매칭을 머릿속으로) → 온톨로지 `Item.gap_status (활용/비슷함/구매)` → PROBLEM 증거 "가진 옷을 먼저 활용하고 없을 때 산다" → SPEC **AC9** (옷장과 대조해 활용/비슷함/구매 분류)
 
 핵심 스펙 3개(AC9·AC11·AC2)가 어떻게 나왔는지는 [SPEC 3절](docs/SPEC.md) 표에 정리했다.
+
+## MVP 서버 개발
+
+서버는 단일 Supabase Edge Function `api`와 Postgres 마이그레이션으로 구성한다. 상세 요청·응답과 현재 데모 제한은 [`docs/API_MVP.md`](docs/API_MVP.md)에 있다.
+
+### 준비
+
+1. Node.js 22.18 이상과 Supabase CLI, Docker 호환 런타임을 설치한다.
+2. `.env.example`을 참고해 로컬 전용 `.env`를 만든다. 실제 service-role 키·OpenAI 키·분석 관리자 토큰은 커밋하지 않는다.
+3. 프로젝트 루트에서 `supabase start`와 `supabase db reset`을 실행한다.
+4. `supabase functions serve api --env-file .env`로 API를 실행한다.
+
+로컬 함수 기본 주소는 `http://127.0.0.1:54321/functions/v1/api`다.
+
+```bash
+curl http://127.0.0.1:54321/functions/v1/api/health
+```
+
+### 검증
+
+```bash
+npm ci
+npm run check
+```
+
+`npm run check`는 승인된 하네스 해시, 분석 계약 동기화, 문법, TypeScript, 골든 계약 47개, 서버 계약 테스트를 차례로 검사한다. Supabase 통합 검증은 로컬 스택을 실행한 뒤 별도로 수행한다.
+
+피드 JPG와 Google Sheets CSV 일괄 등록 방법은 [`docs/API_MVP.md`](docs/API_MVP.md#사진-분석과-csv-일괄-등록)를 따른다. 기본 실행은 검증 전용이며 `--apply`를 명시해야 외부 서비스에 반영된다.

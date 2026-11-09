@@ -2,7 +2,7 @@
   "_meta": {
     "scope": "product_acceptance_contracts_and_ac9_decision_semantics",
     "source": "docs/SPEC.md",
-    "status": "approved_by_team_2026-10-14",
+    "status": "approved_by_team_2026-11-04",
     "note": "AC9의 승인된 매칭 상세 케이스는 golden_cases.yaml에 유지하고, 비슷함의 사용자 선택 의미만 이 파일에서 보완한다. 각 케이스의 pass_output은 통과 예시, fail_output은 반드시 거부되어야 하는 결함 예시다. 기능 구현 시 동일한 judge를 실제 출력에 연결한다."
   },
   "cases": [
@@ -68,6 +68,22 @@
       "pass_output": {"style_image_ids": ["s-new", "s-old"]},
       "fail_output": {"style_image_ids": ["s-other", "s-old", "s-new"]},
       "note": "선택한 스타일 사진만 저장 시각 내림차순으로 반환해야 한다."
+    },
+    {
+      "name": "unhearted_image_leaves_archive",
+      "ac": ["AC5"],
+      "feature": "archive",
+      "input": {
+        "selected_style": "미니멀",
+        "records": [
+          {"id": "s-kept", "style": ["미니멀"], "saved_at": "2026-11-01T09:00:00Z", "hearted": true},
+          {"id": "s-removed", "style": ["미니멀"], "saved_at": "2026-11-03T09:00:00Z", "hearted": false}
+        ]
+      },
+      "judge": {"type": "archive_filter_order"},
+      "pass_output": {"style_image_ids": ["s-kept"]},
+      "fail_output": {"style_image_ids": ["s-removed", "s-kept"]},
+      "note": "하트를 취소한 사진은 같은 스타일이어도 아카이브에 나오면 안 된다."
     },
     {
       "name": "embedded_instruction_is_not_executed",
@@ -150,6 +166,41 @@
       "note": "선택 횟수가 기준 안이어도 사진 촬영을 필수로 만들면 실패다."
     },
     {
+      "name": "wardrobe_fit_follows_kind",
+      "ac": ["AC1", "AC13"],
+      "feature": "wardrobe_registration",
+      "input": {"source": "parse_query.md visual_fit 표"},
+      "judge": {
+        "type": "wardrobe_fit_by_kind",
+        "groups": [
+          {"kinds": ["반소매티셔츠", "긴소매티셔츠", "민소매", "셔츠", "블라우스", "니트", "맨투맨", "후드", "미니원피스", "미디원피스", "롱원피스", "점프수트", "카디건", "재킷", "레더재킷", "데님재킷", "점퍼", "후드집업", "야상", "플리스", "베스트", "트렌치코트", "코트", "숏패딩", "롱패딩", "경량패딩"], "fits": ["슬림", "레귤러", "오버사이즈"]},
+          {"kinds": ["데님팬츠", "슬랙스", "코튼팬츠", "조거팬츠"], "fits": ["스키니", "일자", "와이드", "부츠컷"]},
+          {"kinds": ["미니스커트", "미디스커트", "롱스커트"], "fits": ["A라인", "H라인", "플레어"]},
+          {"kinds": ["숏팬츠", "레깅스", "스니커즈", "로퍼", "플랫슈즈", "힐", "부츠", "샌들", "슬리퍼", "숄더백", "크로스백", "토트백", "백팩", "에코백", "클러치"], "fits": []}
+        ]
+      },
+      "pass_output": {"wardrobe_items": [
+        {"kind": "슬랙스", "visual_fit": "와이드"},
+        {"kind": "미니스커트", "visual_fit": "A라인"},
+        {"kind": "로퍼", "visual_fit": null}
+      ]},
+      "fail_output": {"wardrobe_items": [
+        {"kind": "슬랙스", "visual_fit": null},
+        {"kind": "로퍼", "visual_fit": "슬림"}
+      ]},
+      "note": "핏이 있는 종류는 그 종류의 보기 중 하나가 있어야 하고, 핏이 없는 종류는 null이어야 한다. 바지 핏을 비우거나 신발에 핏을 넣으면 실패다."
+    },
+    {
+      "name": "invalid_enum_is_rejected_with_field",
+      "ac": ["AC1"],
+      "feature": "api_errors",
+      "input": {"request": {"slot": "상의", "kind": "니트", "color": "검정", "visual_fit": "레귤러"}},
+      "judge": {"type": "error_response", "status": 400, "code": "invalid_enum", "field": "color"},
+      "pass_output": {"status": 400, "body": {"error": {"code": "invalid_enum", "message": "색 '검정'은 고를 수 있는 값이 아니에요", "field": "color"}}},
+      "fail_output": {"status": 200, "body": {"wardrobe_item": {"id": "w-1", "slot": "상의", "kind": "니트", "color": "검정", "visual_fit": "레귤러"}}},
+      "note": "목록에 없는 색('검정')으로 옷장 등록을 요청하면 저장하지 않고 400 invalid_enum과 틀린 칸 이름을 돌려줘야 한다."
+    },
+    {
       "name": "chat_reuses_analysis_and_only_claims_registered_clothes",
       "ac": ["AC14"],
       "feature": "chat",
@@ -160,14 +211,30 @@
       "note": "챗봇은 저장 분석을 재사용하고 실제 옷장 ID만 가진 옷으로 말하며 AC2·AC6을 지켜야 한다."
     },
     {
-      "name": "home_feed_uses_70_20_10_and_style_filter_is_strict",
+      "name": "home_feed_orders_preference_then_neighbor_then_other",
       "ac": ["AC15"],
       "feature": "feed",
-      "input": {"preferred_style": "미니멀", "neighbor_styles": ["시크", "청순"], "selected_filter": "스트릿", "feed_size": 20},
-      "judge": {"type": "feed_mix_and_filter", "preferred_count": 14, "neighbor_count": 4, "other_count": 2},
-      "pass_output": {"home_counts": {"preferred": 14, "neighbor": 4, "other": 2}, "filtered_styles": ["스트릿", "스트릿"]},
-      "fail_output": {"home_counts": {"preferred": 20, "neighbor": 0, "other": 0}, "filtered_styles": ["스트릿", "미니멀"]},
-      "note": "홈 20장은 14·4·2로 구성하고 필터 결과에는 선택 스타일만 있어야 한다."
+      "input": {
+        "preferred_styles": ["미니멀"],
+        "neighbor_styles": ["시크", "청순"],
+        "photos": [
+          {"id": "p1", "style": ["미니멀"], "uploaded_at": "2026-11-01T10:00:00+09:00"},
+          {"id": "p2", "style": ["미니멀"], "uploaded_at": "2026-11-03T10:00:00+09:00"},
+          {"id": "p3", "style": ["시크"], "uploaded_at": "2026-11-02T10:00:00+09:00"},
+          {"id": "p4", "style": ["청순"], "uploaded_at": "2026-11-04T10:00:00+09:00"},
+          {"id": "p5", "style": ["캐주얼"], "uploaded_at": "2026-11-05T10:00:00+09:00"},
+          {"id": "p6", "style": ["스트릿"], "uploaded_at": "2026-11-02T10:00:00+09:00"},
+          {"id": "p7", "style": ["캐주얼", "미니멀"], "uploaded_at": "2026-11-06T10:00:00+09:00"},
+          {"id": "p8", "style": ["시크"], "uploaded_at": "2026-11-07T10:00:00+09:00"}
+        ],
+        "selected_filter": "시크",
+        "expected_home_ids": ["p7", "p2", "p1", "p4", "p8", "p3", "p5", "p6"],
+        "expected_filtered_ids": ["p8", "p3"]
+      },
+      "judge": {"type": "feed_order_matches_human_expected"},
+      "pass_output": {"home_ids": ["p7", "p2", "p1", "p4", "p8", "p3", "p5", "p6"], "filtered_ids": ["p8", "p3"]},
+      "fail_output": {"home_ids": ["p7", "p2", "p1", "p5", "p4", "p8", "p3", "p6"], "filtered_ids": ["p8", "p3", "p7"]},
+      "note": "취향 사진이 3장뿐이어도 이웃·나머지로 이어서 모두 보여 준다. p7은 미니멀이 있어 취향 묶음, 이웃 묶음은 청순(p4) → 시크(p8, p3) 순으로 돌아가며, 필터에는 시크 사진만 최신순으로 나와야 한다. 나머지 묶음(p5)이 이웃 묶음보다 먼저 나오거나 필터에 다른 스타일이 섞이면 실패다."
     }
   ]
 }

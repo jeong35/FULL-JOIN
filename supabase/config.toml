@@ -1,0 +1,4 @@
+project_id = "full-join"
+
+[functions.api]
+verify_jwt = false
