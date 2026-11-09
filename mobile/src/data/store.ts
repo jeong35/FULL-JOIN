@@ -55,6 +55,11 @@ function useStore<T>(select: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => select(state));
 }
 
+// 로그인한 사용자가 바뀌면 그 사람의 옷장·저장을 새로 받는다(피드 사진은 모두에게 같다).
+export function resetUserData() {
+  setState({ wardrobe: remote([]), archive: remote([]), saved: {}, hearts: {}, unhearting: {} });
+}
+
 // ── 옷장 ────────────────────────────────────────────
 
 export function useWardrobeState(): Remote<readonly WardrobeItem[]> {

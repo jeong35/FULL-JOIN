@@ -1,8 +1,9 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
+import { useSession } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
 // design/DESIGN.md 6절: 하단 탭 5개, 높이 76 + 위 1px 선, 고른 탭은 #6A3FC4 굵게, 나머지 #645A73.
@@ -16,6 +17,11 @@ const TABS: { name: string; title: string; icon: TabIconName }[] = [
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const session = useSession();
+
+  // 처음 온 사람(웹)은 튜토리얼 → 로그인 → 취향 고르기부터.
+  if (session === null) return <Redirect href="/onboarding" />;
+  if (!session.onboarded) return <Redirect href="/onboarding/taste" />;
 
   return (
     <Tabs
