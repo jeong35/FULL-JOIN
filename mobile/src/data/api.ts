@@ -2,13 +2,18 @@
 // 이 주소는 누구나 부를 수 있는 공개 주소라 앱에 넣어도 된다.
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import type { Color, Kind, Slot, VisualFit } from './catalog';
+import { getSession } from './session';
 import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, WardrobeItem } from './types';
 
 const DEFAULT_API_URL = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/api';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, '');
 
-// 11/11 시연용 고정 사용자. 익명 로그인이 붙으면 그 사용자 ID로 바꾼다.
-export const USER_ID = process.env.EXPO_PUBLIC_DEMO_USER_ID ?? 'eunjae-demo';
+// 지금 로그인한 사용자(session.ts). 로그인 전에는 서버를 부르지 않는다.
+function userId(): string {
+  const id = getSession()?.userId;
+  if (!id) throw new ApiError(401, 'login_required', '먼저 로그인해 주세요');
+  return id;
+}
 
 // 첫 호출은 서버가 깨어나느라 몇 초 걸릴 수 있다.
 const TIMEOUT_MS = 20_000;
@@ -76,7 +81,7 @@ function toWardrobeItem({ id, slot, kind, color, visual_fit }: ServerWardrobeIte
 export async function fetchWardrobe(): Promise<WardrobeItem[]> {
   const data = await request<{ wardrobe_items: ServerWardrobeItem[] }>(
     'GET',
-    `/wardrobe?user_id=${encodeURIComponent(USER_ID)}`,
+    `/wardrobe?user_id=${encodeURIComponent(userId())}`,
   );
   return data.wardrobe_items.map(toWardrobeItem);
 }
@@ -88,7 +93,7 @@ export async function createWardrobeItem(input: {
   visual_fit: VisualFit | null;
 }): Promise<WardrobeItem> {
   const data = await request<{ wardrobe_item: ServerWardrobeItem }>('POST', '/wardrobe', {
-    user_id: USER_ID,
+    user_id: userId(),
     ...input,
   });
   return toWardrobeItem(data.wardrobe_item);
@@ -99,13 +104,13 @@ export async function createWardrobeItem(input: {
 export async function fetchFeed(): Promise<StyleImage[]> {
   const data = await request<{ style_images: StyleImage[] }>(
     'GET',
-    `/feed?user_id=${encodeURIComponent(USER_ID)}`,
+    `/feed?user_id=${encodeURIComponent(userId())}`,
   );
   return data.style_images;
 }
 
 export async function fetchArchive(filters: { style?: string; season?: Season } = {}): Promise<ArchiveImage[]> {
-  const params = new URLSearchParams({ user_id: USER_ID });
+  const params = new URLSearchParams({ user_id: userId() });
   if (filters.style !== undefined) params.set('style', filters.style);
   if (filters.season !== undefined) params.set('season', filters.season);
   const data = await request<{ style_images: ArchiveImage[] }>('GET', `/archive?${params.toString()}`);
@@ -114,13 +119,13 @@ export async function fetchArchive(filters: { style?: string; season?: Season } 
 
 export function postHeart(styleImageId: string): Promise<HeartResult> {
   return request<HeartResult>('POST', `/style-images/${encodeURIComponent(styleImageId)}/heart`, {
-    user_id: USER_ID,
+    user_id: userId(),
   });
 }
 
 export function deleteHeart(styleImageId: string): Promise<{ style_image_id: string; hearted: false }> {
   return request('DELETE', `/style-images/${encodeURIComponent(styleImageId)}/heart`, {
-    user_id: USER_ID,
+    user_id: userId(),
   });
 }
 
@@ -132,13 +137,13 @@ export function postItemDecision(
   return request<ItemDecisionResult>(
     'POST',
     `/style-images/${encodeURIComponent(styleImageId)}/items/${encodeURIComponent(itemId)}/decision`,
-    { user_id: USER_ID, decision },
+    { user_id: userId(), decision },
   );
 }
 
 export function postChat(styleImageId: string, message: string): Promise<ChatResult> {
   return request<ChatResult>('POST', '/chat', {
-    user_id: USER_ID,
+    user_id: userId(),
     style_image_id: styleImageId,
     message,
   });
