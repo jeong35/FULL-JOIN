@@ -5,28 +5,38 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GlassView } from '@/components/GlassView';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
-import { NICKNAME_MAX, login, nicknameProblem, pinProblem } from '@/data/session';
+import { accountHasData } from '@/data/api';
+import { NICKNAME_MAX, login, nicknameProblem, pinProblem, userIdFor } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
 // 튜토리얼 ②: 로그인. 닉네임 + 숫자 4자리.
-// 처음이면 새 옷장이 생기고, 다른 기기에서도 같은 닉네임·숫자로 들어오면 같은 옷장이 열린다.
+// 처음이면 새 옷장이 생기고 취향 고르기로 간다. 이미 저장한 사진이나 옷장 옷이 있는 계정이면(다른 기기·로그아웃 뒤)
+// 취향 고르기를 건너뛰고 바로 홈으로 간다.
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const [nickname, setNickname] = useState('');
   const [pin, setPin] = useState('');
   const [tried, setTried] = useState(false);
+  const [checking, setChecking] = useState(false);
   const pinRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const nicknameError = nicknameProblem(nickname);
   const pinError = pinProblem(pin);
   const valid = nicknameError === null && pinError === null;
 
-  function submit() {
+  async function submit() {
     setTried(true);
-    if (!valid) return;
-    login(nickname, pin);
-    router.replace('/onboarding/taste');
+    if (!valid || checking) return;
+    setChecking(true);
+    let returning = false;
+    try {
+      returning = await accountHasData(userIdFor(nickname, pin));
+    } catch {
+      // 확인을 못 하면 새 사람처럼 취향 고르기로 간다.
+    }
+    login(nickname, pin, returning);
+    router.replace(returning ? '/' : '/onboarding/taste');
   }
 
   return (
@@ -82,7 +92,7 @@ export default function LoginScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(24, insets.bottom) }]}>
-          <PrimaryButton label="시작하기" onPress={submit} disabled={tried && !valid} />
+          <PrimaryButton label={checking ? '확인하는 중…' : '시작하기'} onPress={submit} disabled={checking || (tried && !valid)} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

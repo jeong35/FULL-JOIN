@@ -70,6 +70,18 @@ export function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : '알 수 없는 문제가 생겼어요';
 }
 
+// ── 로그인 ──────────────────────────────────────────
+
+// 로그인하기 전에, 이 계정으로 저장한 사진이나 옷장 옷이 이미 있는지(이미 쓰던 사람인지) 본다.
+export async function accountHasData(id: string): Promise<boolean> {
+  const query = `user_id=${encodeURIComponent(id)}`;
+  const [archive, wardrobe] = await Promise.all([
+    request<{ style_images: unknown[] }>('GET', `/archive?${query}`),
+    request<{ wardrobe_items: unknown[] }>('GET', `/wardrobe?${query}`),
+  ]);
+  return archive.style_images.length > 0 || wardrobe.wardrobe_items.length > 0;
+}
+
 // ── 옷장 ────────────────────────────────────────────
 
 type ServerWardrobeItem = WardrobeItem & { user_id: string; created_at?: string };

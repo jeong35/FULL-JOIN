@@ -8,7 +8,7 @@ import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { PrimaryButton } from '@/components/ui';
 import type { Color, Kind, VisualFit } from '@/data/catalog';
-import { getSession } from '@/data/session';
+import { getSession, markIntroSeen } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
 // 튜토리얼 ①: 앱 소개 3장. 처음 연 사람(웹)은 여기서 시작해 로그인 → 취향 고르기로 간다.
@@ -48,6 +48,7 @@ export default function OnboardingIntroScreen() {
       else router.replace('/');
       return;
     }
+    markIntroSeen();
     const session = getSession();
     if (session === null) router.push('/onboarding/login');
     else router.replace('/onboarding/taste');

@@ -93,8 +93,14 @@ export default function HomeScreen() {
   const saved = useSaved();
   const session = useSession();
   // 처음 고른 취향 스타일 사진 → 이웃 스타일 → 나머지 순서(SPEC AC15).
+  // 이미 저장한 사진은 피드에서 뺀다('모든 저장'에 있으니까). 다만 피드를 보다가 방금 저장한 사진은
+  // 자리가 갑자기 바뀌지 않게 이 화면을 다시 열 때까지 그대로 둔다.
   const taste = session?.styles;
-  const feedImages = useMemo(() => orderByTaste(feed.data, taste ?? []), [feed.data, taste]);
+  const [savedHere, setSavedHere] = useState<ReadonlySet<string>>(() => new Set());
+  const feedImages = useMemo(
+    () => orderByTaste(feed.data.filter((image) => saved[image.id] === undefined || savedHere.has(image.id)), taste ?? []),
+    [feed.data, saved, savedHere, taste],
+  );
   const [folder, setFolder] = useState<Folder>('피드');
   const [filter, setFilter] = useState<ArchiveFilter>(NO_FILTER);
   const [picking, setPicking] = useState<FilterKey | null>(null);
@@ -112,6 +118,7 @@ export default function HomeScreen() {
   // 화면에 돌아올 때마다 사진 주소가 만료됐는지 보고 필요하면 새로 받는다.
   useFocusEffect(
     useCallback(() => {
+      setSavedHere(new Set());
       loadFeed();
       loadArchive({ force: true });
     }, []),
@@ -133,6 +140,7 @@ export default function HomeScreen() {
       }
       return;
     }
+    setSavedHere((current) => new Set(current).add(id));
     heartStyleImage(id);
     router.push({ pathname: '/result/[id]', params: { id } });
   }
@@ -150,6 +158,13 @@ export default function HomeScreen() {
       <View style={styles.center}>
         <Text style={styles.centerText}>{feed.error}</Text>
         <SmallWhiteButton label="다시 시도" onPress={() => loadFeed({ force: true })} />
+      </View>
+    );
+  } else if (folder === '피드' && feedImages.length === 0) {
+    body = (
+      <View style={styles.center}>
+        <Text style={styles.centerText}>피드 사진을 모두 저장했어요{'\n'}저장한 사진은 &apos;모든 저장&apos;에서 볼 수 있어요</Text>
+        <SmallWhiteButton label="모든 저장 보기" onPress={() => setFolder('모든 저장')} />
       </View>
     );
   } else if (folder !== '피드' && archive.data.length === 0 && archive.status !== 'error') {
