@@ -9,6 +9,7 @@ import {
 } from "../../../src/fulljoin/analysis.ts";
 import { filterArchive, SEASONS, seasonForSavedAt, type ArchiveRecord, type Season } from "../../../src/fulljoin/archive.ts";
 import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
+import { buildChatResponse, chatInputSchema, type ChatItem, type ChatWardrobeItem } from "../../../src/fulljoin/chat.ts";
 import { itemDecisionInputSchema, itemDecisionResponse, type DecisionItem } from "../../../src/fulljoin/decision.ts";
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "../../../src/fulljoin/gap_analysis.ts";
@@ -592,6 +593,44 @@ async function handleArchive(request: Request, url: URL, db: SupabaseClient): Pr
   return json({ style_images: styleImages });
 }
 
+async function handleChat(request: Request, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "POST") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  const body = await bodyAsObject(request);
+  if (body === null) return apiError(400, "invalid_request", "요청 본문을 확인해 주세요");
+  const input = chatInputSchema.safeParse(body);
+  if (!input.success) {
+    const field = input.error.issues[0]?.path[0];
+    return apiError(400, "invalid_chat", input.error.issues[0]?.message ?? "질문을 확인해 주세요", typeof field === "string" ? field : undefined);
+  }
+
+  const [{ data: styleImage, error: imageError }, { data: heart, error: heartError }, { data: items, error: itemsError }, { data: wardrobe, error: wardrobeError }] = await Promise.all([
+    db.from("style_images").select("id").eq("id", input.data.style_image_id).maybeSingle(),
+    db.from("hearts").select("style_image_id").eq("user_id", input.data.user_id).eq("style_image_id", input.data.style_image_id).maybeSingle(),
+    db.from("style_image_items")
+      .select("item_id,slot,kind,color,visual_fit,brand,brand_source")
+      .eq("style_image_id", input.data.style_image_id)
+      .order("item_id"),
+    db.from("wardrobe_items")
+      .select("id,slot,kind,color,visual_fit")
+      .eq("user_id", input.data.user_id)
+      .order("id"),
+  ]);
+  if (imageError !== null) throw imageError;
+  if (heartError !== null) throw heartError;
+  if (itemsError !== null) throw itemsError;
+  if (wardrobeError !== null) throw wardrobeError;
+  if (styleImage === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
+  if (heart === null) return apiError(409, "heart_required", "먼저 저장한 사진을 골라 주세요");
+  if (items === null || items.length === 0) return apiError(409, "analysis_required", "저장된 사진 분석 결과가 없어요");
+
+  return json(buildChatResponse(
+    input.data.style_image_id,
+    input.data.message,
+    items as ChatItem[],
+    (wardrobe ?? []) as ChatWardrobeItem[],
+  ));
+}
+
 async function handleHeart(
   request: Request,
   styleImageId: string,
@@ -704,6 +743,7 @@ export default {
       if (path === "/wardrobe") return await handleWardrobe(request, url, db);
       if (path === "/feed" && request.method === "GET") return await handleFeed(url, db);
       if (path === "/archive") return await handleArchive(request, url, db);
+      if (path === "/chat") return await handleChat(request, db);
       const productMatch = path.match(/^\/style-images\/([^/]+)\/items\/([^/]+)\/product$/);
       if (productMatch?.[1] !== undefined && productMatch[2] !== undefined) {
         return await handleProductLink(request, decodeURIComponent(productMatch[1]), decodeURIComponent(productMatch[2]), db);

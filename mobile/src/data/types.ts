@@ -68,6 +68,15 @@ export type ItemDecisionResult = {
   products: Product[];
 };
 
+export type ChatResult = {
+  answer: string;
+  analysis_id_used: string;
+  claimed_owned_item_ids: string[];
+  products: Product[];
+  image_reanalysis_count: 0;
+  external_instruction_applied: false;
+};
+
 // POST /style-images/{id}/heart. shop~product_url은 사진 출처(쇼핑몰 상품)로, 서버가 줄 때만 온다.
 export type HeartResult = {
   style_image_id: string;

@@ -20,6 +20,7 @@
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
+| `POST` | `/chat` | 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
 | `GET/PUT` | `/style-images/{id}/review` | AI 원본은 보존하고 운영용 스타일·아이템을 조회·검수 |
@@ -62,6 +63,10 @@
 ## 저장 아카이브
 
 `GET /archive?user_id=demo-user`는 현재 하트가 남아 있는 공개 사진만 최근 저장순으로 반환한다. `style=미니멀`과 `season=가을`은 함께 또는 따로 사용할 수 있다. 계절은 저장 시각의 월을 기준으로 봄 3~5월, 여름 6~8월, 가을 9~11월, 겨울 12~2월로 자동 계산한다.
+
+## 저장 사진 챗봇
+
+`POST /chat`은 `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. `claimed_owned_item_ids`에는 실제 등록된 옷장 ID만 들어가며, 쇼핑 질문은 브랜드나 상품을 지어내지 않고 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다.
 
 ## 사진 분석과 CSV 일괄 등록
 
@@ -167,8 +172,6 @@ npm run publish:style-image -- --image-id IMG-001 --unpublish
 
 ## 아직 구현하지 않은 경로
 
-- `/chat`
-
-11월 11일 핵심 흐름 뒤에 순서대로 연결한다.
+현재 MVP 서버 계약의 경로는 모두 구현됐다.
 
 정확한 쇼핑몰 링크는 사진 전체가 아니라 분석된 `item_id`에 연결한다. MVP에서는 사진마다 대표 상품을 0~1개 두며, 링크가 없으면 모든 아이템의 `is_representative_product`가 `false`다. DB는 같은 사진에 대표 상품이 둘 생기는 것을 거부한다. 이후에는 다른 아이템에도 `false`로 각자의 정확한 상품 링크를 추가할 수 있다. `shop`·`brand`·`product_name`은 링크에서 추출을 시도하는 선택 정보이며, 추출 실패가 링크 저장을 막지 않는다.
