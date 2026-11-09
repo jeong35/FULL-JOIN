@@ -2,7 +2,7 @@
 // 이 주소는 누구나 부를 수 있는 공개 주소라 앱에 넣어도 된다.
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import type { Color, Kind, Slot, VisualFit } from './catalog';
-import type { HeartResult, ItemDecisionResult, StyleImage, WardrobeItem } from './types';
+import type { ArchiveImage, HeartResult, ItemDecisionResult, Season, StyleImage, WardrobeItem } from './types';
 
 const DEFAULT_API_URL = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/api';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, '');
@@ -101,6 +101,14 @@ export async function fetchFeed(): Promise<StyleImage[]> {
     'GET',
     `/feed?user_id=${encodeURIComponent(USER_ID)}`,
   );
+  return data.style_images;
+}
+
+export async function fetchArchive(filters: { style?: string; season?: Season } = {}): Promise<ArchiveImage[]> {
+  const params = new URLSearchParams({ user_id: USER_ID });
+  if (filters.style !== undefined) params.set('style', filters.style);
+  if (filters.season !== undefined) params.set('season', filters.season);
+  const data = await request<{ style_images: ArchiveImage[] }>('GET', `/archive?${params.toString()}`);
   return data.style_images;
 }
 

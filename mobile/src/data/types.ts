@@ -20,6 +20,14 @@ export type StyleImage = {
   source: StyleImageSource;
 };
 
+export type Season = '봄' | '여름' | '가을' | '겨울';
+
+export type ArchiveImage = StyleImage & {
+  season: Season;
+  season_year: number;
+  saved_at: string;
+};
+
 export type GapStatus = '활용' | '비슷함' | '구매';
 
 // 하트 응답의 아이템 한 개. slot~brand_source는 서버가 아이템 정보를 같이 줄 때만 온다.

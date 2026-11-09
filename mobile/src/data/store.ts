@@ -2,8 +2,8 @@
 // 화면은 이 파일의 use…() 훅으로 읽고, load…()/add…()/heart…() 함수로 서버를 부른다.
 import { useSyncExternalStore } from 'react';
 
-import { createWardrobeItem, errorMessage, fetchFeed, fetchWardrobe, postHeart } from './api';
-import type { HeartResult, StyleImage, WardrobeItem } from './types';
+import { createWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
+import type { ArchiveImage, HeartResult, StyleImage, WardrobeItem } from './types';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -24,7 +24,8 @@ type State = {
   // 최근에 넣은 옷이 앞에 온다(서버가 created_at 내림차순으로 준다).
   wardrobe: Remote<readonly WardrobeItem[]>;
   feed: Remote<readonly StyleImage[]>;
-  // 이번 실행에서 저장한 사진 id → 저장 순번(클수록 최근). 저장 목록 API(/archive)가 붙으면 서버 값으로 바꾼다.
+  archive: Remote<readonly ArchiveImage[]>;
+  // 서버 아카이브의 사진 id → 저장 시각(ms). 새 하트는 응답 전까지 낙관적으로 표시한다.
   saved: Readonly<Record<string, number>>;
   hearts: Readonly<Record<string, HeartState>>;
 };
@@ -33,8 +34,7 @@ function remote<T>(data: T): Remote<T> {
   return { status: 'idle', data, error: null, loadedAt: 0 };
 }
 
-let state: State = { wardrobe: remote([]), feed: remote([]), saved: {}, hearts: {} };
-let nextSaveSeq = 1;
+let state: State = { wardrobe: remote([]), feed: remote([]), archive: remote([]), saved: {}, hearts: {} };
 const listeners = new Set<() => void>();
 
 function setState(patch: Partial<State>) {
@@ -109,10 +109,30 @@ export function getStyleImage(id: string): StyleImage | undefined {
 }
 
 export function useStyleImage(id: string | undefined): StyleImage | undefined {
-  return useStore((s) => (id === undefined ? undefined : s.feed.data.find((image) => image.id === id)));
+  return useStore((s) => (id === undefined
+    ? undefined
+    : s.feed.data.find((image) => image.id === id) ?? s.archive.data.find((image) => image.id === id)));
 }
 
 // ── 저장(하트)과 옷장 대조 결과 ───────────────────────
+
+export function useArchiveState(): Remote<readonly ArchiveImage[]> {
+  return useStore((s) => s.archive);
+}
+
+export async function loadArchive({ force = false }: { force?: boolean } = {}): Promise<void> {
+  const { archive } = state;
+  if (archive.status === 'loading') return;
+  if (!force && archive.status === 'ready' && Date.now() - archive.loadedAt < FEED_MAX_AGE_MS) return;
+  setState({ archive: { ...archive, status: 'loading', error: null } });
+  try {
+    const images = await fetchArchive();
+    const saved = Object.fromEntries(images.map((image) => [image.id, Date.parse(image.saved_at)]));
+    setState({ archive: { status: 'ready', data: images, error: null, loadedAt: Date.now() }, saved });
+  } catch (error) {
+    setState({ archive: { ...state.archive, status: 'error', error: errorMessage(error) } });
+  }
+}
 
 export function useSaved(): Readonly<Record<string, number>> {
   return useStore((s) => s.saved);
@@ -127,7 +147,7 @@ export async function heartStyleImage(id: string): Promise<void> {
   const previous = state.hearts[id];
   if (previous?.status === 'loading') return;
   setState({
-    saved: state.saved[id] === undefined ? { ...state.saved, [id]: nextSaveSeq++ } : state.saved,
+    saved: state.saved[id] === undefined ? { ...state.saved, [id]: Date.now() } : state.saved,
     hearts: { ...state.hearts, [id]: { status: 'loading', result: previous?.result ?? null } },
   });
   try {

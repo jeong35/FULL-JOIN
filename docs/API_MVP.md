@@ -19,6 +19,7 @@
 | `GET` | `/wardrobe?user_id=` | 사용자의 옷장 조회 |
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
+| `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
 | `GET/PUT` | `/style-images/{id}/review` | AI 원본은 보존하고 운영용 스타일·아이템을 조회·검수 |
@@ -57,6 +58,10 @@
 ```
 
 `활용`은 현재 옷장에 실제 등록된 매칭 아이템별 코디를 반환한다. `구매`는 해당 사진 아이템에 검증된 상품 링크가 있으면 그 정확한 상품만 반환하고, 링크가 없으면 근거 없는 상품을 만들지 않고 빈 목록을 반환한다. 하트하지 않은 사진은 `409 heart_required`, 현재 옷장 기준으로 더 이상 `비슷함`이 아닌 아이템은 `409 decision_not_available`이다.
+
+## 저장 아카이브
+
+`GET /archive?user_id=demo-user`는 현재 하트가 남아 있는 공개 사진만 최근 저장순으로 반환한다. `style=미니멀`과 `season=가을`은 함께 또는 따로 사용할 수 있다. 계절은 저장 시각의 월을 기준으로 봄 3~5월, 여름 6~8월, 가을 9~11월, 겨울 12~2월로 자동 계산한다.
 
 ## 사진 분석과 CSV 일괄 등록
 
@@ -162,7 +167,6 @@ npm run publish:style-image -- --image-id IMG-001 --unpublish
 
 ## 아직 구현하지 않은 경로
 
-- `/archive`
 - `/chat`
 
 11월 11일 핵심 흐름 뒤에 순서대로 연결한다.

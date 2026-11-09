@@ -7,6 +7,7 @@ import {
   styleImageAnalysisSchema,
   type StyleImageAnalysis,
 } from "../../../src/fulljoin/analysis.ts";
+import { filterArchive, SEASONS, seasonForSavedAt, type ArchiveRecord, type Season } from "../../../src/fulljoin/archive.ts";
 import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
 import { itemDecisionInputSchema, itemDecisionResponse, type DecisionItem } from "../../../src/fulljoin/decision.ts";
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
@@ -544,6 +545,53 @@ async function handleFeed(url: URL, db: SupabaseClient): Promise<Response> {
   return json({ style_images: styleImages });
 }
 
+async function handleArchive(request: Request, url: URL, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "GET") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  const userId = url.searchParams.get("user_id")?.trim();
+  if (!userId) return apiError(400, "invalid_request", "사용자 식별자가 필요해요", "user_id");
+
+  const requestedStyle = url.searchParams.get("style")?.trim();
+  if (requestedStyle && !STYLES.includes(requestedStyle as typeof STYLES[number])) {
+    return apiError(400, "invalid_enum", "스타일 값을 확인해 주세요", "style");
+  }
+  const requestedSeason = url.searchParams.get("season")?.trim();
+  if (requestedSeason && !SEASONS.includes(requestedSeason as Season)) {
+    return apiError(400, "invalid_enum", "계절 값을 확인해 주세요", "season");
+  }
+
+  const { data: hearts, error: heartsError } = await db.from("hearts")
+    .select("style_image_id,saved_at")
+    .eq("user_id", userId)
+    .order("saved_at", { ascending: false })
+    .order("style_image_id");
+  if (heartsError !== null) throw heartsError;
+  if (hearts === null || hearts.length === 0) return json({ style_images: [] });
+
+  const { data: images, error: imagesError } = await db.from("style_images")
+    .select("id,image_path,style,source")
+    .in("id", hearts.map((heart) => heart.style_image_id))
+    .eq("published", true);
+  if (imagesError !== null) throw imagesError;
+  const imagesById = new Map((images ?? []).map((image) => [image.id, image]));
+  const records = hearts.flatMap((heart) => {
+    const image = imagesById.get(heart.style_image_id);
+    return image === undefined ? [] : [{ ...image, saved_at: heart.saved_at } as ArchiveRecord];
+  });
+  const filtered = filterArchive(records, {
+    ...(requestedStyle ? { style: requestedStyle as typeof STYLES[number] } : {}),
+    ...(requestedSeason ? { season: requestedSeason as Season } : {}),
+  });
+  const styleImages = await Promise.all(filtered.map(async (record) => ({
+    id: record.id,
+    thumbnail_url: await signedThumbnail(db, record.image_path),
+    style: record.style,
+    source: record.source,
+    ...seasonForSavedAt(record.saved_at),
+    saved_at: record.saved_at,
+  })));
+  return json({ style_images: styleImages });
+}
+
 async function handleHeart(
   request: Request,
   styleImageId: string,
@@ -655,6 +703,7 @@ export default {
       if (path === "/analyze") return await handleAnalyze(request, db);
       if (path === "/wardrobe") return await handleWardrobe(request, url, db);
       if (path === "/feed" && request.method === "GET") return await handleFeed(url, db);
+      if (path === "/archive") return await handleArchive(request, url, db);
       const productMatch = path.match(/^\/style-images\/([^/]+)\/items\/([^/]+)\/product$/);
       if (productMatch?.[1] !== undefined && productMatch[2] !== undefined) {
         return await handleProductLink(request, decodeURIComponent(productMatch[1]), decodeURIComponent(productMatch[2]), db);

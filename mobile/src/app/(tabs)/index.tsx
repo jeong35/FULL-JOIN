@@ -7,15 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/GlassView';
 import { BookmarkIcon } from '@/components/Icons';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { heartStyleImage, loadFeed, useFeedState, useSaved } from '@/data/store';
-import type { StyleImage } from '@/data/types';
+import { heartStyleImage, loadArchive, loadFeed, useArchiveState, useFeedState, useSaved } from '@/data/store';
+import type { ArchiveImage, Season, StyleImage } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 // 홈 피드. 모양은 design/screens/10-home-feed.html을 따른다.
 // 사진은 서버(GET /feed)에서 받은 실제 사진이다. 사진은 화면 끝까지, 사이는 2px(DESIGN.md 4절).
 
-// 폴더(계절·출근룩 등)는 11/11 뒤에 만든다(11~13 화면). 지금은 '피드'와 이번에 저장한 사진만 본다.
-const FOLDERS = ['피드', '모든 저장'] as const;
+const FOLDERS = ['피드', '모든 저장', '계절'] as const;
 type Folder = (typeof FOLDERS)[number];
 const PHOTO_GAP = 2;
 const PHOTO_COLORS = [colors.line, '#DFD5F0'] as const;
@@ -31,8 +30,22 @@ function splitColumns(images: readonly StyleImage[]) {
   return columns;
 }
 
+function splitArchiveColumns(images: readonly ArchiveImage[]) {
+  const columns: [ArchiveImage[], ArchiveImage[], ArchiveImage[]] = [[], [], []];
+  images.forEach((image, index) => columns[index % 3].push(image));
+  return columns;
+}
+
+const SEASON_MONTHS: Record<Season, string> = {
+  봄: '3~5월에 저장',
+  여름: '6~8월에 저장',
+  가을: '9~11월에 저장',
+  겨울: '12~2월에 저장',
+};
+
 export default function HomeScreen() {
   const feed = useFeedState();
+  const archive = useArchiveState();
   const saved = useSaved();
   const [folder, setFolder] = useState<Folder>('피드');
   const [refreshing, setRefreshing] = useState(false);
@@ -41,12 +54,13 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadFeed();
+      loadArchive({ force: true });
     }, []),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await loadFeed({ force: true });
+    await Promise.all([loadFeed({ force: true }), loadArchive({ force: true })]);
     setRefreshing(false);
   }
 
@@ -55,36 +69,41 @@ export default function HomeScreen() {
     router.push({ pathname: '/result/[id]', params: { id } });
   }
 
-  const images =
-    folder === '피드'
-      ? feed.data
-      : feed.data.filter((image) => saved[image.id] !== undefined).sort((a, b) => saved[b.id] - saved[a.id]);
-  const columns = splitColumns(images);
-
   let body;
-  if (feed.data.length === 0 && feed.status !== 'error') {
+  if (folder === '피드' && feed.data.length === 0 && feed.status !== 'error') {
     body = (
       <View style={styles.center}>
         <ActivityIndicator color={colors.textPurple} />
         <Text style={styles.centerText}>사진을 불러오는 중이에요</Text>
       </View>
     );
-  } else if (feed.data.length === 0) {
+  } else if (folder === '피드' && feed.data.length === 0) {
     body = (
       <View style={styles.center}>
         <Text style={styles.centerText}>{feed.error}</Text>
         <SmallWhiteButton label="다시 시도" onPress={() => loadFeed({ force: true })} />
       </View>
     );
-  } else if (images.length === 0) {
+  } else if (folder !== '피드' && archive.data.length === 0 && archive.status !== 'error') {
     body = (
       <View style={styles.center}>
-        <Text style={styles.centerText}>
-          {folder === '피드' ? '아직 피드에 사진이 없어요' : '마음에 드는 사진의 저장 버튼을 눌러 보세요'}
-        </Text>
+        {archive.status === 'loading' && <ActivityIndicator color={colors.textPurple} />}
+        <Text style={styles.centerText}>마음에 드는 사진의 저장 버튼을 눌러 보세요</Text>
       </View>
     );
+  } else if (folder !== '피드' && archive.data.length === 0) {
+    body = (
+      <View style={styles.center}>
+        <Text style={styles.centerText}>{archive.error}</Text>
+        <SmallWhiteButton label="다시 시도" onPress={() => loadArchive({ force: true })} />
+      </View>
+    );
+  } else if (folder === '모든 저장') {
+    body = <ArchiveGrid images={archive.data} />;
+  } else if (folder === '계절') {
+    body = <SeasonArchive images={archive.data} />;
   } else {
+    const columns = splitColumns(feed.data);
     body = (
       <View style={styles.columns}>
         {columns.map((column, columnIndex) => (
@@ -114,6 +133,13 @@ export default function HomeScreen() {
 
       <TextTabs options={FOLDERS} value={folder} onChange={setFolder} />
 
+      {folder === '모든 저장' && archive.data.length > 0 && (
+        <Text style={styles.archiveHint}>최근에 저장한 순서</Text>
+      )}
+      {folder === '계절' && archive.data.length > 0 && (
+        <Text style={styles.archiveHint}>저장한 달로 자동으로 나눠요</Text>
+      )}
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -121,6 +147,72 @@ export default function HomeScreen() {
         {body}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function openArchiveImage(image: ArchiveImage) {
+  router.push({ pathname: '/result/[id]', params: { id: image.id } });
+}
+
+function ArchiveGrid({ images }: { images: readonly ArchiveImage[] }) {
+  const columns = splitArchiveColumns(images);
+  return (
+    <View style={styles.archiveColumns}>
+      {columns.map((column, columnIndex) => (
+        <View key={columnIndex} style={styles.archiveColumn}>
+          {column.map((image) => (
+            <Pressable
+              key={image.id}
+              onPress={() => openArchiveImage(image)}
+              accessibilityRole="button"
+              accessibilityLabel={`${image.style.join('·')} 저장 사진 열기`}
+              style={styles.archivePhoto}>
+              <Image
+                source={{ uri: image.thumbnail_url, cacheKey: image.id }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+              />
+            </Pressable>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SeasonArchive({ images }: { images: readonly ArchiveImage[] }) {
+  const groups = new Map<string, { year: number; season: Season; images: ArchiveImage[] }>();
+  for (const image of images) {
+    const key = `${image.season_year}-${image.season}`;
+    const group = groups.get(key) ?? { year: image.season_year, season: image.season, images: [] };
+    group.images.push(image);
+    groups.set(key, group);
+  }
+  return (
+    <View style={styles.seasonGrid}>
+      {[...groups.values()].map((group) => (
+        <View key={`${group.year}-${group.season}`} style={styles.seasonCard}>
+          <View style={styles.seasonPreview}>
+            {group.images.slice(0, 4).map((image) => (
+              <Pressable
+                key={image.id}
+                onPress={() => openArchiveImage(image)}
+                accessibilityRole="button"
+                accessibilityLabel={`${group.year} ${group.season} 저장 사진 열기`}
+                style={styles.seasonPhoto}>
+                <Image
+                  source={{ uri: image.thumbnail_url, cacheKey: image.id }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                />
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.seasonTitle}>{group.year} {group.season}</Text>
+          <Text style={styles.seasonSubtitle}>{SEASON_MONTHS[group.season]}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -190,6 +282,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
+  archiveHint: {
+    marginHorizontal: layout.screenPaddingX,
+    marginBottom: 10,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
   columns: {
     flexDirection: 'row',
     gap: PHOTO_GAP,
@@ -197,6 +296,53 @@ const styles = StyleSheet.create({
   column: {
     flex: 1,
     gap: PHOTO_GAP,
+  },
+  archiveColumns: {
+    flexDirection: 'row',
+    gap: PHOTO_GAP,
+  },
+  archiveColumn: {
+    flex: 1,
+    gap: PHOTO_GAP,
+  },
+  archivePhoto: {
+    aspectRatio: 1,
+    overflow: 'hidden',
+    backgroundColor: colors.line,
+  },
+  seasonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 18,
+    paddingHorizontal: layout.screenPaddingX,
+    paddingBottom: 24,
+  },
+  seasonCard: {
+    width: '47%',
+  },
+  seasonPreview: {
+    height: 170,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: PHOTO_GAP,
+  },
+  seasonPhoto: {
+    width: '49%',
+    height: 84,
+    overflow: 'hidden',
+    backgroundColor: colors.line,
+  },
+  seasonTitle: {
+    marginTop: 8,
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  seasonSubtitle: {
+    marginTop: 2,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   photo: {
     // 사진은 각진 네모(모서리 0).
