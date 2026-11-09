@@ -34,6 +34,7 @@ export default function ChatScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationImageId, setConversationImageId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const nextMessageId = useRef(1);
@@ -44,18 +45,25 @@ export default function ChatScreen() {
   }, []));
 
   const selected = archive.data.find((image) => image.id === selectedId) ?? archive.data[0] ?? null;
+  const visibleMessages = selected?.id === conversationImageId ? messages : [];
 
   async function send() {
     const text = input.trim();
     if (selected === null || text.length === 0 || sending) return;
     setInput('');
     setSendError(null);
-    setMessages((current) => [...current, {
+    const userMessage: Message = {
       id: nextMessageId.current++,
       role: 'user',
       text,
       products: [],
-    }]);
+    };
+    if (conversationImageId === selected.id) {
+      setMessages((current) => [...current, userMessage]);
+    } else {
+      setConversationImageId(selected.id);
+      setMessages([userMessage]);
+    }
     setSending(true);
     try {
       const result = await postChat(selected.id, text);
@@ -98,6 +106,7 @@ export default function ChatScreen() {
                     setSelectedId(image.id);
                     setShowPicker(false);
                     setMessages([]);
+                    setConversationImageId(null);
                   }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: image.id === selected.id }}
@@ -117,13 +126,13 @@ export default function ChatScreen() {
             style={styles.messages}
             contentContainerStyle={styles.messagesContent}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-            {messages.length === 0 && (
+            {visibleMessages.length === 0 && (
               <View style={styles.emptyChat}>
                 <Text style={styles.emptyChatTitle}>이 사진에서 궁금한 걸 물어보세요</Text>
                 <Text style={styles.emptyChatText}>“내 옷장에서 뭐 입어?” 또는 “비슷한 상품 찾아줘”처럼 물을 수 있어요.</Text>
               </View>
             )}
-            {messages.map((message) => <ChatBubble key={message.id} message={message} />)}
+            {visibleMessages.map((message) => <ChatBubble key={message.id} message={message} />)}
             {sending && (
               <View style={styles.assistantRow}>
                 <View style={styles.avatar}><Text style={styles.avatarText}>o.</Text></View>

@@ -11,7 +11,7 @@ import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
 import type { Kind } from '@/data/catalog';
-import { heartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
+import { heartStyleImage, unheartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
 import type { GapStatus, HeartItem, HeartResult, ItemDecisionResult, StyleImage, WardrobeItem } from '@/data/types';
 import { colors, fonts, glass, layout } from '@/theme';
 
@@ -27,11 +27,13 @@ export default function SaveResultScreen() {
   const imageId = typeof id === 'string' ? id : undefined;
   const image = useStyleImage(imageId);
   const heart = useHeart(imageId);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   // 이 화면 주소로 바로 들어와(새로고침 등) 결과가 없으면 서버에 다시 맞춰 달라고 한다.
   useEffect(() => {
-    if (imageId !== undefined && heart === undefined) heartStyleImage(imageId);
-  }, [imageId, heart]);
+    if (imageId !== undefined && heart === undefined && !removing) heartStyleImage(imageId);
+  }, [imageId, heart, removing]);
 
   if (imageId === undefined) {
     return (
@@ -42,7 +44,29 @@ export default function SaveResultScreen() {
     );
   }
 
-  return <SaveResult id={imageId} image={image} heart={heart} />;
+  async function removeHeart() {
+    if (imageId === undefined || removing) return;
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await unheartStyleImage(imageId);
+      router.back();
+    } catch (error) {
+      setRemoveError(errorMessage(error));
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <SaveResult
+      id={imageId}
+      image={image}
+      heart={heart}
+      removing={removing}
+      removeError={removeError}
+      onRemove={removeHeart}
+    />
+  );
 }
 
 // 비슷함은 사용자가 활용/구매를 고르는 정보 상태다(AGENTS.md 2절).
@@ -58,7 +82,21 @@ function hasKind(item: HeartItem): item is ShownItem {
   return item.kind !== undefined;
 }
 
-function SaveResult({ id, image, heart }: { id: string; image: StyleImage | undefined; heart: HeartState | undefined }) {
+function SaveResult({
+  id,
+  image,
+  heart,
+  removing,
+  removeError,
+  onRemove,
+}: {
+  id: string;
+  image: StyleImage | undefined;
+  heart: HeartState | undefined;
+  removing: boolean;
+  removeError: string | null;
+  onRemove: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const result = heart?.result ?? null;
 
@@ -79,14 +117,24 @@ function SaveResult({ id, image, heart }: { id: string; image: StyleImage | unde
           size={44}
           style={[styles.photoButton, { top: insets.top + 20, left: layout.screenPaddingX }]}
         />
-        <View
+        <Pressable
+          onPress={onRemove}
+          disabled={removing}
           style={[styles.photoButton, { top: insets.top + 20, right: layout.screenPaddingX }]}
-          accessible
-          accessibilityLabel="저장됨">
+          accessibilityRole="button"
+          accessibilityLabel="저장 취소"
+          accessibilityState={{ busy: removing, disabled: removing }}>
           <GlassView radius={13} style={styles.savedButton}>
-            <BookmarkIcon color={colors.textPurple} size={18} filled />
+            {removing ? (
+              <ActivityIndicator size="small" color={colors.textPurple} />
+            ) : (
+              <BookmarkIcon color={colors.textPurple} size={18} filled />
+            )}
           </GlassView>
-        </View>
+        </Pressable>
+        {removeError !== null && (
+          <Text style={[styles.removeError, { top: insets.top + 70 }]}>{removeError}</Text>
+        )}
       </View>
 
       <View style={[styles.sheet, { top: SHEET_TOP + insets.top }]}>
@@ -385,6 +433,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0 6px 20px rgba(46,26,92,0.08)',
+  },
+  removeError: {
+    position: 'absolute',
+    right: layout.screenPaddingX,
+    maxWidth: 220,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: '#A23B3B',
   },
   sheet: {
     position: 'absolute',

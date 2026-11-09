@@ -118,6 +118,12 @@ export function postHeart(styleImageId: string): Promise<HeartResult> {
   });
 }
 
+export function deleteHeart(styleImageId: string): Promise<{ style_image_id: string; hearted: false }> {
+  return request('DELETE', `/style-images/${encodeURIComponent(styleImageId)}/heart`, {
+    user_id: USER_ID,
+  });
+}
+
 export function postItemDecision(
   styleImageId: string,
   itemId: string,

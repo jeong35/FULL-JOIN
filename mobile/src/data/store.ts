@@ -2,7 +2,7 @@
 // 화면은 이 파일의 use…() 훅으로 읽고, load…()/add…()/heart…() 함수로 서버를 부른다.
 import { useSyncExternalStore } from 'react';
 
-import { createWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
+import { createWardrobeItem, deleteHeart, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
 import type { ArchiveImage, HeartResult, StyleImage, WardrobeItem } from './types';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -28,13 +28,14 @@ type State = {
   // 서버 아카이브의 사진 id → 저장 시각(ms). 새 하트는 응답 전까지 낙관적으로 표시한다.
   saved: Readonly<Record<string, number>>;
   hearts: Readonly<Record<string, HeartState>>;
+  unhearting: Readonly<Record<string, boolean>>;
 };
 
 function remote<T>(data: T): Remote<T> {
   return { status: 'idle', data, error: null, loadedAt: 0 };
 }
 
-let state: State = { wardrobe: remote([]), feed: remote([]), archive: remote([]), saved: {}, hearts: {} };
+let state: State = { wardrobe: remote([]), feed: remote([]), archive: remote([]), saved: {}, hearts: {}, unhearting: {} };
 const listeners = new Set<() => void>();
 
 function setState(patch: Partial<State>) {
@@ -142,10 +143,14 @@ export function useHeart(id: string | undefined): HeartState | undefined {
   return useStore((s) => (id === undefined ? undefined : s.hearts[id]));
 }
 
+export function useIsUnhearting(id: string | undefined): boolean {
+  return useStore((s) => id !== undefined && s.unhearting[id] === true);
+}
+
 // 사진을 저장하고 서버에서 옷장 대조 결과를 받는다. 이미 저장한 사진이면 지금 옷장으로 다시 맞춰 본다.
 export async function heartStyleImage(id: string): Promise<void> {
   const previous = state.hearts[id];
-  if (previous?.status === 'loading') return;
+  if (previous?.status === 'loading' || state.unhearting[id] === true) return;
   setState({
     saved: state.saved[id] === undefined ? { ...state.saved, [id]: Date.now() } : state.saved,
     hearts: { ...state.hearts, [id]: { status: 'loading', result: previous?.result ?? null } },
@@ -160,5 +165,41 @@ export async function heartStyleImage(id: string): Promise<void> {
         [id]: { status: 'error', result: previous?.result ?? null, error: errorMessage(error) },
       },
     });
+  }
+}
+
+// 서버 취소가 실패하면 이 사진의 저장·아카이브·분석 상태만 원래대로 되돌린다.
+export async function unheartStyleImage(id: string): Promise<void> {
+  if (state.unhearting[id] === true || state.saved[id] === undefined) return;
+  const previousSavedAt = state.saved[id];
+  const previousHeart = state.hearts[id];
+  const previousArchiveImage = state.archive.data.find((image) => image.id === id);
+  const nextSaved = { ...state.saved };
+  const nextHearts = { ...state.hearts };
+  delete nextSaved[id];
+  delete nextHearts[id];
+  setState({
+    saved: nextSaved,
+    hearts: nextHearts,
+    archive: { ...state.archive, data: state.archive.data.filter((image) => image.id !== id) },
+    unhearting: { ...state.unhearting, [id]: true },
+  });
+  try {
+    await deleteHeart(id);
+  } catch (error) {
+    const restoredArchive = previousArchiveImage === undefined
+      ? state.archive.data
+      : [...state.archive.data.filter((image) => image.id !== id), previousArchiveImage]
+        .sort((left, right) => right.saved_at.localeCompare(left.saved_at));
+    setState({
+      saved: { ...state.saved, [id]: previousSavedAt },
+      hearts: previousHeart === undefined ? state.hearts : { ...state.hearts, [id]: previousHeart },
+      archive: { ...state.archive, data: restoredArchive },
+    });
+    throw error;
+  } finally {
+    const nextUnhearting = { ...state.unhearting };
+    delete nextUnhearting[id];
+    setState({ unhearting: nextUnhearting });
   }
 }

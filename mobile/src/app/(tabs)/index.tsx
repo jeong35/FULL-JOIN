@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/GlassView';
 import { BookmarkIcon } from '@/components/Icons';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { heartStyleImage, loadArchive, loadFeed, useArchiveState, useFeedState, useSaved } from '@/data/store';
+import { errorMessage } from '@/data/api';
+import { heartStyleImage, loadArchive, loadFeed, unheartStyleImage, useArchiveState, useFeedState, useIsUnhearting, useSaved } from '@/data/store';
 import type { ArchiveImage, Season, StyleImage } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
@@ -49,6 +50,7 @@ export default function HomeScreen() {
   const saved = useSaved();
   const [folder, setFolder] = useState<Folder>('피드');
   const [refreshing, setRefreshing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // 화면에 돌아올 때마다 사진 주소가 만료됐는지 보고 필요하면 새로 받는다.
   useFocusEffect(
@@ -64,7 +66,16 @@ export default function HomeScreen() {
     setRefreshing(false);
   }
 
-  function onSave(id: string) {
+  async function onToggleSave(id: string) {
+    setActionError(null);
+    if (saved[id] !== undefined) {
+      try {
+        await unheartStyleImage(id);
+      } catch (error) {
+        setActionError(errorMessage(error));
+      }
+      return;
+    }
     heartStyleImage(id);
     router.push({ pathname: '/result/[id]', params: { id } });
   }
@@ -99,9 +110,9 @@ export default function HomeScreen() {
       </View>
     );
   } else if (folder === '모든 저장') {
-    body = <ArchiveGrid images={archive.data} />;
+    body = <ArchiveGrid images={archive.data} onUnsave={onToggleSave} />;
   } else if (folder === '계절') {
-    body = <SeasonArchive images={archive.data} />;
+    body = <SeasonArchive images={archive.data} onUnsave={onToggleSave} />;
   } else {
     const columns = splitColumns(feed.data);
     body = (
@@ -114,7 +125,7 @@ export default function HomeScreen() {
                 image={image}
                 colorIndex={(index + columnIndex) % 2}
                 saved={saved[image.id] !== undefined}
-                onSave={() => onSave(image.id)}
+                onSave={() => onToggleSave(image.id)}
               />
             ))}
           </View>
@@ -139,6 +150,7 @@ export default function HomeScreen() {
       {folder === '계절' && archive.data.length > 0 && (
         <Text style={styles.archiveHint}>저장한 달로 자동으로 나눠요</Text>
       )}
+      {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
 
       <ScrollView
         style={styles.scroll}
@@ -154,33 +166,20 @@ function openArchiveImage(image: ArchiveImage) {
   router.push({ pathname: '/result/[id]', params: { id: image.id } });
 }
 
-function ArchiveGrid({ images }: { images: readonly ArchiveImage[] }) {
+function ArchiveGrid({ images, onUnsave }: { images: readonly ArchiveImage[]; onUnsave: (id: string) => void }) {
   const columns = splitArchiveColumns(images);
   return (
     <View style={styles.archiveColumns}>
       {columns.map((column, columnIndex) => (
         <View key={columnIndex} style={styles.archiveColumn}>
-          {column.map((image) => (
-            <Pressable
-              key={image.id}
-              onPress={() => openArchiveImage(image)}
-              accessibilityRole="button"
-              accessibilityLabel={`${image.style.join('·')} 저장 사진 열기`}
-              style={styles.archivePhoto}>
-              <Image
-                source={{ uri: image.thumbnail_url, cacheKey: image.id }}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-              />
-            </Pressable>
-          ))}
+          {column.map((image) => <ArchiveThumbnail key={image.id} image={image} onUnsave={onUnsave} />)}
         </View>
       ))}
     </View>
   );
 }
 
-function SeasonArchive({ images }: { images: readonly ArchiveImage[] }) {
+function SeasonArchive({ images, onUnsave }: { images: readonly ArchiveImage[]; onUnsave: (id: string) => void }) {
   const groups = new Map<string, { year: number; season: Season; images: ArchiveImage[] }>();
   for (const image of images) {
     const key = `${image.season_year}-${image.season}`;
@@ -194,24 +193,53 @@ function SeasonArchive({ images }: { images: readonly ArchiveImage[] }) {
         <View key={`${group.year}-${group.season}`} style={styles.seasonCard}>
           <View style={styles.seasonPreview}>
             {group.images.slice(0, 4).map((image) => (
-              <Pressable
-                key={image.id}
-                onPress={() => openArchiveImage(image)}
-                accessibilityRole="button"
-                accessibilityLabel={`${group.year} ${group.season} 저장 사진 열기`}
-                style={styles.seasonPhoto}>
-                <Image
-                  source={{ uri: image.thumbnail_url, cacheKey: image.id }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                />
-              </Pressable>
+              <ArchiveThumbnail key={image.id} image={image} onUnsave={onUnsave} season />
             ))}
           </View>
           <Text style={styles.seasonTitle}>{group.year} {group.season}</Text>
           <Text style={styles.seasonSubtitle}>{SEASON_MONTHS[group.season]}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+function ArchiveThumbnail({
+  image,
+  onUnsave,
+  season = false,
+}: {
+  image: ArchiveImage;
+  onUnsave: (id: string) => void;
+  season?: boolean;
+}) {
+  const unhearting = useIsUnhearting(image.id);
+  return (
+    <View style={season ? styles.seasonPhoto : styles.archivePhoto}>
+      <Pressable
+        onPress={() => openArchiveImage(image)}
+        accessibilityRole="button"
+        accessibilityLabel={`${image.style.join('·')} 저장 사진 열기`}
+        style={StyleSheet.absoluteFill}>
+        <Image
+          source={{ uri: image.thumbnail_url, cacheKey: image.id }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+      </Pressable>
+      <Pressable
+        onPress={() => onUnsave(image.id)}
+        disabled={unhearting}
+        accessibilityRole="button"
+        accessibilityLabel="저장 취소"
+        accessibilityState={{ busy: unhearting, disabled: unhearting }}
+        style={styles.archiveRemoveButton}>
+        {unhearting ? (
+          <ActivityIndicator size="small" color={colors.textPurple} />
+        ) : (
+          <BookmarkIcon color={colors.textPurple} size={14} filled />
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -228,6 +256,7 @@ function FeedPhoto({
   onSave: () => void;
 }) {
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
+  const unhearting = useIsUnhearting(image.id);
   return (
     <View style={[styles.photo, { aspectRatio: ratio, backgroundColor: PHOTO_COLORS[colorIndex] }]}>
       <Image
@@ -245,12 +274,18 @@ function FeedPhoto({
       />
       <Pressable
         onPress={onSave}
+        disabled={unhearting}
         accessibilityRole="button"
-        accessibilityLabel={saved ? '저장됨' : '저장'}
+        accessibilityLabel={saved ? '저장 취소' : '저장'}
+        accessibilityState={{ busy: unhearting, disabled: unhearting }}
         hitSlop={6}
         style={styles.saveButtonWrap}>
         <GlassView radius={18} style={styles.saveButton}>
-          <BookmarkIcon color={colors.text} filled={saved} />
+          {unhearting ? (
+            <ActivityIndicator size="small" color={colors.textPurple} />
+          ) : (
+            <BookmarkIcon color={colors.text} filled={saved} />
+          )}
         </GlassView>
       </Pressable>
     </View>
@@ -289,6 +324,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
   },
+  actionError: {
+    marginHorizontal: layout.screenPaddingX,
+    marginBottom: 8,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: '#A23B3B',
+  },
   columns: {
     flexDirection: 'row',
     gap: PHOTO_GAP,
@@ -309,6 +351,17 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     overflow: 'hidden',
     backgroundColor: colors.line,
+  },
+  archiveRemoveButton: {
+    position: 'absolute',
+    right: 5,
+    bottom: 5,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   seasonGrid: {
     flexDirection: 'row',
