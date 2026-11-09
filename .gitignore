@@ -24,3 +24,6 @@ supabase/.temp/
 
 # 스파이크 사진 원본 (저작권 — 저장소에 올리지 않음)
 spike_photos/
+
+# 피드 사진 원본 (허락 전 쇼핑몰 캡처 — 저장소에 올리지 않고 Supabase Storage에만 올림)
+feed_photos/
