@@ -82,9 +82,11 @@ export async function loadWardrobe(): Promise<void> {
 }
 
 // 서버에 저장이 끝나야 옷장에 보인다. 실패하면 오류를 던진다(화면에서 알려 준다).
+// 옷장이 바뀌면 전에 받아 둔 저장 사진의 옷장 비교 결과(hearts)는 낡은 것이 되므로 비운다.
+// 결과 화면을 다시 열면 서버가 바뀐 옷장으로 다시 맞춘다(저장 시각은 그대로).
 export async function addWardrobeItem(input: Omit<WardrobeItem, 'id'>): Promise<WardrobeItem> {
   const item = await createWardrobeItem(input);
-  setState({ wardrobe: { ...state.wardrobe, data: [item, ...state.wardrobe.data] } });
+  setState({ wardrobe: { ...state.wardrobe, data: [item, ...state.wardrobe.data] }, hearts: {} });
   return item;
 }
 

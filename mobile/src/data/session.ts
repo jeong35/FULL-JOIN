@@ -18,6 +18,8 @@ export type Session = {
 };
 
 const STORAGE_KEY = 'odit-session-v1';
+// 이 브라우저에서 소개 3장을 본 적이 있는지. 로그아웃해도 남는다(한 번 본 사람은 로그인 화면부터).
+const INTRO_SEEN_KEY = 'odit-intro-seen-v1';
 const DEMO_USER_ID = process.env.EXPO_PUBLIC_DEMO_USER_ID ?? 'eunjae-demo';
 
 // 로그인 화면은 웹에서만 띄운다. EXPO_PUBLIC_DEMO_USER_ID를 넣으면 웹도 시연용 사용자로 고정된다.
@@ -112,6 +114,30 @@ function initialSession(): Session | null {
 }
 
 let session: Session | null = initialSession();
+let introSeen = readIntroSeen();
+
+function readIntroSeen(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return globalThis.localStorage?.getItem(INTRO_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+// 소개를 본 적이 있으면 로그아웃 뒤에도 소개를 건너뛰고 로그인 화면으로 간다.
+export function hasSeenIntro(): boolean {
+  return introSeen;
+}
+
+export function markIntroSeen() {
+  introSeen = true;
+  try {
+    globalThis.localStorage?.setItem(INTRO_SEEN_KEY, '1');
+  } catch {
+    // 저장이 막힌 브라우저는 이번 방문 동안만 기억한다.
+  }
+}
 const listeners = new Set<() => void>();
 
 function setSession(next: Session | null) {
@@ -133,12 +159,13 @@ export function useSession(): Session | null {
   return useSyncExternalStore(subscribe, getSession, getSession);
 }
 
-export function login(nickname: string, pin: string) {
+// returning: 이 계정으로 저장한 사진이나 옷장 옷이 이미 있으면(이미 쓰던 사람) 취향 고르기를 건너뛴다.
+export function login(nickname: string, pin: string, returning = false) {
   setSession({
     userId: userIdFor(nickname, pin),
     nickname: normalizeNickname(nickname),
     styles: [],
-    onboarded: false,
+    onboarded: returning,
   });
 }
 

@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postChat } from '@/data/api';
@@ -80,104 +81,107 @@ export default function ChatScreen() {
     }
   }
 
+  // 폰 위쪽 상태 표시줄(시간·배터리)과 제목이 겹치지 않게 다른 탭처럼 안전 영역 안에 그린다.
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={76}>
-      <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">챗봇</Text>
-        <Text style={styles.subtitle}>저장한 사진을 골라 이어서 물어봐요</Text>
-      </View>
-
-      {selected !== null ? (
-        <>
-          <SelectedImage image={selected} onChange={() => setShowPicker((current) => !current)} />
-          {showPicker && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pickerContent}
-              style={styles.picker}>
-              {archive.data.map((image) => (
-                <Pressable
-                  key={image.id}
-                  onPress={() => {
-                    setSelectedId(image.id);
-                    setShowPicker(false);
-                    setMessages([]);
-                    setConversationImageId(null);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: image.id === selected.id }}
-                  style={[styles.pickerImage, image.id === selected.id && styles.pickerImageSelected]}>
-                  <Image
-                    source={{ uri: image.thumbnail_url, cacheKey: image.id }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                  />
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-
-          <ScrollView
-            ref={scrollRef}
-            style={styles.messages}
-            contentContainerStyle={styles.messagesContent}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-            {visibleMessages.length === 0 && (
-              <View style={styles.emptyChat}>
-                <Text style={styles.emptyChatTitle}>이 사진에서 궁금한 걸 물어보세요</Text>
-                <Text style={styles.emptyChatText}>“내 옷장에서 뭐 입어?” 또는 “비슷한 상품 찾아줘”처럼 물을 수 있어요.</Text>
-              </View>
-            )}
-            {visibleMessages.map((message) => <ChatBubble key={message.id} message={message} />)}
-            {sending && (
-              <View style={styles.assistantRow}>
-                <View style={styles.avatar}><Text style={styles.avatarText}>o.</Text></View>
-                <View style={styles.loadingBubble}><ActivityIndicator size="small" color={colors.textPurple} /></View>
-              </View>
-            )}
-          </ScrollView>
-
-          {sendError !== null && <Text style={styles.error}>{sendError}</Text>}
-          <View style={styles.composer}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              onSubmitEditing={send}
-              placeholder="메시지 입력"
-              placeholderTextColor={colors.textSecondary}
-              returnKeyType="send"
-              editable={!sending}
-              style={styles.input}
-              accessibilityLabel="챗봇 메시지"
-            />
-            <Pressable
-              onPress={send}
-              disabled={sending || input.trim().length === 0}
-              accessibilityRole="button"
-              accessibilityLabel="보내기"
-              style={[styles.sendButton, (sending || input.trim().length === 0) && styles.sendButtonDisabled]}>
-              <Text style={styles.sendText}>↑</Text>
-            </Pressable>
-          </View>
-        </>
-      ) : (
-        <View style={styles.noArchive}>
-          {archive.status === 'loading' || archive.status === 'idle' ? (
-            <ActivityIndicator color={colors.textPurple} />
-          ) : (
-            <>
-              <Text style={styles.emptyChatTitle}>먼저 마음에 드는 사진을 저장해 주세요</Text>
-              <Text style={styles.emptyChatText}>{archive.error ?? '저장한 사진을 골라야 대화를 시작할 수 있어요.'}</Text>
-              <SmallWhiteButton label="피드로 가기" onPress={() => router.navigate('/')} />
-            </>
-          )}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={76}>
+        <View style={styles.header}>
+          <Text style={styles.title} accessibilityRole="header">챗봇</Text>
+          <Text style={styles.subtitle}>저장한 사진을 골라 이어서 물어봐요</Text>
         </View>
-      )}
-    </KeyboardAvoidingView>
+
+        {selected !== null ? (
+          <>
+            <SelectedImage image={selected} onChange={() => setShowPicker((current) => !current)} />
+            {showPicker && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.pickerContent}
+                style={styles.picker}>
+                {archive.data.map((image) => (
+                  <Pressable
+                    key={image.id}
+                    onPress={() => {
+                      setSelectedId(image.id);
+                      setShowPicker(false);
+                      setMessages([]);
+                      setConversationImageId(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: image.id === selected.id }}
+                    style={[styles.pickerImage, image.id === selected.id && styles.pickerImageSelected]}>
+                    <Image
+                      source={{ uri: image.thumbnail_url, cacheKey: image.id }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
+            <ScrollView
+              ref={scrollRef}
+              style={styles.messages}
+              contentContainerStyle={styles.messagesContent}
+              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
+              {visibleMessages.length === 0 && (
+                <View style={styles.emptyChat}>
+                  <Text style={styles.emptyChatTitle}>이 사진에서 궁금한 걸 물어보세요</Text>
+                  <Text style={styles.emptyChatText}>“내 옷장에서 뭐 입어?” 또는 “비슷한 상품 찾아줘”처럼 물을 수 있어요.</Text>
+                </View>
+              )}
+              {visibleMessages.map((message) => <ChatBubble key={message.id} message={message} />)}
+              {sending && (
+                <View style={styles.assistantRow}>
+                  <View style={styles.avatar}><Text style={styles.avatarText}>o.</Text></View>
+                  <View style={styles.loadingBubble}><ActivityIndicator size="small" color={colors.textPurple} /></View>
+                </View>
+              )}
+            </ScrollView>
+
+            {sendError !== null && <Text style={styles.error}>{sendError}</Text>}
+            <View style={styles.composer}>
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                onSubmitEditing={send}
+                placeholder="메시지 입력"
+                placeholderTextColor={colors.textSecondary}
+                returnKeyType="send"
+                editable={!sending}
+                style={styles.input}
+                accessibilityLabel="챗봇 메시지"
+              />
+              <Pressable
+                onPress={send}
+                disabled={sending || input.trim().length === 0}
+                accessibilityRole="button"
+                accessibilityLabel="보내기"
+                style={[styles.sendButton, (sending || input.trim().length === 0) && styles.sendButtonDisabled]}>
+                <Text style={styles.sendText}>↑</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <View style={styles.noArchive}>
+            {archive.status === 'loading' || archive.status === 'idle' ? (
+              <ActivityIndicator color={colors.textPurple} />
+            ) : (
+              <>
+                <Text style={styles.emptyChatTitle}>먼저 마음에 드는 사진을 저장해 주세요</Text>
+                <Text style={styles.emptyChatText}>{archive.error ?? '저장한 사진을 골라야 대화를 시작할 수 있어요.'}</Text>
+                <SmallWhiteButton label="피드로 가기" onPress={() => router.navigate('/')} />
+              </>
+            )}
+          </View>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -234,10 +238,11 @@ function ChatBubble({ message }: { message: Message }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   header: { paddingTop: 28, paddingBottom: 12, paddingHorizontal: layout.screenPaddingX },
   title: { fontFamily: fonts.extraBold, fontSize: 24, letterSpacing: -0.4, color: colors.text },
   subtitle: { marginTop: 4, fontFamily: fonts.regular, fontSize: 13, color: colors.textSecondary },
-  selectedCard: { marginHorizontal: layout.screenPaddingX, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 18, backgroundColor: '#FBF9FE' },
+  selectedCard: { marginHorizontal: layout.screenPaddingX, marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 18, backgroundColor: '#FBF9FE' },
   selectedThumb: { width: 38, height: 46, borderRadius: 10, backgroundColor: colors.line },
   selectedText: { flex: 1, minWidth: 0 },
   selectedLabel: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary },

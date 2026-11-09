@@ -258,10 +258,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
           ))}
         </View>
 
-        <Text style={styles.note}>
-          브랜드는 근거가 있을 때만 보여 줘요.
-          {result.shop ? ` 사진 출처: ${result.shop}` : ''}
-        </Text>
+        {result.shop ? <Text style={styles.note}>사진 출처: {result.shop}</Text> : null}
       </ScrollView>
 
       {footerButton !== null && (
