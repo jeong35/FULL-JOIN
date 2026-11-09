@@ -36,7 +36,7 @@ export type HeartItem = {
   visibility?: '전체' | '일부' | '판단불가';
   brand?: string | null;
   product_name?: string | null;
-  brand_source?: '캡션' | '이미지_글자' | '없음';
+  brand_source?: '캡션' | '이미지_글자' | '쇼핑몰_상품정보' | '없음';
 };
 
 // 비슷한 상품. 서버가 아직 빈 목록을 준다.

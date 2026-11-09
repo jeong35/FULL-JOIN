@@ -7,13 +7,17 @@
     "generate:analysis-contract": "node scripts/generate-analysis-contract.mjs",
     "check:analysis-contract": "node scripts/generate-analysis-contract.mjs --check",
     "check:product-metadata": "node scripts/check-product-metadata.mjs",
+    "check:heart-response": "node scripts/check-heart-response.mjs",
+    "check:review-publish": "node scripts/check-review-publish.mjs",
     "import:style-images": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/import-style-images.mjs",
     "link:item-product": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/link-item-product.mjs",
-    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check src/fulljoin/catalog.ts && node --check src/fulljoin/feed.ts && node --check src/fulljoin/analysis.ts && node --check src/fulljoin/product_metadata.ts && node --check scripts/import-style-images.mjs && node --check scripts/link-item-product.mjs && node --check scripts/generate-analysis-contract.mjs && node --check scripts/check-product-metadata.mjs && node --check supabase/functions/api/index.ts && node --check tests/test_gap_analysis_golden.ts && node --check tests/test_acceptance_contracts_golden.ts && node --check tests/test_server_contract.ts",
+    "review:style-image": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/review-style-image.mjs",
+    "publish:style-image": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/publish-style-image.mjs",
+    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check src/fulljoin/catalog.ts && node --check src/fulljoin/feed.ts && node --check src/fulljoin/analysis.ts && node --check src/fulljoin/product_metadata.ts && node --check src/fulljoin/review.ts && node --check src/fulljoin/heart.ts && node --check scripts/import-style-images.mjs && node --check scripts/link-item-product.mjs && node --check scripts/review-style-image.mjs && node --check scripts/publish-style-image.mjs && node --check scripts/generate-analysis-contract.mjs && node --check scripts/check-product-metadata.mjs && node --check scripts/check-review-publish.mjs && node --check scripts/check-heart-response.mjs && node --check supabase/functions/api/index.ts && node --check tests/test_gap_analysis_golden.ts && node --check tests/test_acceptance_contracts_golden.ts && node --check tests/test_server_contract.ts",
     "check:types": "tsc --noEmit",
     "test:golden": "node --test --test-reporter=spec tests/test_gap_analysis_golden.ts tests/test_acceptance_contracts_golden.ts",
     "test:server": "node --test --test-reporter=spec tests/test_server_contract.ts",
-    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server"
+    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server"
   },
   "engines": {
     "node": ">=22.18"

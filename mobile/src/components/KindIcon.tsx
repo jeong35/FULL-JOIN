@@ -93,7 +93,7 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
   const tops = variant?.tops ?? icon.tops;
 
   return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" accessible={false}>
+    <Svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
       <Defs>
         {isMulti && (
           <LinearGradient id={multiId} x1="0" y1="0" x2="1" y2="1">

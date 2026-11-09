@@ -21,6 +21,8 @@
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
+| `GET/PUT` | `/style-images/{id}/review` | AI 원본은 보존하고 운영용 스타일·아이템을 조회·검수 |
+| `PUT` | `/style-images/{id}/publish` | 검수된 사진만 피드에 공개하거나 공개 취소 |
 | `POST` | `/style-images/{id}/heart` | 하트 저장과 갭 분석 |
 | `DELETE` | `/style-images/{id}/heart` | 하트 취소 |
 
@@ -40,7 +42,7 @@
 
 ## 하트와 빈 옷장
 
-하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
+하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 각 `items[]`에는 갭 판정뿐 아니라 결과 화면에 필요한 `slot`, `kind`, `color`, `visual_fit`, `visibility`, 근거가 있는 상품 식별 정보가 함께 온다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 대표상품이 있으면 응답 최상위의 `shop`, `product_name`, `product_url`로 정확한 상품 페이지를 제공한다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
 
 ## 사진 분석과 CSV 일괄 등록
 
@@ -93,6 +95,56 @@ npm run link:item-product -- --image-id IMG-001 --item-id IMG-001-ITEM-02 \
 ```
 
 링크를 이미지 전체에 자동 연결하지 않고 아이템을 명시하는 이유는, 코디 사진에 여러 아이템이 있어 잘못된 옷에 정확한 상품 정보를 붙이면 AC2를 위반하기 때문이다.
+
+## 사진 검수와 공개
+
+AI의 최초 결과는 `style_images.tagging`에 그대로 남는다. 검수 API는 서비스에서 사용하는 `style_images.style`과 `style_image_items`의 분류값만 고치고 `reviewed_at`을 기록하며, 수정 또는 재검수한 사진은 항상 `published=false`로 둔다.
+
+현재 값을 먼저 확인한다.
+
+```bash
+npm run review:style-image -- --image-id IMG-001 --show
+```
+
+수정할 것이 없으면 현재 값을 승인한다.
+
+```bash
+npm run review:style-image -- --image-id IMG-001
+```
+
+수정이 필요하면 JSON 파일을 만든다. `style`과 `items` 중 바꿀 값만 넣을 수 있고, 아이템은 기존 `item_id`를 명시한다.
+
+```json
+{
+  "style": ["캐주얼", "스트릿"],
+  "items": [
+    {
+      "item_id": "IMG-001-ITEM-01",
+      "slot": "아우터",
+      "kind": "점퍼",
+      "color": "브라운",
+      "visual_fit": "오버사이즈",
+      "visibility": "전체"
+    }
+  ]
+}
+```
+
+```bash
+npm run review:style-image -- --image-id IMG-001 --input /절대/경로/IMG-001-review.json
+```
+
+검수가 끝난 사진만 공개한다. 검수하지 않은 사진은 서버가 `409 review_required`로 거절한다.
+
+```bash
+npm run publish:style-image -- --image-id IMG-001
+```
+
+다시 숨기려면 다음 명령을 사용한다.
+
+```bash
+npm run publish:style-image -- --image-id IMG-001 --unpublish
+```
 
 ## 아직 구현하지 않은 경로
 

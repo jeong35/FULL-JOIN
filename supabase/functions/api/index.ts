@@ -10,7 +10,9 @@ import {
 import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "../../../src/fulljoin/gap_analysis.ts";
+import { heartItemResponse, representativeProductFields, type HeartItemRow } from "../../../src/fulljoin/heart.ts";
 import { extractProductMetadata, type ProductMetadata } from "../../../src/fulljoin/product_metadata.ts";
+import { styleImagePublishInputSchema, styleImageReviewInputSchema } from "../../../src/fulljoin/review.ts";
 import { ANALYSIS_JSON_SCHEMA, ANALYSIS_SYSTEM_PROMPT } from "./generated_analysis_contract.ts";
 
 const corsHeaders = {
@@ -393,6 +395,94 @@ async function handleProductLink(
   return json({ item: updated, metadata_status: metadataStatus });
 }
 
+async function reviewSnapshot(styleImageId: string, db: SupabaseClient): Promise<{
+  style_image: Record<string, unknown>;
+  items: Record<string, unknown>[];
+} | null> {
+  const [{ data: styleImage, error: imageError }, { data: items, error: itemsError }] = await Promise.all([
+    db.from("style_images")
+      .select("id,image_path,source,source_url,permission,style,tagging,reviewed_at,published")
+      .eq("id", styleImageId).maybeSingle(),
+    db.from("style_image_items")
+      .select("item_id,slot,kind,color,visual_fit,visibility,shop,brand,product_name,product_url,is_representative_product")
+      .eq("style_image_id", styleImageId).order("item_id"),
+  ]);
+  if (imageError !== null) throw imageError;
+  if (itemsError !== null) throw itemsError;
+  return styleImage === null ? null : { style_image: styleImage, items: items ?? [] };
+}
+
+async function handleStyleImageReview(
+  request: Request,
+  styleImageId: string,
+  db: SupabaseClient,
+): Promise<Response> {
+  if (!["GET", "PUT"].includes(request.method)) return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  if (!adminTokenIsValid(request)) return apiError(401, "admin_token_required", "분석 관리자 토큰을 확인해 주세요");
+
+  const before = await reviewSnapshot(styleImageId, db);
+  if (before === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
+  if (request.method === "GET") return json(before);
+
+  const body = await bodyAsObject(request);
+  if (body === null) return apiError(400, "invalid_request", "요청 본문을 확인해 주세요");
+  const input = styleImageReviewInputSchema.safeParse(body);
+  if (!input.success) {
+    const field = input.error.issues[0]?.path[0];
+    return apiError(400, "invalid_review", input.error.issues[0]?.message ?? "검수 값을 확인해 주세요", typeof field === "string" ? field : undefined);
+  }
+
+  const knownItemIds = new Set(before.items.map((item) => item.item_id));
+  const unknownItem = input.data.items?.find((item) => !knownItemIds.has(item.item_id));
+  if (unknownItem !== undefined) {
+    return apiError(400, "review_item_not_found", "해당 사진에 없는 아이템이에요", "items");
+  }
+
+  const { error } = await db.rpc("review_style_image", {
+    p_style_image_id: styleImageId,
+    p_style: input.data.style ?? null,
+    p_items: input.data.items ?? null,
+  });
+  if (error !== null) throw error;
+  const reviewed = await reviewSnapshot(styleImageId, db);
+  if (reviewed === null) throw new Error("Reviewed style image disappeared");
+  return json(reviewed);
+}
+
+async function handleStyleImagePublish(
+  request: Request,
+  styleImageId: string,
+  db: SupabaseClient,
+): Promise<Response> {
+  if (request.method !== "PUT") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  if (!adminTokenIsValid(request)) return apiError(401, "admin_token_required", "분석 관리자 토큰을 확인해 주세요");
+  const body = await bodyAsObject(request);
+  if (body === null) return apiError(400, "invalid_request", "요청 본문을 확인해 주세요");
+  const input = styleImagePublishInputSchema.safeParse(body);
+  if (!input.success) return apiError(400, "invalid_publish", input.error.issues[0]?.message ?? "공개 값을 확인해 주세요", "published");
+
+  const { data: styleImage, error: findError } = await db.from("style_images")
+    .select("id,reviewed_at,published").eq("id", styleImageId).maybeSingle();
+  if (findError !== null) throw findError;
+  if (styleImage === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
+  if (input.data.published && styleImage.reviewed_at === null) {
+    return apiError(409, "review_required", "사진을 먼저 검수해야 공개할 수 있어요");
+  }
+
+  const { error: publishError } = await db.rpc("set_style_image_published", {
+    p_style_image_id: styleImageId,
+    p_published: input.data.published,
+  });
+  if (publishError !== null) throw publishError;
+  return json({
+    style_image: {
+      id: styleImageId,
+      reviewed_at: styleImage.reviewed_at,
+      published: input.data.published,
+    },
+  });
+}
+
 async function handleWardrobe(request: Request, url: URL, db: SupabaseClient): Promise<Response> {
   if (request.method === "GET") {
     const userId = url.searchParams.get("user_id")?.trim();
@@ -473,7 +563,9 @@ async function handleHeart(
   if (request.method !== "POST") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
 
   const [{ data: itemRows, error: itemError }, { data: wardrobeRows, error: wardrobeError }] = await Promise.all([
-    db.from("style_image_items").select("item_id,slot,kind,color,visual_fit,visibility").eq("style_image_id", styleImageId),
+    db.from("style_image_items")
+      .select("item_id,slot,kind,color,visual_fit,visibility,brand,product_name,brand_source,shop,product_url,is_representative_product")
+      .eq("style_image_id", styleImageId).order("item_id"),
     db.from("wardrobe_items").select("id,slot,kind,color,visual_fit").eq("user_id", userId),
   ]);
   if (itemError !== null) throw itemError;
@@ -483,28 +575,27 @@ async function handleHeart(
     .upsert({ user_id: userId, style_image_id: styleImageId }, { onConflict: "user_id,style_image_id" })
     .select("saved_at").single();
   if (heartError !== null) throw heartError;
+  const itemDetails = (itemRows ?? []) as HeartItemRow[];
+  const representativeProduct = representativeProductFields(itemDetails);
 
   if ((wardrobeRows ?? []).length === 0) {
     return json({
       style_image_id: styleImageId,
       saved_at: heart.saved_at,
-      items: (itemRows ?? []).map((item) => ({ item_id: item.item_id, gap_status: null, wardrobe_item_ids: [], decision_options: [] })),
+      items: itemDetails.map((item) => heartItemResponse(item, { gap_status: null, wardrobe_item_ids: [] })),
       outfits: [],
       products: [],
       message: "옷장을 등록하면 가진 옷과 맞춰 드려요",
+      ...representativeProduct,
     });
   }
 
   const wardrobe = (wardrobeRows ?? []) as WardrobeItemForGapAnalysis[];
-  const items = (itemRows ?? []).map((row) => {
+  const items = itemDetails.map((row) => {
     const result = classifyGap(row as ItemForGapAnalysis, wardrobe);
-    return {
-      item_id: row.item_id,
-      ...result,
-      decision_options: result.gap_status === "비슷함" ? ["활용", "구매"] : [],
-    };
+    return heartItemResponse(row, result);
   });
-  return json({ style_image_id: styleImageId, saved_at: heart.saved_at, items, outfits: [], products: [] });
+  return json({ style_image_id: styleImageId, saved_at: heart.saved_at, items, outfits: [], products: [], ...representativeProduct });
 }
 
 export default {
@@ -527,6 +618,14 @@ export default {
       const productMatch = path.match(/^\/style-images\/([^/]+)\/items\/([^/]+)\/product$/);
       if (productMatch?.[1] !== undefined && productMatch[2] !== undefined) {
         return await handleProductLink(request, decodeURIComponent(productMatch[1]), decodeURIComponent(productMatch[2]), db);
+      }
+      const reviewMatch = path.match(/^\/style-images\/([^/]+)\/review$/);
+      if (reviewMatch?.[1] !== undefined) {
+        return await handleStyleImageReview(request, decodeURIComponent(reviewMatch[1]), db);
+      }
+      const publishMatch = path.match(/^\/style-images\/([^/]+)\/publish$/);
+      if (publishMatch?.[1] !== undefined) {
+        return await handleStyleImagePublish(request, decodeURIComponent(publishMatch[1]), db);
       }
       const heartMatch = path.match(/^\/style-images\/([^/]+)\/heart$/);
       if (heartMatch?.[1] !== undefined) return await handleHeart(request, decodeURIComponent(heartMatch[1]), db);
