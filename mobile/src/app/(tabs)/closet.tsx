@@ -148,7 +148,8 @@ export default function ClosetScreen() {
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.grid}>
+      {/* 아래 말풍선이 떠 있으면 마지막 줄 옷이 가려지지 않게 그만큼 더 내려 볼 수 있게 한다. */}
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.grid, showAfterClosetHint && styles.gridUnderHint]}>
         {wardrobe.length === 0 && loading ? (
           <View style={styles.emptyBox}>
             <ActivityIndicator color={colors.textPurple} />
@@ -354,6 +355,9 @@ const styles = StyleSheet.create({
     rowGap: 14,
     paddingHorizontal: layout.screenPaddingX,
     paddingBottom: 16,
+  },
+  gridUnderHint: {
+    paddingBottom: 170,
   },
   empty: {
     width: '100%',
