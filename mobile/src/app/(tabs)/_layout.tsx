@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
 import { emitHomeTabReselect } from '@/data/homeTab';
-import { hasSeenIntro, useSession } from '@/data/session';
+import { hasLoggedInBefore, hasSeenIntro, useSession } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
 // design/DESIGN.md 6절: 하단 탭 5개, 높이 76 + 위 1px 선, 고른 탭은 #6A3FC4 굵게, 나머지 #645A73.
@@ -20,8 +20,11 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const session = useSession();
 
-  // 처음 온 사람(웹)은 튜토리얼 → 로그인 → 취향 고르기부터. 소개를 이미 봤으면(로그아웃 등) 로그인부터.
-  if (session === null) return <Redirect href={hasSeenIntro() ? '/onboarding/login' : '/onboarding'} />;
+  // 처음 온 사람(웹)은 튜토리얼 → 로그인 → 취향 고르기부터. 소개를 이미 봤거나 이 브라우저에서 로그인한 적이 있으면
+  // (로그아웃 등) 소개 없이 로그인부터.
+  if (session === null) {
+    return <Redirect href={hasSeenIntro() || hasLoggedInBefore() ? '/onboarding/login' : '/onboarding'} />;
+  }
   if (!session.onboarded) return <Redirect href="/onboarding/taste" />;
 
   return (

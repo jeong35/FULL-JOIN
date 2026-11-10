@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/GlassView';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { accountHasData, fetchStylePreferences } from '@/data/api';
+import { track } from '@/data/events';
 import { NICKNAME_MAX, login, nicknameProblem, pinProblem, userIdFor } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
@@ -25,6 +26,10 @@ export default function LoginScreen() {
   const pinError = pinProblem(pin);
   const valid = nicknameError === null && pinError === null;
 
+  useEffect(() => {
+    track('login_view');
+  }, []);
+
   async function submit() {
     setTried(true);
     if (!valid || checking) return;
@@ -42,6 +47,7 @@ export default function LoginScreen() {
       returning ||= savedStyles.length > 0;
     }
     login(nickname, pin, returning, savedStyles);
+    track('login_success', { returning });
     router.replace(returning ? '/' : '/onboarding/taste');
   }
 

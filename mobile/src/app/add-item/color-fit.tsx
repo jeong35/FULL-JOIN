@@ -25,7 +25,8 @@ import {
   type VisualFit,
 } from '@/data/catalog';
 import { errorMessage } from '@/data/api';
-import { addWardrobeItem } from '@/data/store';
+import { track } from '@/data/events';
+import { addWardrobeItem, useWardrobe } from '@/data/store';
 import { colors, fonts, layout } from '@/theme';
 
 // '옷 추가 ②' 색·핏. 모양은 design/screens/21-add-item-2-color-fit.html을 따른다.
@@ -57,6 +58,7 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
   const [fit, setFit] = useState<VisualFit | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const wardrobe = useWardrobe();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
@@ -76,6 +78,8 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
     setSaveError(null);
     try {
       await addWardrobeItem({ slot, kind, color, visual_fit: needsFit ? fit : null });
+      // 옷장 크기는 활성화(옷 5벌 이상) 목표를 재려고 같이 남긴다.
+      track('wardrobe_add_done', { slot, kind, wardrobe_size: wardrobe.length + 1 });
       // 옷 추가 화면 두 장을 닫고 옷장 탭으로 돌아간다.
       router.dismissTo('/closet');
     } catch (error) {

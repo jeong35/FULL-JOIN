@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { CheckMark } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { DetailHeader, PrimaryButton, ProgressSteps, SegmentedControl } from '@/components/ui';
 import { isSlot, KINDS_BY_SLOT, SLOTS, type Kind, type Slot } from '@/data/catalog';
+import { track } from '@/data/events';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // '옷 추가 ①' 부위·종류. 모양은 design/screens/20-add-item-1-kind.html을 따른다.
@@ -26,6 +27,11 @@ export default function AddItemKindScreen() {
   const cardWidth =
     (width - layout.screenPaddingX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
   const kinds: readonly Kind[] = KINDS_BY_SLOT[slot];
+
+  // 옷 추가를 시작한 횟수. 옷장 탭·준비 끝 화면·비교 결과의 '옷 추가' 어디서 와도 여기서 한 번 남긴다.
+  useEffect(() => {
+    track('wardrobe_add_start');
+  }, []);
 
   function selectSlot(next: Slot) {
     if (next === slot) return;

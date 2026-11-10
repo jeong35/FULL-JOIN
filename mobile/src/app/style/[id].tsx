@@ -9,6 +9,8 @@ import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { BackButton, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, fetchStyleImageDetail } from '@/data/api';
+import { track } from '@/data/events';
+import { markHintDone } from '@/data/hints';
 import { heartStyleImage, unheartStyleImage, useSaved } from '@/data/store';
 import type { StyleImageDetail, StyleImageDetailItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
@@ -70,7 +72,11 @@ export default function StyleDetailScreen() {
     setError(null);
     try {
       if (isSaved) await unheartStyleImage(imageId);
-      else await heartStyleImage(imageId);
+      else {
+        track('photo_save', { style_image_id: imageId, place: 'detail' });
+        markHintDone('home_after_closet');
+        await heartStyleImage(imageId);
+      }
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
@@ -81,6 +87,7 @@ export default function StyleDetailScreen() {
   const openComparison = async () => {
     if (busy) return;
     setBusy(true);
+    track('compare_open', { style_image_id: imageId, was_saved: isSaved });
     if (!isSaved) await heartStyleImage(imageId);
     setBusy(false);
     router.push({ pathname: '/result/[id]', params: { id: imageId } });
@@ -180,7 +187,10 @@ function ProductItem({ item }: { item: StyleImageDetailItem }) {
         {source !== '' && <Text style={styles.itemMeta}>{source}</Text>}
         {item.product_url !== null ? (
           <Pressable
-            onPress={() => WebBrowser.openBrowserAsync(item.product_url!)}
+            onPress={() => {
+              track('shop_link_click', { place: 'detail', match_type: 'exact', platform: item.shop ?? null, kind: item.kind });
+              void WebBrowser.openBrowserAsync(item.product_url!);
+            }}
             accessibilityRole="link"
             style={styles.productLink}>
             <Text style={styles.productLinkText}>이 상품 보기 ›</Text>

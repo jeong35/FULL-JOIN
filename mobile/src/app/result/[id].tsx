@@ -1,16 +1,19 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/GlassView';
+import { HintBubble } from '@/components/HintBubble';
 import { KindIcon } from '@/components/KindIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
 import type { Kind } from '@/data/catalog';
+import { track } from '@/data/events';
+import { markHintDone, useHintOpen } from '@/data/hints';
 import { buildOutfits, substitutesFor, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
 import { shoppingLinksFor } from '@/data/shopping';
 import { heartStyleImage, unheartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
@@ -184,6 +187,31 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
     decisions[item.item_id]?.products ?? result.products.filter((candidate) => candidate.item_id === item.item_id),
   );
 
+  // 비교 결과까지 온 횟수(도달)와 판정 구성을 사진마다 한 번 남긴다(docs/EVENTS.md).
+  const trackedImage = useRef<string | null>(null);
+  useEffect(() => {
+    if (trackedImage.current === imageId) return;
+    trackedImage.current = imageId;
+    // 비교 결과까지 왔으니 그 앞 단계 말풍선(사진 저장하기·비교하기)은 더 띄우지 않는다.
+    markHintDone('save_compare');
+    markHintDone('archive_open');
+    const count = (test: (item: ShownItem) => boolean) => items.filter(test).length;
+    track('result_view', {
+      style_image_id: imageId,
+      items: items.length,
+      use: count((item) => item.gap_status === '활용'),
+      similar: count((item) => item.gap_status === '비슷함'),
+      substitute: count((item) => item.gap_status === '구매' && substitutesFor(item, wardrobe).length > 0),
+      need: count((item) => item.gap_status === '구매' && substitutesFor(item, wardrobe).length === 0),
+      wardrobe_empty: wardrobeEmpty,
+      wardrobe_size: wardrobe.length,
+      outfits: showOutfits ? outfits.length : 0,
+    });
+  });
+
+  // 다음 할 일 말풍선: 결과를 끝까지 보면 이 사진으로 챗봇에 물어보기.
+  const chatHintOpen = useHintOpen('result_chat');
+
   const choose = async (itemId: string, value: SimilarChoice) => {
     const previousChoice = choices[itemId];
     setChoices((current) => ({ ...current, [itemId]: value }));
@@ -244,14 +272,33 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
               pending={pendingItems[item.item_id] === true}
               error={decisionErrors[item.item_id] || null}
               // '대체'는 화면에서만 고른다(서버 판정은 구매 그대로). 고르면 아래 코디만 바뀐다.
-              onChoose={(value) => (item.gap_status === '구매'
-                ? setChoices((current) => ({ ...current, [item.item_id]: value }))
-                : choose(item.item_id, value))}
+              onChoose={(value) => {
+                track('item_choice', {
+                  style_image_id: imageId,
+                  item_id: item.item_id,
+                  kind: item.kind,
+                  status: item.gap_status === '구매' ? 'substitute' : 'similar',
+                  choice: value === '활용' ? 'use' : 'find',
+                });
+                if (item.gap_status === '구매') setChoices((current) => ({ ...current, [item.item_id]: value }));
+                else void choose(item.item_id, value);
+              }}
             />
           ))}
         </View>
 
         {showOutfits && <OutfitSection outfits={outfits} linksFor={linksFor} />}
+
+        {!wardrobeEmpty && items.length > 0 && chatHintOpen && (
+          <HintBubble
+            id="result_chat"
+            text="더 궁금한 건 챗봇에게 이 사진으로 물어볼 수 있어요"
+            actionLabel="챗봇에 물어보기"
+            tail="none"
+            onPress={() => router.navigate({ pathname: '/chat', params: { image: imageId } })}
+            style={styles.hint}
+          />
+        )}
 
         {result.shop ? <Text style={styles.note}>사진 출처: {result.shop}</Text> : null}
       </ScrollView>
@@ -328,7 +375,7 @@ function ResultCard({
       {/* 필요한 옷, 그리고 옷장이 비어 비교하지 못한 옷(AC12)에는 쇼핑 링크를 바로 단다. */}
       {(item.gap_status === null || (item.gap_status === '구매' && !hasSubstitute)) && (
         <View style={styles.needBox}>
-          <ShopLinks item={item} links={links} />
+          <ShopLinks item={item} links={links} place="list" />
         </View>
       )}
 
@@ -371,7 +418,7 @@ function ResultCard({
           {hasSubstitute && choice === '구매' && (
             <View style={styles.decisionOutcome}>
               <Text style={styles.decisionTitle}>비슷한 상품을 찾아볼게요</Text>
-              <ShopLinks item={item} links={links} />
+              <ShopLinks item={item} links={links} place="list" />
             </View>
           )}
         </>
@@ -382,13 +429,24 @@ function ResultCard({
 }
 
 // '필요'한 옷의 쇼핑 링크. 검색어는 옷마다 다르다(색 + 핏 + 종류, parse_query.md 쇼핑 검색어 규칙).
-function ShopLinks({ item, links }: { item: ShownItem; links: Product[] }) {
+// place: 아이템 목록('list')인지 코디 카드('outfit')인지 — 어느 자리 링크를 누르는지 보려고 기록에 남긴다.
+function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; place: 'list' | 'outfit' }) {
+  const { id } = useLocalSearchParams<{ id?: string }>();
   return (
     <View style={styles.decisionLinks}>
       {links.map((product) => (
         <Pressable
           key={`${product.platform}-${product.match_type}`}
-          onPress={() => WebBrowser.openBrowserAsync(product.url)}
+          onPress={() => {
+            track('shop_link_click', {
+              place,
+              platform: product.platform,
+              match_type: product.match_type,
+              kind: item.kind,
+              style_image_id: typeof id === 'string' ? id : null,
+            });
+            void WebBrowser.openBrowserAsync(product.url);
+          }}
           accessibilityRole="link"
           accessibilityLabel={`${item.kind} ${product.platform}에서 찾기`}
           style={styles.decisionLink}>
@@ -447,7 +505,7 @@ function DecisionOutcome({
   return (
     <View style={styles.decisionOutcome}>
       <Text style={styles.decisionTitle}>비슷한 상품을 찾아볼게요</Text>
-      <ShopLinks item={item} links={links} />
+      <ShopLinks item={item} links={links} place="list" />
     </View>
   );
 }
@@ -509,7 +567,7 @@ function OutfitCard({
               <Text style={styles.needLabel} numberOfLines={1}>
                 {[piece.item.color, piece.item.kind].filter(Boolean).join(' ')} 찾기
               </Text>
-              <ShopLinks item={piece.item} links={linksFor(piece.item)} />
+              <ShopLinks item={piece.item} links={linksFor(piece.item)} place="outfit" />
             </View>
           ))}
         </View>
@@ -981,5 +1039,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: colors.textSecondary,
+  },
+  hint: {
+    marginTop: 18,
   },
 });

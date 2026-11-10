@@ -17,6 +17,7 @@ import {
   type ChatWardrobeItem,
 } from "../../../src/fulljoin/chat.ts";
 import { itemDecisionInputSchema, itemDecisionResponse, type DecisionItem } from "../../../src/fulljoin/decision.ts";
+import { eventBatchSchema, eventRows } from "../../../src/fulljoin/events.ts";
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "../../../src/fulljoin/gap_analysis.ts";
 import { heartItemResponse, representativeProductFields, type HeartItemRow } from "../../../src/fulljoin/heart.ts";
@@ -586,6 +587,16 @@ async function handleStylePreferences(request: Request, url: URL, db: SupabaseCl
   return json({ styles });
 }
 
+// 사용 기록(docs/EVENTS.md). 앱은 페이지를 닫을 때도 보낼 수 있게 text/plain으로 JSON을 보낸다.
+async function handleEvents(request: Request, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "POST") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  const input = eventBatchSchema.safeParse(await bodyAsObject(request));
+  if (!input.success) return apiError(400, "invalid_request", "사용 기록 형식이 맞지 않아요");
+  const { error } = await db.from("user_events").insert(eventRows(input.data));
+  if (error !== null) throw error;
+  return json({ accepted: input.data.events.length });
+}
+
 async function handleFeed(url: URL, db: SupabaseClient): Promise<Response> {
   const selectedStyle = url.searchParams.get("style");
   if (selectedStyle !== null && !STYLES.includes(selectedStyle as (typeof STYLES)[number])) {
@@ -961,6 +972,7 @@ export default {
       if (path === "/feed" && request.method === "GET") return await handleFeed(url, db);
       if (path === "/archive") return await handleArchive(request, url, db);
       if (path === "/chat") return await handleChat(request, db);
+      if (path === "/events") return await handleEvents(request, db);
       const detailMatch = path.match(/^\/style-images\/([^/]+)$/);
       if (detailMatch?.[1] !== undefined) {
         return await handleStyleImageDetail(request, decodeURIComponent(detailMatch[1]), db);
