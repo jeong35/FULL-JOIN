@@ -90,20 +90,34 @@ export async function addWardrobeItem(input: Omit<WardrobeItem, 'id'>): Promise<
   return item;
 }
 
-// 화면에서는 먼저 지우고 서버 삭제가 실패하면 원래 순서로 되돌린다.
-export async function removeWardrobeItem(id: string): Promise<void> {
-  const previousWardrobe = state.wardrobe;
-  const previousHearts = state.hearts;
+// 옷장 편집에서 고른 옷 여러 벌을 한 번에 지운다. 화면에서 먼저 빼고,
+// 서버에서 못 지운 옷만 원래 자리로 되돌린다. 못 지운 옷의 id를 돌려준다.
+export async function removeWardrobeItems(ids: readonly string[]): Promise<string[]> {
+  const targets = new Set(ids);
+  const previous = state.wardrobe.data;
+  const removing = previous.filter((item) => targets.has(item.id));
   setState({
-    wardrobe: { ...state.wardrobe, data: state.wardrobe.data.filter((item) => item.id !== id) },
+    wardrobe: { ...state.wardrobe, data: previous.filter((item) => !targets.has(item.id)) },
     hearts: {},
   });
-  try {
-    await deleteWardrobeItem(id);
-  } catch (error) {
-    setState({ wardrobe: previousWardrobe, hearts: previousHearts });
-    throw error;
+  const results = await Promise.allSettled(removing.map((item) => deleteWardrobeItem(item.id)));
+  const failed = new Set(removing.filter((_, index) => results[index].status === 'rejected').map((item) => item.id));
+  if (failed.size > 0) {
+    // 그사이 새로 넣은 옷(앞)은 그대로 두고, 원래 있던 옷은 원래 순서대로 되살린다.
+    const current = state.wardrobe.data;
+    const currentIds = new Set(current.map((item) => item.id));
+    const previousIds = new Set(previous.map((item) => item.id));
+    setState({
+      wardrobe: {
+        ...state.wardrobe,
+        data: [
+          ...current.filter((item) => !previousIds.has(item.id)),
+          ...previous.filter((item) => currentIds.has(item.id) || failed.has(item.id)),
+        ],
+      },
+    });
   }
+  return [...failed];
 }
 
 // ── 피드 ────────────────────────────────────────────
