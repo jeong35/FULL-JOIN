@@ -8,9 +8,10 @@
 - 전송: `POST /events`
 - 개인 정보: 닉네임, 숫자 4자리, 채팅 원문은 보내지 않는다.
 - 식별자: `user_id`(로그인 후 해시), `device_id`, `session_id`
+- 세션: 마지막 분석 이벤트 이후 **30분 inactivity** 전까지 같은 `session_id`를 유지한다. 새로고침·탭 닫기·Safari 재접속도 30분 안이면 같은 세션이다.
 - 시간: 클라이언트 `client_ts`와 서버 수신 `received_at`
 - 모든 이벤트 `props`에는 `app_version`, `analytics_version`이 자동으로 붙는다.
-- 현재 기본 `analytics_version`: `2026-11-11-v3`
+- 현재 기본 `analytics_version`: `2026-11-11-v4`
 - 이벤트 전송 실패가 앱 사용을 막아서는 안 된다.
 
 ## 핵심 플로우
@@ -49,6 +50,15 @@
 - `feed`와 `archive`는 같은 URL(/) 안의 탭이지만 사용자 관점의 논리 화면이 다르므로 서로 전환할 때도 `screen_leave → screen_view`를 남긴다.
 - 사용자의 의도·제품 가치를 나타내는 행동(`photo_save_done`, `item_choice`, `result_view` 등)은 별도 이벤트로 유지하고, 행동의 맥락은 property로 구분한다.
 - 새 이벤트는 분석 질문이 명확할 때만 추가하고, 클라이언트/서버 허용 목록과 이 문서를 함께 갱신한다.
+
+### 세션 규칙
+
+- 세션 경계는 브라우저 종료 여부가 아니라 **마지막 이벤트 이후 30분 inactivity**로 판단한다.
+- 새로고침, Safari 탭 닫기, Safari 종료 후 재접속도 30분 안이면 기존 `session_id`를 재사용한다.
+- `app_background`는 세션 종료 이벤트가 아니다. 백그라운드/탭 이탈 행동만 기록한다.
+- 익명 상태에서 로그인 성공으로 `user_id`가 생기는 것은 같은 사용 흐름이므로 현재 세션을 유지한다.
+- 로그인 사용자에서 로그아웃하거나 다른 사용자로 바뀌면 다음 이벤트부터 새 세션을 사용한다.
+- 7일 테스트의 Activation/Core Value/재방문은 주로 `user_id` 기준으로 연결하고, `session_id`는 한 번의 연속 사용 흐름 분석에 사용한다.
 
 ## 온보딩·로그인·추구미
 

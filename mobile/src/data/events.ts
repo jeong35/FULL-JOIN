@@ -92,9 +92,12 @@ export const EVENT_NAMES = [
 export type EventName = (typeof EVENT_NAMES)[number];
 export type EventProps = Record<string, string | number | boolean | null>;
 
-type QueuedEvent = { name: EventName; ts: string; user_id: string | null; props: EventProps };
+type QueuedEvent = { session_id: string; name: EventName; ts: string; user_id: string | null; props: EventProps };
+type AnalyticsSessionRecord = { session_id: string; last_active_at: number; user_id: string | null };
 
 const DEVICE_KEY = 'odit-device-v1';
+const ANALYTICS_SESSION_KEY = 'odit-analytics-session-v1';
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_BATCH = 20;
 const FLUSH_MS = 2000;
 
@@ -120,12 +123,63 @@ function readDeviceId(): string {
 }
 
 const deviceId = typeof window === 'undefined' ? 'server-render' : readDeviceId();
-const sessionId = randomId();
 const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
 const appVersion = Constants.expoConfig?.version ?? 'unknown';
-const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v3';
+const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v4';
 let queue: QueuedEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
+let memoryAnalyticsSession: AnalyticsSessionRecord | null = null;
+
+function readAnalyticsSession(): AnalyticsSessionRecord | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(ANALYTICS_SESSION_KEY);
+    if (raw) {
+      const data = JSON.parse(raw) as Partial<AnalyticsSessionRecord>;
+      if (
+        typeof data.session_id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(data.session_id) &&
+        typeof data.last_active_at === 'number' && Number.isFinite(data.last_active_at) &&
+        (data.user_id === null || typeof data.user_id === 'string')
+      ) {
+        return { session_id: data.session_id, last_active_at: data.last_active_at, user_id: data.user_id ?? null };
+      }
+    }
+  } catch {
+    // localStorage를 못 쓰면 메모리 세션으로 폴백한다.
+  }
+  return memoryAnalyticsSession;
+}
+
+function writeAnalyticsSession(value: AnalyticsSessionRecord): void {
+  memoryAnalyticsSession = value;
+  try {
+    globalThis.localStorage?.setItem(ANALYTICS_SESSION_KEY, JSON.stringify(value));
+  } catch {
+    // Safari 사생활 보호 모드 등에서는 이번 페이지 수명 동안만 유지한다.
+  }
+}
+
+// 마지막 분석 이벤트 후 30분 동안은 새로고침·탭 닫기·Safari 재실행에도 같은 세션을 재사용한다.
+// 익명 상태에서 로그인하는 것은 같은 사용 흐름이므로 세션을 유지하고 user_id만 붙인다.
+// 반대로 로그인 사용자에서 로그아웃하거나 다른 사용자로 바뀌면 다음 이벤트부터 새 세션을 만든다.
+function analyticsSessionId(userId: string | null, now: number): string {
+  const stored = readAnalyticsSession();
+  const timedOut = stored === null || now - stored.last_active_at >= SESSION_TIMEOUT_MS;
+  const userChanged = stored !== null && stored.user_id !== null && stored.user_id !== userId;
+
+  if (stored === null || timedOut || userChanged) {
+    const created = { session_id: randomId(), last_active_at: now, user_id: userId };
+    writeAnalyticsSession(created);
+    return created.session_id;
+  }
+
+  const continued = {
+    session_id: stored.session_id,
+    last_active_at: now,
+    user_id: stored.user_id ?? userId,
+  };
+  writeAnalyticsSession(continued);
+  return continued.session_id;
+}
 
 type ScreenVisit = { screen: string; startedAt: number };
 type HomeAnalyticsScreen = 'feed' | 'archive';
@@ -190,10 +244,18 @@ function clean(props: EventProps): EventProps {
 export function track(name: EventName, props: EventProps = {}): void {
   if (typeof window === 'undefined') return; // 서버에서 미리 그릴 때는 보내지 않는다.
   try {
+    const userId = getSession()?.userId ?? null;
+    const now = Date.now();
+    const eventSessionId = analyticsSessionId(userId, now);
+
+    // 30분 타임아웃이나 사용자 전환으로 세션이 바뀌면 이전 세션 큐를 먼저 보낸다.
+    if (queue.length > 0 && queue[queue.length - 1].session_id !== eventSessionId) flushEvents();
+
     queue.push({
+      session_id: eventSessionId,
       name,
-      ts: new Date().toISOString(),
-      user_id: getSession()?.userId ?? null,
+      ts: new Date(now).toISOString(),
+      user_id: userId,
       props: clean({ app_version: appVersion, analytics_version: analyticsVersion, ...props }),
     });
     if (queue.length >= MAX_BATCH) flushEvents();
@@ -209,14 +271,20 @@ export function flushEvents(): void {
     timer = null;
   }
   if (queue.length === 0) return;
-  const events = queue.slice(0, MAX_BATCH);
-  queue = queue.slice(MAX_BATCH);
+  const firstSessionId = queue[0].session_id;
+  let batchSize = 0;
+  while (batchSize < queue.length && batchSize < MAX_BATCH && queue[batchSize].session_id === firstSessionId) {
+    batchSize += 1;
+  }
+  const queued = queue.slice(0, batchSize);
+  queue = queue.slice(batchSize);
+  const events = queued.map(({ session_id: _sessionId, ...event }) => event);
   try {
     // text/plain이면 브라우저가 사전 확인(preflight) 없이 보내고, keepalive라 페이지를 닫는 중에도 전송된다.
     void fetch(`${API_URL}/events`, {
       method: 'POST',
       headers: { 'content-type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ device_id: deviceId, session_id: sessionId, platform, events }),
+      body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
       keepalive: true,
     }).catch(() => undefined);
   } catch {
