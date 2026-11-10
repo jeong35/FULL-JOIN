@@ -12,7 +12,7 @@ import { AppState, Platform } from 'react-native';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { fetchStylePreferences, updateStylePreferences } from '@/data/api';
-import { flushEvents, track } from '@/data/events';
+import { enterAnalyticsScreen, flushEvents, getHomeAnalyticsScreen, recordAnalyticsBackground, resumeAnalyticsScreen, track } from '@/data/events';
 import { getSession, restoreStyles, useSession } from '@/data/session';
 import { loadFeed, loadWardrobe, resetUserData } from '@/data/store';
 import { colors } from '@/theme';
@@ -24,7 +24,7 @@ const subscribeNothing = () => () => {};
 function analyticsScreen(pathname: string): string {
   if (/^\/style\/[^/]+$/.test(pathname)) return 'style_detail';
   if (/^\/result\/[^/]+$/.test(pathname)) return 'result';
-  if (pathname === '/') return 'feed';
+  if (pathname === '/') return getHomeAnalyticsScreen();
   if (pathname === '/closet') return 'wardrobe';
   if (pathname === '/chat') return 'chat';
   if (pathname === '/my') return 'my';
@@ -49,30 +49,16 @@ export default function RootLayout() {
   const ready = fontsLoaded || fontError !== null;
   const session = useSession();
   const pathname = usePathname();
-  const screenVisit = useRef<{ screen: string; startedAt: number } | null>(null);
   const backgroundRecorded = useRef(false);
   const userId = session?.userId ?? null;
   const previousUserId = useRef<string | null>(null);
   // 웹에서는 로그인 정보가 브라우저에만 있어서, 화면은 브라우저에서 그릴 때부터 만든다(서버에서 미리 그릴 땐 false).
   const mounted = useSyncExternalStore(subscribeNothing, () => true, () => false);
 
-  // 경로가 바뀔 때 화면 진입·이탈과 체류 시간을 공통으로 기록한다.
+  // 경로가 바뀌면 공통 tracker에 논리 화면 이름만 전달한다.
   useEffect(() => {
     if (!mounted) return;
-    const now = Date.now();
-    const screen = analyticsScreen(pathname);
-    const previous = screenVisit.current;
-    if (previous !== null && previous.screen !== screen) {
-      track('screen_leave', {
-        screen: previous.screen,
-        next_screen: screen,
-        duration_ms: Math.max(0, now - previous.startedAt),
-      });
-    }
-    if (previous === null || previous.screen !== screen) {
-      track('screen_view', { screen, previous_screen: previous?.screen ?? null });
-      screenVisit.current = { screen, startedAt: now };
-    }
+    enterAnalyticsScreen(analyticsScreen(pathname));
   }, [mounted, pathname]);
 
   // 화면을 닫거나 다른 앱으로 가는 경우에는 일반 screen_leave가 없으므로 별도 기록한다.
@@ -80,21 +66,16 @@ export default function RootLayout() {
     if (!mounted) return;
     const recordBackground = () => {
       if (backgroundRecorded.current) return;
-      const current = screenVisit.current;
-      if (current === null) return;
+      if (!recordAnalyticsBackground()) return;
       backgroundRecorded.current = true;
-      track('app_background', {
-        screen: current.screen,
-        duration_ms: Math.max(0, Date.now() - current.startedAt),
-      });
       flushEvents();
     };
     if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof window !== 'undefined') {
       const onVisibility = () => {
         if (document.visibilityState === 'hidden') recordBackground();
-        else if (screenVisit.current !== null) {
+        else {
           backgroundRecorded.current = false;
-          screenVisit.current.startedAt = Date.now();
+          resumeAnalyticsScreen();
         }
       };
       window.addEventListener('pagehide', recordBackground);
@@ -107,7 +88,7 @@ export default function RootLayout() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         backgroundRecorded.current = false;
-        if (screenVisit.current !== null) screenVisit.current.startedAt = Date.now();
+        resumeAnalyticsScreen();
       } else {
         recordBackground();
       }

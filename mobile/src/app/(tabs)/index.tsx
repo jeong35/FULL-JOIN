@@ -20,7 +20,7 @@ import { BookmarkIcon } from '@/components/Icons';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { errorMessage } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
-import { track } from '@/data/events';
+import { setHomeAnalyticsScreen, track } from '@/data/events';
 import { NEIGHBOR_STYLES, orderByTaste } from '@/data/feedOrder';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { onHomeTabReselect } from '@/data/homeTab';
@@ -128,20 +128,23 @@ export default function HomeScreen() {
   const openHintOpen = useHintOpen('archive_open');
 
   function changeFolder(next: Folder) {
-    if (next === '모든 저장') {
-      markHintDone('save_compare');
-      track('archive_view', { saved_count: archive.data.length });
-    }
+    if (next === folder) return;
+    if (next === '모든 저장') markHintDone('save_compare');
+    setHomeAnalyticsScreen(
+      next === '모든 저장' ? 'archive' : 'feed',
+      next === '모든 저장' ? { saved_count: archive.data.length } : {},
+    );
     setFolder(next);
   }
 
-  // 화면에 돌아올 때마다 사진 주소가 만료됐는지 보고 필요하면 새로 받는다.
+  // 화면에 돌아올 때마다 논리 화면(feed/archive)을 공통 tracker와 맞추고 데이터를 새로 확인한다.
   useFocusEffect(
     useCallback(() => {
-      track('feed_view');
+      setHomeAnalyticsScreen(folder === '모든 저장' ? 'archive' : 'feed',
+        folder === '모든 저장' ? { saved_count: archive.data.length } : {});
       void loadFeed();
       void loadArchive({ force: true });
-    }, []),
+    }, [folder, archive.data.length]),
   );
 
   useEffect(() => {
@@ -216,6 +219,7 @@ export default function HomeScreen() {
 
   useEffect(() => onHomeTabReselect(() => {
     if (folder === '모든 저장') {
+      setHomeAnalyticsScreen('feed');
       setFolder('피드');
       return;
     }

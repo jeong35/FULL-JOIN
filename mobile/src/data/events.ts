@@ -53,7 +53,6 @@ export const EVENT_NAMES = [
   'outfit_section_view',
   'outfit_view',
   'wardrobe_return_click',
-  'archive_view',
   'archive_image_open',
   'archive_filter_apply',
   'archive_filter_clear',
@@ -72,14 +71,10 @@ export const EVENT_NAMES = [
   'intro_next',
   'intro_skip',
   'intro_done',
-  'login_view',
   'login_success',
-  'taste_view',
   'taste_done',
   'taste_later',
-  'ready_view',
   'ready_choice',
-  'feed_view',
   'photo_open',
   'photo_save',
   'compare_open',
@@ -128,9 +123,56 @@ const deviceId = typeof window === 'undefined' ? 'server-render' : readDeviceId(
 const sessionId = randomId();
 const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
 const appVersion = Constants.expoConfig?.version ?? 'unknown';
-const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v2';
+const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v3';
 let queue: QueuedEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
+
+type ScreenVisit = { screen: string; startedAt: number };
+type HomeAnalyticsScreen = 'feed' | 'archive';
+let currentScreenVisit: ScreenVisit | null = null;
+let homeAnalyticsScreen: HomeAnalyticsScreen = 'feed';
+
+// 화면마다 feed_view/login_view 같은 이벤트를 만들지 않고 공통 screen_view/screen_leave로 기록한다.
+// 홈의 피드/모든 저장은 같은 URL(/)을 쓰므로 현재 논리 화면을 별도로 기억한다.
+export function getHomeAnalyticsScreen(): HomeAnalyticsScreen {
+  return homeAnalyticsScreen;
+}
+
+export function enterAnalyticsScreen(screen: string, props: EventProps = {}): void {
+  const now = Date.now();
+  const previous = currentScreenVisit;
+  if (previous?.screen === screen) return;
+
+  if (previous !== null) {
+    track('screen_leave', {
+      screen: previous.screen,
+      next_screen: screen,
+      duration_ms: Math.max(0, now - previous.startedAt),
+    });
+  }
+
+  track('screen_view', { screen, previous_screen: previous?.screen ?? null, ...props });
+  currentScreenVisit = { screen, startedAt: now };
+}
+
+export function setHomeAnalyticsScreen(screen: HomeAnalyticsScreen, props: EventProps = {}): void {
+  homeAnalyticsScreen = screen;
+  enterAnalyticsScreen(screen, props);
+}
+
+export function recordAnalyticsBackground(): boolean {
+  const current = currentScreenVisit;
+  if (current === null) return false;
+  track('app_background', {
+    screen: current.screen,
+    duration_ms: Math.max(0, Date.now() - current.startedAt),
+  });
+  return true;
+}
+
+export function resumeAnalyticsScreen(): void {
+  if (currentScreenVisit !== null) currentScreenVisit.startedAt = Date.now();
+}
 
 // 서버 규칙에 맞게 속성을 다듬는다: 이름은 영소문자·밑줄, 값은 짧은 글자·숫자·참거짓만, 최대 12개.
 function clean(props: EventProps): EventProps {

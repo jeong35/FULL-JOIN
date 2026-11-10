@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,10 +15,6 @@ export default function ReadyScreen() {
   const session = useSession();
   const insets = useSafeAreaInsets();
   const taste = session?.styles ?? [];
-
-  useEffect(() => {
-    track('ready_view');
-  }, []);
 
   function goCloset() {
     track('ready_choice', { choice: 'closet' });

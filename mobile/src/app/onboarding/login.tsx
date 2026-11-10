@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,10 +27,6 @@ export default function LoginScreen() {
   const nicknameError = nicknameProblem(nickname);
   const pinError = pinProblem(pin);
   const valid = nicknameError === null && pinError === null;
-
-  useEffect(() => {
-    track('login_view');
-  }, []);
 
   async function submit() {
     setTried(true);

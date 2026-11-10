@@ -10,7 +10,7 @@
 - 식별자: `user_id`(로그인 후 해시), `device_id`, `session_id`
 - 시간: 클라이언트 `client_ts`와 서버 수신 `received_at`
 - 모든 이벤트 `props`에는 `app_version`, `analytics_version`이 자동으로 붙는다.
-- 현재 기본 `analytics_version`: `2026-11-11-v2`
+- 현재 기본 `analytics_version`: `2026-11-11-v3`
 - 이벤트 전송 실패가 앱 사용을 막아서는 안 된다.
 
 ## 핵심 플로우
@@ -35,12 +35,20 @@
 | 이름 | 발생 시점 | 주요 속성 |
 |---|---|---|
 | `app_open` | 앱/웹 진입 | `path`, `logged_in` |
-| `screen_view` | 분석 화면 진입 | `screen`, `previous_screen` |
-| `screen_leave` | 다른 화면 이동 | `screen`, `next_screen`, `duration_ms` |
+| `screen_view` | 논리 화면 진입 | `screen`, `previous_screen` (+ 화면별 선택 속성) |
+| `screen_leave` | 다른 논리 화면 이동 | `screen`, `next_screen`, `duration_ms` |
 | `app_background` | 탭 닫기·백그라운드 이동 | `screen`, `duration_ms` |
 | `tab_click` | 하단 탭 클릭 | `from_tab`, `to_tab`, `reselect` |
 | `back_click` | 공통 뒤로가기 클릭 | `screen` |
 | `error_shown` | 사용자에게 오류가 표시됨 | `screen`, `error_code` |
+
+### Tracking Plan 규칙
+
+- 화면 진입/이탈은 화면마다 별도 `*_view` 이벤트를 만들지 않고 `screen_view/screen_leave`로 공통 기록한다.
+- 현재 주요 `screen`: `intro`, `login`, `taste`, `ready`, `wardrobe`, `wardrobe_add_kind`, `wardrobe_add_color_fit`, `feed`, `archive`, `style_detail`, `result`, `chat`, `my`.
+- `feed`와 `archive`는 같은 URL(/) 안의 탭이지만 사용자 관점의 논리 화면이 다르므로 서로 전환할 때도 `screen_leave → screen_view`를 남긴다.
+- 사용자의 의도·제품 가치를 나타내는 행동(`photo_save_done`, `item_choice`, `result_view` 등)은 별도 이벤트로 유지하고, 행동의 맥락은 property로 구분한다.
+- 새 이벤트는 분석 질문이 명확할 때만 추가하고, 클라이언트/서버 허용 목록과 이 문서를 함께 갱신한다.
 
 ## 온보딩·로그인·추구미
 
@@ -51,21 +59,19 @@
 | `intro_prev` | 이전 | `step` |
 | `intro_skip` | 건너뛰기 가능한 경우 건너뜀 | `step` |
 | `intro_done` | 마지막 시작하기 | |
-| `login_view` | 로그인 화면 | |
 | `login_nickname_start` | 닉네임 첫 입력 | |
 | `login_pin_start` | PIN 첫 입력 | |
 | `login_submit` | 시작하기 클릭 | `valid` |
 | `login_validation_failed` | 입력 형식 오류 | `error_field`, `error_type` |
 | `login_failed` | 계정 조회 실패 | `error_code`, `latency_ms` |
 | `login_success` | 로그인 완료 | `returning` |
-| `taste_view` | 최초 추구미 화면 | |
 | `taste_select` | 추구미 선택 | `style`, `selected_count`, `replay` |
 | `taste_deselect` | 추구미 선택 해제 | `style`, `selected_count`, `replay` |
 | `taste_limit_reached` | 3개가 찬 상태에서 추가 선택 | `style`, `selected_count`, `replay` |
 | `taste_done` | 추구미 저장 완료 | `count` |
 | `taste_later` | 나중에 고르기 | |
 | `taste_save_failed` | 추구미 저장 실패 | `error_code`, `count`, `replay` |
-| `ready_view` / `ready_choice` | 준비 끝 / 다음 경로 선택 | `choice` |
+| `ready_choice` | 준비 화면에서 다음 경로 선택 | `choice` |
 
 ## 옷장·옷 등록
 
@@ -91,7 +97,6 @@
 
 | 이름 | 발생 시점 | 주요 속성 |
 |---|---|---|
-| `feed_view` | 홈 피드 진입 | |
 | `feed_load_done` | 실제 피드 로딩 성공 | `latency_ms`, `item_count` |
 | `feed_load_failed` | 피드 로딩 실패 | `error_code`, `latency_ms` |
 | `feed_scroll` | 25/50/75/100% 스크롤 도달 | `depth_percent`, `cards_seen` |
@@ -100,7 +105,6 @@
 | `photo_save` | 저장 시도 | `style_image_id`, `place` |
 | `photo_save_done` | 저장 성공 | `style_image_id`, `place`, `saved_count`(가능한 경로) |
 | `photo_save_failed` | 저장 실패 | `style_image_id`, `place` |
-| `archive_view` | 모든 저장 진입 | `saved_count` |
 | `archive_image_open` | 저장 사진 재조회 | `style_image_id` |
 | `archive_filter_apply` | 연도·계절·스타일 필터 적용 | `filter_type`, `filter_value` |
 | `archive_filter_clear` | 아카이브 필터 해제 | |
@@ -110,6 +114,8 @@
 - `feed`: 홈 카드 북마크
 - `detail`: 상세 우측 북마크
 - `compare`: 상세의 “저장하고 내 옷장과 비교”
+
+피드 진입은 `screen_view(screen=feed)`, 모든 저장 진입은 `screen_view(screen=archive)`로 본다. `archive`로 전환할 때는 현재 `saved_count`도 해당 `screen_view` property에 함께 남긴다.
 
 피드에는 사용자가 직접 조작하는 스타일 필터 이벤트를 두지 않는다. 추구미 기반 자동 정렬 효과는 `feed_card_impression.recommendation = preferred | neighbor | other`로 본다.
 
@@ -374,10 +380,10 @@ where name in ('hint_view','hint_click','hint_close')
 group by 1;
 ```
 
-힌트의 실제 성공은 같은 세션에서 다음 목표 이벤트까지 연결해 본다.
+힌트의 실제 성공은 같은 세션에서 다음 목표 이벤트까지 연결해 본다. 화면 목표는 `name='screen_view'`와 `props->>'screen'` 조건을 함께 사용한다.
 - `closet_empty` → `wardrobe_add_start`
-- `home_after_closet` → `feed_view`
-- `save_compare` → `archive_view`
+- `home_after_closet` → `screen_view` + `screen=feed`
+- `save_compare` → `screen_view` + `screen=archive`
 - `archive_open` → `result_view`
 - `result_chat` → `chat_send`
 
@@ -458,6 +464,6 @@ order by 1;
 발표에서는 단순히 “기능을 추가했다”가 아니라 아래 형식으로 남긴다.
 
 > 문제: 옷 1벌 등록 후 홈 이동 전 이탈률이 높았다.  
-> 근거: `wardrobe_add_done → feed_view` 전환율과 `screen_leave/app_background`에서 확인했다.  
+> 근거: `wardrobe_add_done → screen_view(screen=feed)` 전환율과 `screen_leave/app_background`에서 확인했다.  
 > 변경: 홈 탭을 가리키는 다음 행동 힌트를 개선했다.  
 > 결과: 다음 버전에서 이탈률 X% → Y%, 홈 진입까지 중앙시간 A초 → B초로 개선됐다.
