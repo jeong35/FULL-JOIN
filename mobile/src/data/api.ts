@@ -1,7 +1,7 @@
 // 서버(Supabase Edge Function 'api') 호출. 경로와 응답 모양은 docs/API_MVP.md(PR #1)를 따른다.
 // 이 주소는 누구나 부를 수 있는 공개 주소라 앱에 넣어도 된다.
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
-import type { Color, Kind, Slot, VisualFit } from './catalog';
+import type { Color, Kind, Slot, Style, VisualFit } from './catalog';
 import { getSession } from './session';
 import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
@@ -31,7 +31,7 @@ export class ApiError extends Error {
 
 type ErrorBody = { error?: { code?: string; message?: string; field?: string } };
 
-async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: object, timeoutMs = TIMEOUT_MS): Promise<T> {
+async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: object, timeoutMs = TIMEOUT_MS): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
@@ -80,6 +80,22 @@ export async function accountHasData(id: string): Promise<boolean> {
     request<{ wardrobe_items: unknown[] }>('GET', `/wardrobe?${query}`),
   ]);
   return archive.style_images.length > 0 || wardrobe.wardrobe_items.length > 0;
+}
+
+export async function fetchStylePreferences(id: string): Promise<Style[]> {
+  const data = await request<{ styles: Style[] }>(
+    'GET',
+    `/style-preferences?user_id=${encodeURIComponent(id)}`,
+  );
+  return data.styles;
+}
+
+export async function updateStylePreferences(styles: readonly Style[]): Promise<Style[]> {
+  const data = await request<{ styles: Style[] }>('PUT', '/style-preferences', {
+    user_id: userId(),
+    styles,
+  });
+  return data.styles;
 }
 
 // ── 옷장 ────────────────────────────────────────────

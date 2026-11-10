@@ -160,11 +160,11 @@ export function useSession(): Session | null {
 }
 
 // returning: 이 계정으로 저장한 사진이나 옷장 옷이 이미 있으면(이미 쓰던 사람) 취향 고르기를 건너뛴다.
-export function login(nickname: string, pin: string, returning = false) {
+export function login(nickname: string, pin: string, returning = false, styles: readonly Style[] = []) {
   setSession({
     userId: userIdFor(nickname, pin),
     nickname: normalizeNickname(nickname),
-    styles: [],
+    styles: [...new Set(styles)].filter(isStyle).slice(0, 3),
     onboarded: returning,
   });
 }
@@ -177,6 +177,13 @@ export function logout() {
 export function saveStyles(styles: readonly Style[]) {
   if (session === null) return;
   setSession({ ...session, styles: [...new Set(styles)].slice(0, 3) });
+}
+
+// 다른 브라우저나 시연용 계정으로 들어왔을 때 서버에 저장된 추구미로 현재 세션을 맞춘다.
+// 요청 도중 로그아웃하거나 다른 계정으로 바뀐 경우에는 늦게 온 응답을 버린다.
+export function restoreStyles(userId: string, styles: readonly Style[]) {
+  if (session === null || session.userId !== userId) return;
+  setSession({ ...session, styles: [...new Set(styles)].filter(isStyle).slice(0, 3) });
 }
 
 export function finishOnboarding() {

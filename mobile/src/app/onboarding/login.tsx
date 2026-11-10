@@ -5,7 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GlassView } from '@/components/GlassView';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
-import { accountHasData } from '@/data/api';
+import { accountHasData, fetchStylePreferences } from '@/data/api';
 import { NICKNAME_MAX, login, nicknameProblem, pinProblem, userIdFor } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
@@ -29,13 +29,19 @@ export default function LoginScreen() {
     setTried(true);
     if (!valid || checking) return;
     setChecking(true);
+    const userId = userIdFor(nickname, pin);
     let returning = false;
-    try {
-      returning = await accountHasData(userIdFor(nickname, pin));
-    } catch {
-      // 확인을 못 하면 새 사람처럼 취향 고르기로 간다.
+    let savedStyles = [] as Awaited<ReturnType<typeof fetchStylePreferences>>;
+    const [dataResult, stylesResult] = await Promise.allSettled([
+      accountHasData(userId),
+      fetchStylePreferences(userId),
+    ]);
+    if (dataResult.status === 'fulfilled') returning = dataResult.value;
+    if (stylesResult.status === 'fulfilled') {
+      savedStyles = stylesResult.value;
+      returning ||= savedStyles.length > 0;
     }
-    login(nickname, pin, returning);
+    login(nickname, pin, returning, savedStyles);
     router.replace(returning ? '/' : '/onboarding/taste');
   }
 

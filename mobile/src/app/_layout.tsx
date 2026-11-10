@@ -10,7 +10,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
-import { useSession } from '@/data/session';
+import { fetchStylePreferences, updateStylePreferences } from '@/data/api';
+import { getSession, restoreStyles, useSession } from '@/data/session';
 import { loadFeed, loadWardrobe, resetUserData } from '@/data/store';
 import { colors } from '@/theme';
 
@@ -40,6 +41,19 @@ export default function RootLayout() {
     previousUserId.current = userId;
     loadWardrobe();
     loadFeed();
+    void fetchStylePreferences(userId)
+      .then(async (styles) => {
+        const current = getSession();
+        // 이 기능을 배포하기 전에 브라우저에만 있던 선택은 서버가 비어 있을 때 최초 1회 옮긴다.
+        if (styles.length === 0 && current?.userId === userId && current.styles.length > 0) {
+          restoreStyles(userId, await updateStylePreferences(current.styles));
+          return;
+        }
+        restoreStyles(userId, styles);
+      })
+      .catch(() => {
+        // 네트워크 오류면 브라우저에 남은 추구미를 유지한다.
+      });
   }, [userId]);
 
   useEffect(() => {

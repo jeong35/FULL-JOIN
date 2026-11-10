@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { CheckMark } from '@/components/Icons';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
+import { errorMessage, updateStylePreferences } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
 import { saveStyles, useSession } from '@/data/session';
 import { loadFeed, useFeedState } from '@/data/store';
@@ -59,6 +60,8 @@ export default function TasteScreen() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [picked, setPicked] = useState<Style[]>(() => (isReplay ? (session?.styles ?? []) : []));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (session !== null) loadFeed();
@@ -82,13 +85,23 @@ export default function TasteScreen() {
     );
   }
 
-  function done(styles: Style[]) {
-    saveStyles(styles);
-    if (isReplay) {
-      if (router.canGoBack()) router.back();
-      else router.replace('/my');
-    } else {
-      router.replace('/onboarding/ready');
+  async function done(styles: Style[]) {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const saved = await updateStylePreferences(styles);
+      saveStyles(saved);
+      if (isReplay) {
+        if (router.canGoBack()) router.back();
+        else router.replace('/my');
+      } else {
+        router.replace('/onboarding/ready');
+      }
+    } catch (error) {
+      setSaveError(errorMessage(error));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -144,13 +157,14 @@ export default function TasteScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: Math.max(24, insets.bottom) }]}>
+        {saveError !== null && <Text style={styles.saveError}>{saveError}</Text>}
         <PrimaryButton
-          label={picked.length === 0 ? '스타일을 골라 주세요' : `다음 (${picked.length}/${MAX_PICKS})`}
-          onPress={() => done(picked)}
-          disabled={picked.length === 0}
+          label={saving ? '저장하는 중…' : picked.length === 0 ? '스타일을 골라 주세요' : `다음 (${picked.length}/${MAX_PICKS})`}
+          onPress={() => void done(picked)}
+          disabled={saving || picked.length === 0}
         />
         {!isReplay && (
-          <Pressable onPress={() => done([])} accessibilityRole="button" style={styles.later} hitSlop={8}>
+          <Pressable onPress={() => void done([])} disabled={saving} accessibilityRole="button" style={styles.later} hitSlop={8}>
             <Text style={styles.laterText}>나중에 고를게요</Text>
           </Pressable>
         )}
@@ -241,6 +255,13 @@ const styles = StyleSheet.create({
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: colors.line,
+  },
+  saveError: {
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.danger,
   },
   later: {
     alignSelf: 'center',
