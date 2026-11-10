@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
 import { BookmarkIcon } from '@/components/Icons';
-import { BackButton, InfoBar, PrimaryButton, SmallWhiteButton } from '@/components/ui';
+import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
 import type { Kind } from '@/data/catalog';
 import { buildOutfits, substitutesFor, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
@@ -160,7 +160,6 @@ function SaveResult({
 }
 
 function ResultBody({ imageId, result }: { imageId: string; result: HeartResult }) {
-  const insets = useSafeAreaInsets();
   const wardrobe = useWardrobe();
   const [choices, setChoices] = useState<Record<string, SimilarChoice>>({});
   const [decisions, setDecisions] = useState<Record<string, ItemDecisionResult>>({});
@@ -171,14 +170,15 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
   const missingInfo = result.items.length > 0 && items.length === 0;
   const wardrobeEmpty = result.message !== undefined;
 
-  // 아래 버튼은 사진 출처 쇼핑몰 상품만 연다. 비슷한 상품 검색 링크는 필요한 옷 카드마다 단다.
-  const productUrl = result.product_url ?? null;
-  const exactProduct = [...Object.values(decisions).flatMap((decision) => decision.products), ...result.products]
-    .find((candidate) => candidate.match_type === 'exact');
+  // 쇼핑 링크는 아이템마다 단다 — 사진 속 실제 상품 링크(있을 때)를 먼저, 그다음 무신사·에이블리·지그재그 검색.
+  // 앞으로 사진 속 모든 아이템에 상품 링크가 붙어도 같은 방식으로 늘어난다(SPEC 4절 쇼핑몰 상품 정보 저장).
 
   // 코디 조합(AC11): 사진 구성을 부위별로 내 옷장 옷으로 채우고, 없는 자리는 가까운 종류의 내 옷으로 대신한다.
   // 비슷함에서 '새로 찾기'를 고르면 그 자리는 '필요'가 된다. 필요한 자리에는 무신사·에이블리·지그재그 링크를 단다.
   const outfits = wardrobeEmpty ? [] : buildOutfits(items, wardrobe, choices);
+  // 활용·필요만 있으면 코디가 위 목록과 같은 내용이라, 비슷함·대체 옷이 들어간 코디가 있을 때만 보여 준다(11/10 팀 결정).
+  const showOutfits = outfits.some((outfit) =>
+    outfit.pieces.some((piece) => piece.type === 'owned' && (piece.similar || piece.substitute)));
   const linksFor = (item: HeartItem): Product[] => shoppingLinksFor(
     item,
     decisions[item.item_id]?.products ?? result.products.filter((candidate) => candidate.item_id === item.item_id),
@@ -208,23 +208,6 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
       });
     }
   };
-
-  let footerButton = null;
-  if (exactProduct !== undefined && productUrl === null) {
-    footerButton = (
-      <PrimaryButton
-        label={`${exactProduct.platform}에서 이 상품 보기`}
-        onPress={() => WebBrowser.openBrowserAsync(exactProduct.url)}
-      />
-    );
-  } else if (productUrl !== null) {
-    footerButton = (
-      <PrimaryButton
-        label={`${result.shop ?? '쇼핑몰'}에서 이 상품 보기`}
-        onPress={() => WebBrowser.openBrowserAsync(productUrl)}
-      />
-    );
-  }
 
   return (
     <>
@@ -256,7 +239,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
               thumbColor={index % 2 === 0 ? colors.line : '#DFD5F0'}
               choice={choices[item.item_id] ?? null}
               decision={decisions[item.item_id] ?? null}
-              links={item.gap_status === '구매' || choices[item.item_id] === '구매' ? linksFor(item) : []}
+              links={item.gap_status === null || item.gap_status === '구매' || choices[item.item_id] === '구매' ? linksFor(item) : []}
               substitutes={substitutesFor(item, wardrobe)}
               pending={pendingItems[item.item_id] === true}
               error={decisionErrors[item.item_id] || null}
@@ -268,14 +251,10 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
           ))}
         </View>
 
-        {!wardrobeEmpty && items.length > 0 && <OutfitSection outfits={outfits} linksFor={linksFor} />}
+        {showOutfits && <OutfitSection outfits={outfits} linksFor={linksFor} />}
 
         {result.shop ? <Text style={styles.note}>사진 출처: {result.shop}</Text> : null}
       </ScrollView>
-
-      {footerButton !== null && (
-        <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom) }]}>{footerButton}</View>
-      )}
     </>
   );
 }
@@ -346,7 +325,8 @@ function ResultCard({
         {item.gap_status !== null && <GapTag status={item.gap_status} substitute={hasSubstitute} />}
       </View>
 
-      {item.gap_status === '구매' && !hasSubstitute && (
+      {/* 필요한 옷, 그리고 옷장이 비어 비교하지 못한 옷(AC12)에는 쇼핑 링크를 바로 단다. */}
+      {(item.gap_status === null || (item.gap_status === '구매' && !hasSubstitute)) && (
         <View style={styles.needBox}>
           <ShopLinks item={item} links={links} />
         </View>
@@ -413,7 +393,7 @@ function ShopLinks({ item, links }: { item: ShownItem; links: Product[] }) {
           accessibilityLabel={`${item.kind} ${product.platform}에서 찾기`}
           style={styles.decisionLink}>
           <Text style={styles.decisionLinkText}>
-            {product.match_type === 'exact' ? `${product.platform} 상품` : product.platform} ›
+            {product.match_type === 'exact' ? `사진 속 ${item.kind}` : product.platform} ›
           </Text>
         </Pressable>
       ))}
@@ -483,11 +463,7 @@ function OutfitSection({
   return (
     <View style={styles.outfitSection}>
       <Text style={styles.sectionTitle} accessibilityRole="header">내 옷장으로 입어 보기</Text>
-      <Text style={styles.sectionSub}>
-        {outfits.length > 0
-          ? '사진처럼 입을 수 있게 가진 옷으로 맞춰 봤어요'
-          : '아직 이 사진과 맞춰 입을 옷이 옷장에 없어요'}
-      </Text>
+      <Text style={styles.sectionSub}>사진처럼 입을 수 있게 비슷한 옷까지 넣어 맞춰 봤어요</Text>
       {outfits.map((outfit, index) => (
         <OutfitCard key={outfit.id} index={index} outfit={outfit} linksFor={linksFor} />
       ))}
@@ -1005,9 +981,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: colors.textSecondary,
-  },
-  footer: {
-    paddingTop: 12,
-    paddingHorizontal: layout.screenPaddingX,
   },
 });
