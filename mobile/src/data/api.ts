@@ -3,7 +3,7 @@
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import type { Color, Kind, Slot, VisualFit } from './catalog';
 import { getSession } from './session';
-import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, WardrobeItem } from './types';
+import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
 const DEFAULT_API_URL = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/api';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, '');
@@ -31,9 +31,9 @@ export class ApiError extends Error {
 
 type ErrorBody = { error?: { code?: string; message?: string; field?: string } };
 
-async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: object): Promise<T> {
+async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: object, timeoutMs = TIMEOUT_MS): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -111,6 +111,10 @@ export async function createWardrobeItem(input: {
   return toWardrobeItem(data.wardrobe_item);
 }
 
+export function deleteWardrobeItem(id: string): Promise<{ wardrobe_item_id: string; deleted: true }> {
+  return request('DELETE', `/wardrobe/${encodeURIComponent(id)}`, { user_id: userId() });
+}
+
 // ── 피드·저장 ───────────────────────────────────────
 
 export async function fetchFeed(): Promise<StyleImage[]> {
@@ -119,6 +123,10 @@ export async function fetchFeed(): Promise<StyleImage[]> {
     `/feed?user_id=${encodeURIComponent(userId())}`,
   );
   return data.style_images;
+}
+
+export function fetchStyleImageDetail(styleImageId: string): Promise<StyleImageDetail> {
+  return request<StyleImageDetail>('GET', `/style-images/${encodeURIComponent(styleImageId)}`);
 }
 
 export async function fetchArchive(filters: { style?: string; season?: Season } = {}): Promise<ArchiveImage[]> {
@@ -153,10 +161,15 @@ export function postItemDecision(
   );
 }
 
-export function postChat(styleImageId: string, message: string): Promise<ChatResult> {
+export function postChat(
+  styleImageId: string,
+  message: string,
+  history: { role: 'user' | 'assistant'; content: string }[] = [],
+): Promise<ChatResult> {
   return request<ChatResult>('POST', '/chat', {
     user_id: userId(),
     style_image_id: styleImageId,
     message,
-  });
+    history,
+  }, 30_000);
 }

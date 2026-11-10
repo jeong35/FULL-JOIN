@@ -20,6 +20,25 @@ export type StyleImage = {
   source: StyleImageSource;
 };
 
+export type StyleImageDetailItem = {
+  item_id: string;
+  slot: Slot;
+  kind: Kind;
+  color: Color | null;
+  visual_fit: VisualFit | null;
+  brand: string | null;
+  product_name: string | null;
+  brand_source: '캡션' | '이미지_글자' | '쇼핑몰_상품정보' | '없음';
+  shop: string | null;
+  product_url: string | null;
+  is_representative_product: boolean;
+};
+
+export type StyleImageDetail = {
+  style_image: StyleImage;
+  items: StyleImageDetailItem[];
+};
+
 export type Season = '봄' | '여름' | '가을' | '겨울';
 
 export type ArchiveImage = StyleImage & {
@@ -75,6 +94,7 @@ export type ChatResult = {
   products: Product[];
   image_reanalysis_count: 0;
   external_instruction_applied: false;
+  answer_source?: 'openai' | 'fallback';
 };
 
 // POST /style-images/{id}/heart. shop~product_url은 사진 출처(쇼핑몰 상품)로, 서버가 줄 때만 온다.

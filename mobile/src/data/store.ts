@@ -2,7 +2,7 @@
 // 화면은 이 파일의 use…() 훅으로 읽고, load…()/add…()/heart…() 함수로 서버를 부른다.
 import { useSyncExternalStore } from 'react';
 
-import { createWardrobeItem, deleteHeart, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
+import { createWardrobeItem, deleteHeart, deleteWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
 import type { ArchiveImage, HeartResult, StyleImage, WardrobeItem } from './types';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -88,6 +88,22 @@ export async function addWardrobeItem(input: Omit<WardrobeItem, 'id'>): Promise<
   const item = await createWardrobeItem(input);
   setState({ wardrobe: { ...state.wardrobe, data: [item, ...state.wardrobe.data] }, hearts: {} });
   return item;
+}
+
+// 화면에서는 먼저 지우고 서버 삭제가 실패하면 원래 순서로 되돌린다.
+export async function removeWardrobeItem(id: string): Promise<void> {
+  const previousWardrobe = state.wardrobe;
+  const previousHearts = state.hearts;
+  setState({
+    wardrobe: { ...state.wardrobe, data: state.wardrobe.data.filter((item) => item.id !== id) },
+    hearts: {},
+  });
+  try {
+    await deleteWardrobeItem(id);
+  } catch (error) {
+    setState({ wardrobe: previousWardrobe, hearts: previousHearts });
+    throw error;
+  }
 }
 
 // ── 피드 ────────────────────────────────────────────

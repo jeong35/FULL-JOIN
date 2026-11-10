@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { GlassView } from '@/components/GlassView';
 import { CheckMark } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { DetailHeader, PrimaryButton, ProgressSteps, SegmentedControl } from '@/components/ui';
-import { KINDS_BY_SLOT, SLOTS, type Kind, type Slot } from '@/data/catalog';
+import { isSlot, KINDS_BY_SLOT, SLOTS, type Kind, type Slot } from '@/data/catalog';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // '옷 추가 ①' 부위·종류. 모양은 design/screens/20-add-item-1-kind.html을 따른다.
@@ -16,7 +16,9 @@ const GRID_GAP = 10;
 const GRID_COLUMNS = 3;
 
 export default function AddItemKindScreen() {
-  const [slot, setSlot] = useState<Slot>('상의');
+  const params = useLocalSearchParams<{ slot?: string }>();
+  const initialSlot = isSlot(params.slot) ? params.slot : '상의';
+  const [slot, setSlot] = useState<Slot>(initialSlot);
   const [kind, setKind] = useState<Kind | null>(null);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();

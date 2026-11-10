@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,6 +20,7 @@ import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { errorMessage } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
 import { orderByTaste } from '@/data/feedOrder';
+import { onHomeTabReselect } from '@/data/homeTab';
 import { useSession } from '@/data/session';
 import { heartStyleImage, loadArchive, loadFeed, unheartStyleImage, useArchiveState, useFeedState, useIsUnhearting, useSaved } from '@/data/store';
 import type { ArchiveImage, Season, StyleImage } from '@/data/types';
@@ -93,13 +94,11 @@ export default function HomeScreen() {
   const saved = useSaved();
   const session = useSession();
   // 처음 고른 취향 스타일 사진 → 이웃 스타일 → 나머지 순서(SPEC AC15).
-  // 이미 저장한 사진은 피드에서 뺀다('모든 저장'에 있으니까). 다만 피드를 보다가 방금 저장한 사진은
-  // 자리가 갑자기 바뀌지 않게 이 화면을 다시 열 때까지 그대로 둔다.
+  // 이미 저장한 사진은 즉시 피드에서 빼고 '모든 저장'에서만 보여 준다.
   const taste = session?.styles;
-  const [savedHere, setSavedHere] = useState<ReadonlySet<string>>(() => new Set());
   const feedImages = useMemo(
-    () => orderByTaste(feed.data.filter((image) => saved[image.id] === undefined || savedHere.has(image.id)), taste ?? []),
-    [feed.data, saved, savedHere, taste],
+    () => orderByTaste(feed.data.filter((image) => saved[image.id] === undefined), taste ?? []),
+    [feed.data, saved, taste],
   );
   const [folder, setFolder] = useState<Folder>('피드');
   const [filter, setFilter] = useState<ArchiveFilter>(NO_FILTER);
@@ -118,17 +117,27 @@ export default function HomeScreen() {
   // 화면에 돌아올 때마다 사진 주소가 만료됐는지 보고 필요하면 새로 받는다.
   useFocusEffect(
     useCallback(() => {
-      setSavedHere(new Set());
       loadFeed();
       loadArchive({ force: true });
     }, []),
   );
 
-  async function onRefresh() {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadFeed({ force: true }), loadArchive({ force: true })]);
-    setRefreshing(false);
-  }
+    try {
+      await Promise.all([loadFeed({ force: true }), loadArchive({ force: true })]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => onHomeTabReselect(() => {
+    if (folder === '모든 저장') {
+      setFolder('피드');
+      return;
+    }
+    void onRefresh();
+  }), [folder, onRefresh]);
 
   async function onToggleSave(id: string) {
     setActionError(null);
@@ -140,9 +149,9 @@ export default function HomeScreen() {
       }
       return;
     }
-    setSavedHere((current) => new Set(current).add(id));
-    heartStyleImage(id);
-    router.push({ pathname: '/result/[id]', params: { id } });
+    await heartStyleImage(id);
+    // 저장 버튼은 화면을 열지 않는다. '모든 저장' 목록만 서버 상태와 맞춘다.
+    await loadArchive({ force: true });
   }
 
   let body;
@@ -207,6 +216,7 @@ export default function HomeScreen() {
                 image={image}
                 colorIndex={(index + columnIndex) % 2}
                 saved={saved[image.id] !== undefined}
+                onOpen={() => router.push(`/style/${encodeURIComponent(image.id)}` as Href)}
                 onSave={() => onToggleSave(image.id)}
               />
             ))}
@@ -409,7 +419,7 @@ function ArchiveThumbnail({ image, onUnsave }: { image: ArchiveImage; onUnsave: 
       <Pressable
         onPress={() => openArchiveImage(image)}
         accessibilityRole="button"
-        accessibilityLabel={`${image.style.join('·')} 저장 사진 열기`}
+        accessibilityLabel={`${image.style.join('·')} 저장 사진과 내 옷장 비교 보기`}
         style={StyleSheet.absoluteFill}>
         <Image
           source={{ uri: image.thumbnail_url, cacheKey: image.id }}
@@ -438,30 +448,37 @@ function FeedPhoto({
   image,
   colorIndex,
   saved,
+  onOpen,
   onSave,
 }: {
   image: StyleImage;
   colorIndex: number;
   saved: boolean;
+  onOpen: () => void;
   onSave: () => void;
 }) {
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
   const unhearting = useIsUnhearting(image.id);
   return (
     <View style={[styles.photo, { aspectRatio: ratio, backgroundColor: PHOTO_COLORS[colorIndex] }]}>
-      <Image
-        // 사진 주소는 받을 때마다 바뀌지만 사진은 같으니 id로 캐시한다.
-        source={{ uri: image.thumbnail_url, cacheKey: image.id }}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        transition={150}
-        accessibilityLabel={`${image.style.join('·')} 스타일 사진`}
-        onLoad={({ source }) => {
-          if (source.width > 0 && source.height > 0) {
-            setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, source.width / source.height)));
-          }
-        }}
-      />
+      <Pressable
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`${image.style.join('·')} 스타일 사진 제품 정보 보기`}
+        style={StyleSheet.absoluteFill}>
+        <Image
+          // 사진 주소는 받을 때마다 바뀌지만 사진은 같으니 id로 캐시한다.
+          source={{ uri: image.thumbnail_url, cacheKey: image.id }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={150}
+          onLoad={({ source }) => {
+            if (source.width > 0 && source.height > 0) {
+              setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, source.width / source.height)));
+            }
+          }}
+        />
+      </Pressable>
       <Pressable
         onPress={onSave}
         disabled={unhearting}

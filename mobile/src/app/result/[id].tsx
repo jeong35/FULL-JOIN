@@ -251,6 +251,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
               wardrobe={wardrobe}
               thumbColor={index % 2 === 0 ? colors.line : '#DFD5F0'}
               choice={choices[item.item_id] ?? null}
+              decision={decisions[item.item_id] ?? null}
               pending={pendingItems[item.item_id] === true}
               error={decisionErrors[item.item_id] || null}
               onChoose={(value) => choose(item.item_id, value)}
@@ -294,6 +295,7 @@ function ResultCard({
   wardrobe,
   thumbColor,
   choice,
+  decision,
   pending,
   error,
   onChoose,
@@ -302,6 +304,7 @@ function ResultCard({
   wardrobe: readonly WardrobeItem[];
   thumbColor: string;
   choice: SimilarChoice | null;
+  decision: ItemDecisionResult | null;
   pending: boolean;
   error: string | null;
   onChoose: (value: SimilarChoice) => void;
@@ -326,29 +329,66 @@ function ResultCard({
       </View>
 
       {item.gap_status === '비슷함' && (
-        <View style={styles.choice}>
-          {SIMILAR_OPTIONS.map((option) => {
-            const selected = option.value === choice;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={() => onChoose(option.value)}
-                disabled={pending}
-                accessibilityRole="button"
-                accessibilityState={{ selected, disabled: pending }}
-                style={[styles.choiceItem, selected && styles.choiceItemSelected]}>
-                {pending && selected ? (
-                  <ActivityIndicator size="small" color={colors.textPurple} />
-                ) : (
-                  <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{option.label}</Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
+        <>
+          <Text style={styles.choiceGuide}>비슷한 옷을 활용할지, 새 상품을 찾을지 선택해 주세요.</Text>
+          <View style={styles.choice}>
+            {SIMILAR_OPTIONS.map((option) => {
+              const selected = option.value === choice;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => onChoose(option.value)}
+                  disabled={pending}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected, disabled: pending }}
+                  style={[styles.choiceItem, selected && styles.choiceItemSelected]}>
+                  {pending && selected ? (
+                    <ActivityIndicator size="small" color={colors.textPurple} />
+                  ) : (
+                    <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{option.label}</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+          {decision !== null && !pending && (
+            <DecisionOutcome decision={decision} wardrobe={wardrobe} />
+          )}
+        </>
       )}
       {error !== null && <Text style={styles.choiceError}>{error}</Text>}
     </GlassView>
+  );
+}
+
+function DecisionOutcome({ decision, wardrobe }: { decision: ItemDecisionResult; wardrobe: readonly WardrobeItem[] }) {
+  if (decision.decision === '활용') {
+    const matched = decision.outfits.flatMap((outfit) => outfit.wardrobe_item_ids)
+      .map((id) => wardrobe.find((item) => item.id === id))
+      .filter((item): item is WardrobeItem => item !== undefined);
+    const labels = matched.map((item) => [item.color, item.visual_fit, item.kind].filter(Boolean).join(' · '));
+    return (
+      <View style={styles.decisionOutcome}>
+        <Text style={styles.decisionTitle}>이 옷으로 입을 수 있어요</Text>
+        <Text style={styles.decisionText}>{labels.join(', ') || '옷장에 등록된 비슷한 옷을 활용해요.'}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.decisionOutcome}>
+      <Text style={styles.decisionTitle}>비슷한 상품을 찾아볼게요</Text>
+      <View style={styles.decisionLinks}>
+        {decision.products.map((product) => (
+          <Pressable
+            key={`${product.item_id}-${product.platform}`}
+            onPress={() => WebBrowser.openBrowserAsync(product.url)}
+            accessibilityRole="link"
+            style={styles.decisionLink}>
+            <Text style={styles.decisionLinkText}>{product.platform} ›</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -565,6 +605,13 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: 'rgba(46,26,92,0.05)',
   },
+  choiceGuide: {
+    marginTop: 10,
+    marginLeft: 55,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
   choiceItem: {
     flex: 1,
     height: 32,
@@ -590,6 +637,42 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 11,
     color: '#A23B3B',
+  },
+  decisionOutcome: {
+    marginTop: 8,
+    marginLeft: 52,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#F3EEF9',
+  },
+  decisionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.text,
+  },
+  decisionText: {
+    marginTop: 3,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  decisionLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  decisionLink: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+  },
+  decisionLinkText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: colors.textPurple,
   },
   note: {
     marginTop: 10,

@@ -1,11 +1,22 @@
 import { z } from "zod";
 
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "./gap_analysis.ts";
+import { similarSearchProducts, similarSearchQuery } from "./shopping.ts";
+
+export const chatHistoryMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(1_000),
+}).strict();
 
 export const chatInputSchema = z.object({
   user_id: z.string().trim().min(1),
   style_image_id: z.string().trim().min(1),
   message: z.string().trim().min(1).max(500),
+  history: z.array(chatHistoryMessageSchema).max(8).optional(),
+}).strict();
+
+export const chatModelOutputSchema = z.object({
+  answer: z.string().trim().min(1).max(1_200),
 }).strict();
 
 export type ChatItem = ItemForGapAnalysis & {
@@ -20,14 +31,6 @@ export type ChatWardrobeItem = WardrobeItemForGapAnalysis & {
   visual_fit: string | null;
 };
 
-const SEARCH_PLATFORMS = [
-  { platform: "무신사", baseUrl: "https://www.musinsa.com/search/goods?keyword=" },
-  { platform: "에이블리", baseUrl: "https://m.a-bly.com/search?keyword=" },
-  { platform: "지그재그", baseUrl: "https://zigzag.kr/search?keyword=" },
-] as const;
-
-const OMITTED_SEARCH_COLORS = new Set([null, "멀티", "기타"]);
-
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
 }
@@ -38,15 +41,6 @@ function wardrobeLabel(item: ChatWardrobeItem): string {
 
 function itemLabel(item: ChatItem): string {
   return [item.color, item.visual_fit, item.kind].filter((value) => value !== null).join(" ");
-}
-
-function searchQuery(item: ChatItem): string {
-  return [
-    item.brand_source === "없음" ? null : item.brand,
-    OMITTED_SEARCH_COLORS.has(item.color) ? null : item.color,
-    item.visual_fit,
-    item.kind,
-  ].filter((value): value is string => typeof value === "string" && value.length > 0).join(" ");
 }
 
 export function buildChatResponse(
@@ -75,14 +69,9 @@ export function buildChatResponse(
   let answer: string;
   let products: Array<{ item_id: string; platform: string; url: string; match_type: "similar" }> = [];
   if (wantsShopping && shoppingItem !== undefined) {
-    const query = searchQuery(shoppingItem);
+    const query = similarSearchQuery(shoppingItem);
     answer = `${query} 비슷한 상품 검색으로 연결해 드릴게요. 같은 상품이라고 단정하지 않아요.`;
-    products = SEARCH_PLATFORMS.map(({ platform, baseUrl }) => ({
-      item_id: shoppingItem.item_id,
-      platform,
-      url: `${baseUrl}${encodeURIComponent(query)}`,
-      match_type: "similar",
-    }));
+    products = similarSearchProducts(shoppingItem);
   } else if (wardrobe.length === 0) {
     answer = "옷장이 비어 있어 가진 옷으로 코디를 확인할 수 없어요. 옷을 먼저 등록해 주세요.";
   } else {

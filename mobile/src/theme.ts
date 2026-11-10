@@ -9,6 +9,7 @@ export const colors = {
   purpleFill: '#CDB8F4',
   onPurpleFill: '#2E1A5C',
   tagText: '#4A2D99',
+  danger: '#B33A4A',
   line: '#E7DFF5',
   photoPlaceholder: '#EDE6F8',
   progressTrack: '#E3D9F3',

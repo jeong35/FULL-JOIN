@@ -3,6 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
+import { emitHomeTabReselect } from '@/data/homeTab';
 import { hasSeenIntro, useSession } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
@@ -41,6 +42,14 @@ export default function TabLayout() {
         <Tabs.Screen
           key={tab.name}
           name={tab.name}
+          listeners={tab.name === 'index'
+            ? ({ navigation }) => ({
+                tabPress: () => {
+                  const state = navigation.getState();
+                  if (state.routes[state.index]?.name === 'index') emitHomeTabReselect();
+                },
+              })
+            : undefined}
           options={{
             title: tab.title,
             tabBarIcon: ({ color }) => <TabIcon name={tab.icon} color={color} />,

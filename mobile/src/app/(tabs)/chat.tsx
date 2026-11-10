@@ -53,6 +53,10 @@ export default function ChatScreen() {
     if (selected === null || text.length === 0 || sending) return;
     setInput('');
     setSendError(null);
+    const history = visibleMessages.slice(-8).map((message) => ({
+      role: message.role,
+      content: message.text,
+    }));
     const userMessage: Message = {
       id: nextMessageId.current++,
       role: 'user',
@@ -67,7 +71,7 @@ export default function ChatScreen() {
     }
     setSending(true);
     try {
-      const result = await postChat(selected.id, text);
+      const result = await postChat(selected.id, text, history);
       setMessages((current) => [...current, {
         id: nextMessageId.current++,
         role: 'assistant',
