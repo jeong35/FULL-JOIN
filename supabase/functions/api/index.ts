@@ -20,6 +20,7 @@ import { itemDecisionInputSchema, itemDecisionResponse, type DecisionItem } from
 import { filterFeed, orderHomeFeed, type FeedImage } from "../../../src/fulljoin/feed.ts";
 import { classifyGap, type ItemForGapAnalysis, type WardrobeItemForGapAnalysis } from "../../../src/fulljoin/gap_analysis.ts";
 import { heartItemResponse, representativeProductFields, type HeartItemRow } from "../../../src/fulljoin/heart.ts";
+import { buildPhotoOutfits } from "../../../src/fulljoin/outfit.ts";
 import { extractProductMetadata, type ProductMetadata } from "../../../src/fulljoin/product_metadata.ts";
 import { styleImagePublishInputSchema, styleImageReviewInputSchema } from "../../../src/fulljoin/review.ts";
 import { similarSearchProducts, type SearchableItem } from "../../../src/fulljoin/shopping.ts";
@@ -852,7 +853,7 @@ async function handleHeart(
     style_image_id: styleImageId,
     saved_at: heart.saved_at,
     items: analyzedItems.map(({ response }) => response),
-    outfits: [],
+    outfits: buildPhotoOutfits(styleImageId, analyzedItems.map(({ response }) => response)),
     products,
     ...representativeProduct,
   });

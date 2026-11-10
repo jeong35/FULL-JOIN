@@ -11,8 +11,9 @@ import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
 import type { Kind } from '@/data/catalog';
+import { buildOutfits, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
 import { heartStyleImage, unheartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
-import type { GapStatus, HeartItem, HeartResult, ItemDecisionResult, StyleImage, WardrobeItem } from '@/data/types';
+import type { GapStatus, HeartItem, HeartResult, ItemDecisionResult, Product, StyleImage, WardrobeItem } from '@/data/types';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // 저장 후 결과(옷장 대조). 모양은 design/screens/14-save-result.html을 따른다.
@@ -177,6 +178,11 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
   const product = decisionProduct ?? result.products[0];
   const productUrl = result.product_url ?? null;
 
+  // 코디 조합(AC11): 사진 구성을 부위별로 내 옷장 옷으로 채운다. 비슷함에서 '새로 찾기'를 고르면 그 자리는 '필요'가 된다.
+  const outfits = wardrobeEmpty ? [] : buildOutfits(items, wardrobe, choices);
+  const productFor = (itemId: string): Product | undefined =>
+    decisions[itemId]?.products[0] ?? result.products.find((candidate) => candidate.item_id === itemId);
+
   const choose = async (itemId: string, value: SimilarChoice) => {
     const previousChoice = choices[itemId];
     setChoices((current) => ({ ...current, [itemId]: value }));
@@ -258,6 +264,8 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
             />
           ))}
         </View>
+
+        {!wardrobeEmpty && items.length > 0 && <OutfitSection outfits={outfits} productFor={productFor} />}
 
         {result.shop ? <Text style={styles.note}>사진 출처: {result.shop}</Text> : null}
       </ScrollView>
@@ -389,6 +397,103 @@ function DecisionOutcome({ decision, wardrobe }: { decision: ItemDecisionResult;
         ))}
       </View>
     </View>
+  );
+}
+
+// 코디 조합. 한 벌은 사진 속 옷 순서(아우터·상의·원피스·하의·신발·가방)대로 놓는다.
+function OutfitSection({
+  outfits,
+  productFor,
+}: {
+  outfits: OutfitSuggestion[];
+  productFor: (itemId: string) => Product | undefined;
+}) {
+  return (
+    <View style={styles.outfitSection}>
+      <Text style={styles.sectionTitle} accessibilityRole="header">내 옷장으로 입어 보기</Text>
+      <Text style={styles.sectionSub}>
+        {outfits.length > 0
+          ? '사진처럼 입을 수 있게 가진 옷으로 맞춰 봤어요'
+          : '아직 이 사진과 맞춰 입을 옷이 옷장에 없어요'}
+      </Text>
+      {outfits.map((outfit, index) => (
+        <OutfitCard key={outfit.id} index={index} outfit={outfit} productFor={productFor} />
+      ))}
+    </View>
+  );
+}
+
+function OutfitCard({
+  index,
+  outfit,
+  productFor,
+}: {
+  index: number;
+  outfit: OutfitSuggestion;
+  productFor: (itemId: string) => Product | undefined;
+}) {
+  const owned = outfit.pieces.filter((piece) => piece.type === 'owned').length;
+  const missing = outfit.pieces.length - owned;
+  return (
+    <GlassView radius={16} style={styles.outfitCard}>
+      <View style={styles.outfitHead}>
+        <Text style={styles.outfitTitle}>코디 {index + 1}</Text>
+        <Text style={styles.outfitCount}>
+          내 옷 {owned}벌{missing > 0 ? ` · 필요 ${missing}벌` : ''}
+        </Text>
+      </View>
+      <View style={styles.pieces}>
+        {outfit.pieces.map((piece) => (
+          <OutfitPieceView key={piece.item.item_id} piece={piece} product={piece.type === 'missing' ? productFor(piece.item.item_id) : undefined} />
+        ))}
+      </View>
+    </GlassView>
+  );
+}
+
+function OutfitPieceView({ piece, product }: { piece: OutfitPiece; product: Product | undefined }) {
+  if (piece.type === 'owned') {
+    const { wardrobeItem } = piece;
+    return (
+      <View style={styles.piece} accessible accessibilityLabel={`내 옷 ${wardrobeItem.color} ${wardrobeItem.visual_fit ?? ''} ${wardrobeItem.kind}`}>
+        <View style={styles.pieceThumb}>
+          <KindIcon kind={wardrobeItem.kind} color={wardrobeItem.color} fit={wardrobeItem.visual_fit} size={44} />
+        </View>
+        <Text style={styles.pieceName} numberOfLines={1}>{wardrobeItem.kind}</Text>
+        <Text style={styles.pieceMeta} numberOfLines={1}>
+          {piece.similar ? `${wardrobeItem.color}(비슷)` : wardrobeItem.color}
+        </Text>
+        {wardrobeItem.visual_fit !== null && (
+          <Text style={styles.pieceMeta} numberOfLines={1}>{wardrobeItem.visual_fit}</Text>
+        )}
+      </View>
+    );
+  }
+  const kind = piece.item.kind;
+  const content = (
+    <>
+      <View style={[styles.pieceThumb, styles.pieceThumbMissing]}>
+        {kind !== undefined && (
+          <View style={styles.pieceFaded}>
+            <KindIcon kind={kind} color={piece.item.color ?? null} fit={piece.item.visual_fit ?? null} size={44} />
+          </View>
+        )}
+      </View>
+      <Text style={styles.pieceName} numberOfLines={1}>{kind ?? '아이템'}</Text>
+      <Text style={[styles.pieceMeta, styles.pieceNeed]} numberOfLines={1}>{product !== undefined ? '필요 ›' : '필요'}</Text>
+    </>
+  );
+  if (product === undefined) {
+    return <View style={styles.piece} accessible accessibilityLabel={`필요한 옷 ${kind ?? ''}`}>{content}</View>;
+  }
+  return (
+    <Pressable
+      style={styles.piece}
+      onPress={() => WebBrowser.openBrowserAsync(product.url)}
+      accessibilityRole="link"
+      accessibilityLabel={`필요한 옷 ${kind ?? ''} 상품 보기`}>
+      {content}
+    </Pressable>
   );
 }
 
@@ -672,6 +777,87 @@ const styles = StyleSheet.create({
   decisionLinkText: {
     fontFamily: fonts.bold,
     fontSize: 11,
+    color: colors.textPurple,
+  },
+  outfitSection: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    marginHorizontal: 4,
+    fontFamily: fonts.extraBold,
+    fontSize: 16,
+    letterSpacing: -0.2,
+    color: colors.text,
+  },
+  sectionSub: {
+    marginTop: 2,
+    marginBottom: 10,
+    marginHorizontal: 4,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  outfitCard: {
+    padding: 12,
+    gap: 10,
+    marginBottom: 8,
+  },
+  outfitHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  outfitTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  outfitCount: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  pieces: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  piece: {
+    width: 58,
+    alignItems: 'center',
+  },
+  pieceThumb: {
+    width: 58,
+    height: 66,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.line,
+  },
+  pieceThumbMissing: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.purpleStrong,
+  },
+  pieceFaded: {
+    opacity: 0.45,
+  },
+  pieceName: {
+    marginTop: 4,
+    maxWidth: 58,
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: colors.text,
+  },
+  pieceMeta: {
+    maxWidth: 58,
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: colors.textSecondary,
+  },
+  pieceNeed: {
+    fontFamily: fonts.bold,
     color: colors.textPurple,
   },
   note: {
