@@ -8,16 +8,15 @@ export type SearchableItem = {
 };
 
 const SEARCH_PLATFORMS = [
-  { platform: "무신사", baseUrl: "https://www.musinsa.com/search/goods?keyword=" },
-  { platform: "에이블리", baseUrl: "https://m.a-bly.com/search?keyword=" },
-  { platform: "지그재그", baseUrl: "https://zigzag.kr/search?keyword=" },
+  { platform: "무신사", baseUrl: "https://www.musinsa.com/search/goods?keyword=", suffix: "" },
+  { platform: "에이블리", baseUrl: "https://mobile.a-bly.com/search/search-result?query=", suffix: "&search_type=DIRECT" },
+  { platform: "지그재그", baseUrl: "https://zigzag.kr/search?keyword=", suffix: "" },
 ] as const;
 
 const OMITTED_SEARCH_COLORS = new Set([null, "멀티", "기타"]);
 
 export function similarSearchQuery(item: SearchableItem): string {
   return [
-    item.brand_source !== undefined && item.brand_source !== "없음" ? item.brand : null,
     OMITTED_SEARCH_COLORS.has(item.color) ? null : item.color,
     item.visual_fit,
     item.kind,
@@ -26,10 +25,10 @@ export function similarSearchQuery(item: SearchableItem): string {
 
 export function similarSearchProducts(item: SearchableItem) {
   const query = similarSearchQuery(item);
-  return SEARCH_PLATFORMS.map(({ platform, baseUrl }) => ({
+  return SEARCH_PLATFORMS.map(({ platform, baseUrl, suffix }) => ({
     item_id: item.item_id,
     platform,
-    url: `${baseUrl}${encodeURIComponent(query)}`,
+    url: `${baseUrl}${encodeURIComponent(query)}${suffix}`,
     match_type: "similar" as const,
   }));
 }
