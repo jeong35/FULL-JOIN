@@ -15,20 +15,28 @@ const SEARCH_PLATFORMS = [
 
 const OMITTED_SEARCH_COLORS = new Set([null, "멀티", "기타"]);
 
-export function similarSearchQuery(item: SearchableItem): string {
+// 내부 태깅 enum은 바꾸지 않고, 쇼핑몰이 실제 검색에 쓰는 표현만 링크 생성 시 변환한다.
+const PLATFORM_KIND_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  에이블리: { 카디건: "가디건" },
+};
+
+function kindForPlatform(kind: string, platform?: string): string {
+  return platform === undefined ? kind : PLATFORM_KIND_ALIASES[platform]?.[kind] ?? kind;
+}
+
+export function similarSearchQuery(item: SearchableItem, platform?: string): string {
   return [
     OMITTED_SEARCH_COLORS.has(item.color) ? null : item.color,
     item.visual_fit,
-    item.kind,
+    kindForPlatform(item.kind, platform),
   ].filter((value): value is string => typeof value === "string" && value.length > 0).join(" ");
 }
 
 export function similarSearchProducts(item: SearchableItem) {
-  const query = similarSearchQuery(item);
   return SEARCH_PLATFORMS.map(({ platform, baseUrl, suffix }) => ({
     item_id: item.item_id,
     platform,
-    url: `${baseUrl}${encodeURIComponent(query)}${suffix}`,
+    url: `${baseUrl}${encodeURIComponent(similarSearchQuery(item, platform))}${suffix}`,
     match_type: "similar" as const,
   }));
 }
