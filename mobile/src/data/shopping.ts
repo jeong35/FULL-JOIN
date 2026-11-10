@@ -4,7 +4,7 @@
 import type { HeartItem, Product } from './types';
 
 const SEARCH_PLATFORMS = [
-  { platform: '무신사', baseUrl: 'https://www.musinsa.com/search/goods?keyword=', suffix: '' },
+  { platform: '무신사', baseUrl: 'https://www.musinsa.com/search/goods?gf=A&keyword=', suffix: '' },
   { platform: '에이블리', baseUrl: 'https://mobile.a-bly.com/search/search-result?query=', suffix: '&search_type=DIRECT' },
   { platform: '지그재그', baseUrl: 'https://zigzag.kr/search?keyword=', suffix: '' },
 ] as const;
