@@ -17,6 +17,8 @@
 | `GET` | `/health` | 함수 실행 상태 확인 |
 | `POST` | `/wardrobe` | 옷장 아이템 등록 |
 | `GET` | `/wardrobe?user_id=` | 사용자의 옷장 조회 |
+| `GET` | `/style-preferences?user_id=` | 사용자의 추구미 조회 |
+| `PUT` | `/style-preferences` | 사용자의 추구미를 0~3개로 교체 저장 |
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |

@@ -553,6 +553,39 @@ async function handleWardrobeItem(request: Request, wardrobeItemId: string, db: 
   return json({ wardrobe_item_id: wardrobeItemId, deleted: true });
 }
 
+async function handleStylePreferences(request: Request, url: URL, db: SupabaseClient): Promise<Response> {
+  if (request.method === "GET") {
+    const userId = url.searchParams.get("user_id")?.trim();
+    if (!userId) return apiError(400, "invalid_request", "사용자 식별자가 필요해요", "user_id");
+    const { data, error } = await db.from("user_style_preferences")
+      .select("style,position")
+      .eq("user_id", userId)
+      .order("position", { ascending: true });
+    if (error !== null) throw error;
+    return json({ styles: (data ?? []).map((entry) => entry.style) });
+  }
+
+  if (request.method !== "PUT") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  const body = await bodyAsObject(request);
+  const userId = typeof body?.user_id === "string" ? body.user_id.trim() : "";
+  if (!userId) return apiError(400, "invalid_request", "사용자 식별자가 필요해요", "user_id");
+  if (!Array.isArray(body?.styles)) return apiError(400, "invalid_request", "추구미 목록이 필요해요", "styles");
+  const styles = body.styles;
+  if (styles.length > 3 || new Set(styles).size !== styles.length || styles.some((style) => typeof style !== "string" || !STYLES.includes(style as (typeof STYLES)[number]))) {
+    return apiError(400, "invalid_enum", "추구미는 서로 다른 스타일로 3개까지 고를 수 있어요", "styles");
+  }
+
+  const { error: deleteError } = await db.from("user_style_preferences").delete().eq("user_id", userId);
+  if (deleteError !== null) throw deleteError;
+  if (styles.length > 0) {
+    const { error: insertError } = await db.from("user_style_preferences").insert(
+      styles.map((style, index) => ({ user_id: userId, style, position: index + 1 })),
+    );
+    if (insertError !== null) throw insertError;
+  }
+  return json({ styles });
+}
+
 async function handleFeed(url: URL, db: SupabaseClient): Promise<Response> {
   const selectedStyle = url.searchParams.get("style");
   if (selectedStyle !== null && !STYLES.includes(selectedStyle as (typeof STYLES)[number])) {
@@ -914,6 +947,7 @@ export default {
       if (path === "/health" && request.method === "GET") return json({ ok: true });
       if (path === "/analyze") return await handleAnalyze(request, db);
       if (path === "/wardrobe") return await handleWardrobe(request, url, db);
+      if (path === "/style-preferences") return await handleStylePreferences(request, url, db);
       const wardrobeItemMatch = path.match(/^\/wardrobe\/([^/]+)$/);
       if (wardrobeItemMatch?.[1] !== undefined) {
         return await handleWardrobeItem(request, decodeURIComponent(wardrobeItemMatch[1]), db);
