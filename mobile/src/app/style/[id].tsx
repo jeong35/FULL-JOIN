@@ -166,17 +166,18 @@ export default function StyleDetailScreen() {
 }
 
 function ProductItem({ item }: { item: StyleImageDetailItem }) {
+  // 제목은 다른 아이템과 같은 '색 · 핏 · 종류'. 쇼핑몰 상품명은 길고 브랜드가 겹쳐서 보여 주지 않고 링크로만 연다.
   const label = [item.color, item.visual_fit, item.kind].filter(Boolean).join(' · ');
   const groundedBrand = item.brand_source === '없음' ? null : item.brand;
+  const source = [...new Set([groundedBrand, item.shop].filter((value): value is string => Boolean(value)))].join(' · ');
   return (
     <View style={styles.itemCard}>
       <View style={styles.itemIcon}>
         <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={42} />
       </View>
       <View style={styles.itemText}>
-        <Text style={styles.itemName}>{item.product_name ?? label}</Text>
-        {groundedBrand !== null && <Text style={styles.itemMeta}>{groundedBrand}</Text>}
-        {item.shop !== null && <Text style={styles.itemMeta}>{item.shop}</Text>}
+        <Text style={styles.itemName}>{label}</Text>
+        {source !== '' && <Text style={styles.itemMeta}>{source}</Text>}
         {item.product_url !== null ? (
           <Pressable
             onPress={() => WebBrowser.openBrowserAsync(item.product_url!)}
