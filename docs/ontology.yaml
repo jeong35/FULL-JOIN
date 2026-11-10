@@ -133,6 +133,11 @@ classes:
   Outfit:
     description: 함께 입는 옷의 조합(코디). 갭 분석에서 가진 옷(WardrobeItem)과 사진 속 아이템(Item)을 부위별로 채운 결과.
     evidence: [로그 2, 로그 3, 로그 9, 로그 10]
+    attributes:
+      source_style_image: {type: ref, ref: StyleImage, evidence: [팀 결정 11/10], note: "기준이 된 저장 사진. 사진은 이미 어울리게 입혀진 한 벌이라 사진의 부위 구성을 그대로 따른다"}
+      pieces: {type: list, evidence: [팀 결정 11/10], note: "사진 속 Item 자리마다 하나. 자리 채움 방식(fill)과 그 자리의 WardrobeItem(없으면 null)"}
+      fill: {type: enum, values: [활용, 비슷함, 대체, 필요], evidence: [팀 결정 11/10], note: "채우는 순서는 활용 → 비슷함 → 대체. 활용·비슷함 = gap_status 그대로 / 대체 = 같은 자리에 입는 가까운 종류(대체 짝)의 같은 색·같은 계열 색 내 옷 — 판정 값은 바꾸지 않는다 / 필요 = 채울 옷이 없어 쇼핑 링크를 닮"}
+      max_count: {type: integer, value: 3, evidence: [팀 결정 11/10], note: "사진 한 장당 코디 최대 3개, 채울 옷이 없으면 0개 (SPEC AC11)"}
     relations:
       - includes: WardrobeItem
         evidence: [로그 2, 로그 9, 로그 10]

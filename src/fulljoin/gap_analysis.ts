@@ -55,12 +55,12 @@ function hasMatchingKindAndSlot(
   return item.slot === wardrobeItem.slot || CROSS_SLOT_KINDS.has(item.kind);
 }
 
-function isSameColorFamily(itemColor: string, wardrobeColor: string): boolean {
+export function isSameColorFamily(itemColor: string, wardrobeColor: string): boolean {
   const itemFamily = COLOR_FAMILY_BY_COLOR.get(itemColor);
   return itemFamily !== undefined && itemFamily === COLOR_FAMILY_BY_COLOR.get(wardrobeColor);
 }
 
-function isComparableColor(color: string | null): color is string {
+export function isComparableColor(color: string | null): color is string {
   return color !== null && color !== "멀티" && color !== "기타";
 }
 
