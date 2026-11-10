@@ -4,11 +4,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWi
 import Svg, { Path } from 'react-native-svg';
 
 import { ColorSwatch } from '@/components/ColorSwatch';
+import { HintBubble } from '@/components/HintBubble';
 import { KindIcon } from '@/components/KindIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { SLOTS, type Slot } from '@/data/catalog';
-import { loadWardrobe, removeWardrobeItems, useWardrobeState } from '@/data/store';
+import { useHintOpen } from '@/data/hints';
+import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
@@ -33,16 +35,25 @@ export default function ClosetScreen() {
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
+  const archive = useArchiveState();
+  const emptyHintOpen = useHintOpen('closet_empty');
+  const afterClosetHintOpen = useHintOpen('home_after_closet');
+  // 다음 할 일 말풍선: 0벌이면 옷 넣기(위). 옷을 넣었고 아직 저장한 사진이 없으면 홈으로 가서 사진 보며 코디 고르기
+  // (아래, 꼬리는 홈 탭을 가리킨다. 11/11 팀 결정).
+  const hintable = !editing && !loading && wardrobeState.status === 'ready';
+  const showEmptyHint = hintable && wardrobe.length === 0 && emptyHintOpen;
+  const showAfterClosetHint = hintable && wardrobe.length > 0 && afterClosetHintOpen
+    && archive.status === 'ready' && archive.data.length === 0;
 
-  // 다른 탭으로 가면 편집을 끝낸다.
+  // 다른 탭으로 가면 편집을 끝낸다. 저장한 사진이 있는지(아래 말풍선)는 홈을 안 거쳐도 알 수 있게 받아 둔다.
   useFocusEffect(
-    useCallback(
-      () => () => {
+    useCallback(() => {
+      void loadArchive();
+      return () => {
         setEditing(false);
         setSelected(new Set());
-      },
-      [],
-    ),
+      };
+    }, []),
   );
 
   const tileWidth =
@@ -122,6 +133,18 @@ export default function ClosetScreen() {
           </View>
         )
       }>
+      {showEmptyHint && (
+        <HintBubble
+          id="closet_empty"
+          text="옷장이 아직 비어 있어요! 가진 옷을 넣으면 사진과 바로 비교해 볼 수 있어요"
+          actionLabel="옷 넣기"
+          tail="up"
+          tailX={width - layout.screenPaddingX * 2 - 44}
+          onPress={addItem}
+          doneOnPress={false}
+          style={styles.hintTop}
+        />
+      )}
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
 
@@ -151,6 +174,18 @@ export default function ClosetScreen() {
           ))
         )}
       </ScrollView>
+
+      {showAfterClosetHint && (
+        <HintBubble
+          id="home_after_closet"
+          text="옷을 등록했어요! 이제 사진을 보며 원하는 코디를 골라볼까요? 옷을 더 등록하면 정확한 코디를 추천받을 수 있어요!"
+          actionLabel="홈으로 가기"
+          tail="down"
+          tailX={width / 10 - layout.screenPaddingX}
+          onPress={() => router.navigate('/')}
+          style={styles.hintBottom}
+        />
+      )}
 
       {editing && (
         <View style={styles.deleteBar}>
@@ -297,6 +332,17 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.danger,
+  },
+  hintTop: {
+    marginHorizontal: layout.screenPaddingX,
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  hintBottom: {
+    position: 'absolute',
+    left: layout.screenPaddingX,
+    right: layout.screenPaddingX,
+    bottom: 12,
   },
   scroll: {
     flex: 1,

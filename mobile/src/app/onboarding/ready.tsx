@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
 import { PrimaryButton } from '@/components/ui';
+import { track } from '@/data/events';
 import { finishOnboarding, useSession } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
@@ -15,13 +17,19 @@ export default function ReadyScreen() {
   const insets = useSafeAreaInsets();
   const taste = session?.styles ?? [];
 
+  useEffect(() => {
+    track('ready_view');
+  }, []);
+
   function goCloset() {
+    track('ready_choice', { choice: 'closet' });
     finishOnboarding();
     router.replace('/closet');
     router.push('/add-item/kind');
   }
 
   function goFeed() {
+    track('ready_choice', { choice: 'feed' });
     finishOnboarding();
     router.replace('/');
   }

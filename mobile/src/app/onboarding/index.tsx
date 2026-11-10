@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,11 +8,14 @@ import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { PrimaryButton } from '@/components/ui';
 import type { Color, Kind, VisualFit } from '@/data/catalog';
-import { getSession, markIntroSeen } from '@/data/session';
+import { track } from '@/data/events';
+import { getSession, hasLoggedInBefore, markIntroSeen } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
 // 튜토리얼 ①: 앱 소개 3장. 처음 연 사람(웹)은 여기서 시작해 로그인 → 취향 고르기로 간다.
 // 마이 탭의 '튜토리얼 다시 보기'로 오면(replay=1) 마지막에 닫기만 한다.
+// '건너뛰기'는 이 브라우저에서 로그인한 적이 있는 사람에게만 보여 준다. 처음 온 사람은 핵심(활용·비슷함·필요)을 알고
+// 시작하도록 3장을 끝까지 본다(11/10 결정).
 
 type Slide = { title: string; body: string; picture: ReactNode };
 
@@ -41,6 +44,26 @@ export default function OnboardingIntroScreen() {
   const insets = useSafeAreaInsets();
   const slide = SLIDES[index];
   const last = index === SLIDES.length - 1;
+  const canSkip = isReplay || hasLoggedInBefore();
+
+  useEffect(() => {
+    if (!isReplay) track('intro_view', { step: index + 1 });
+  }, [index, isReplay]);
+
+  function next() {
+    if (!isReplay) track('intro_next', { step: index + 1 });
+    setIndex(index + 1);
+  }
+
+  function skip() {
+    if (!isReplay) track('intro_skip', { step: index + 1 });
+    finish();
+  }
+
+  function done() {
+    if (!isReplay) track('intro_done');
+    finish();
+  }
 
   function finish() {
     if (isReplay) {
@@ -60,8 +83,8 @@ export default function OnboardingIntroScreen() {
         <Text style={styles.logo} accessibilityRole="header">
           odit.
         </Text>
-        {!last && (
-          <Pressable onPress={finish} accessibilityRole="button" hitSlop={10}>
+        {!last && canSkip && (
+          <Pressable onPress={skip} accessibilityRole="button" hitSlop={10}>
             <Text style={styles.skip}>{isReplay ? '닫기' : '건너뛰기'}</Text>
           </Pressable>
         )}
@@ -81,7 +104,7 @@ export default function OnboardingIntroScreen() {
         </View>
         <PrimaryButton
           label={last ? (isReplay ? '닫기' : '시작하기') : '다음'}
-          onPress={last ? finish : () => setIndex(index + 1)}
+          onPress={last ? done : next}
         />
         {index > 0 && (
           <Pressable onPress={() => setIndex(index - 1)} accessibilityRole="button" style={styles.prev} hitSlop={8}>

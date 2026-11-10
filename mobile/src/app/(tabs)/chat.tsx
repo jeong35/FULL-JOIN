@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import type { ElementRef } from 'react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -18,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postChat } from '@/data/api';
+import { track } from '@/data/events';
+import { markHintDone } from '@/data/hints';
 import { loadArchive, useArchiveState } from '@/data/store';
 import type { ArchiveImage, Product } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
@@ -40,6 +42,19 @@ export default function ChatScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const nextMessageId = useRef(1);
   const scrollRef = useRef<ElementRef<typeof ScrollView>>(null);
+
+  // 비교 결과의 '챗봇에 물어보기'로 오면(image=사진 ID) 그 사진을 고른 채로 연다. 방금 저장한 사진일 수 있어 새로 받는다.
+  const { image } = useLocalSearchParams<{ image?: string }>();
+  const requestedImage = typeof image === 'string' && image !== '' ? image : null;
+  const [openedImage, setOpenedImage] = useState<string | null>(null);
+  if (requestedImage !== null && requestedImage !== openedImage) {
+    setOpenedImage(requestedImage);
+    setSelectedId(requestedImage);
+    setShowPicker(false);
+  }
+  useEffect(() => {
+    if (requestedImage !== null) void loadArchive({ force: true });
+  }, [requestedImage]);
 
   useFocusEffect(useCallback(() => {
     loadArchive();
@@ -70,6 +85,9 @@ export default function ChatScreen() {
       setMessages([userMessage]);
     }
     setSending(true);
+    // 질문 내용은 남기지 않고, 어느 사진에 몇 번째 질문인지만 남긴다.
+    track('chat_send', { style_image_id: selected.id, turn: history.filter((message) => message.role === 'user').length + 1 });
+    markHintDone('result_chat');
     try {
       const result = await postChat(selected.id, text, history);
       setMessages((current) => [...current, {
@@ -226,7 +244,10 @@ function ChatBubble({ message }: { message: Message }) {
               {message.products.map((product) => (
                 <Pressable
                   key={`${product.item_id}-${product.platform}`}
-                  onPress={() => WebBrowser.openBrowserAsync(product.url)}
+                  onPress={() => {
+                    track('shop_link_click', { place: 'chat', platform: product.platform, match_type: product.match_type });
+                    void WebBrowser.openBrowserAsync(product.url);
+                  }}
                   accessibilityRole="link"
                   style={styles.productLink}>
                   <Text style={styles.productLinkText}>{product.platform} ›</Text>

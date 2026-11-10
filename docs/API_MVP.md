@@ -23,6 +23,7 @@
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
 | `POST` | `/chat` | 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변 |
+| `POST` | `/events` | 앱 사용 기록(이탈 지점·최종 목표 측정용) 저장, 이름은 `docs/EVENTS.md` 목록만 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
 | `GET/PUT` | `/style-images/{id}/review` | AI 원본은 보존하고 운영용 스타일·아이템을 조회·검수 |
@@ -69,6 +70,10 @@
 ## 저장 사진 챗봇
 
 `POST /chat`은 `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. `claimed_owned_item_ids`에는 실제 등록된 옷장 ID만 들어가며, 쇼핑 질문은 브랜드나 상품을 지어내지 않고 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다.
+
+## 사용 기록
+
+`POST /events`는 `{ "device_id", "session_id", "platform", "events": [{ "name", "ts", "user_id", "props" }] }`를 한 번에 1~20개 받아 `user_events` 표에 넣고 `{ "accepted": N }`을 돌려준다. 이름은 `src/fulljoin/events.ts`의 닫힌 목록만 받고, 속성은 12개까지 짧은 글자·숫자·참거짓만 받는다. 닉네임·숫자 4자리·채팅 내용은 받지 않는다. 앱은 사전 확인(preflight) 없이 보내려고 `content-type: text/plain`으로 보낸다. 이벤트 목록과 조회 쿼리는 `docs/EVENTS.md`.
 
 ## 사진 분석과 CSV 일괄 등록
 

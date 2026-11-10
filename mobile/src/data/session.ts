@@ -20,6 +20,8 @@ export type Session = {
 const STORAGE_KEY = 'odit-session-v1';
 // 이 브라우저에서 소개 3장을 본 적이 있는지. 로그아웃해도 남는다(한 번 본 사람은 로그인 화면부터).
 const INTRO_SEEN_KEY = 'odit-intro-seen-v1';
+// 이 브라우저에서 로그인한 적이 있는지. 로그아웃해도 남는다. 소개의 '건너뛰기'는 이런 사람에게만 보여 준다.
+const EVER_LOGGED_IN_KEY = 'odit-ever-logged-in-v1';
 const DEMO_USER_ID = process.env.EXPO_PUBLIC_DEMO_USER_ID ?? 'eunjae-demo';
 
 // 로그인 화면은 웹에서만 띄운다. EXPO_PUBLIC_DEMO_USER_ID를 넣으면 웹도 시연용 사용자로 고정된다.
@@ -115,6 +117,32 @@ function initialSession(): Session | null {
 
 let session: Session | null = initialSession();
 let introSeen = readIntroSeen();
+let everLoggedIn = readEverLoggedIn();
+if (session !== null) markEverLoggedIn();
+
+function readEverLoggedIn(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return globalThis.localStorage?.getItem(EVER_LOGGED_IN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markEverLoggedIn() {
+  if (everLoggedIn || typeof window === 'undefined') return;
+  everLoggedIn = true;
+  try {
+    globalThis.localStorage?.setItem(EVER_LOGGED_IN_KEY, '1');
+  } catch {
+    // 저장이 막힌 브라우저는 이번 방문 동안만 기억한다.
+  }
+}
+
+// 이 브라우저에서 로그인한 적이 있으면(로그아웃 뒤 포함) 소개를 건너뛸 수 있다. 처음 온 사람은 소개 3장을 끝까지 본다.
+export function hasLoggedInBefore(): boolean {
+  return everLoggedIn;
+}
 
 function readIntroSeen(): boolean {
   if (typeof window === 'undefined') return false;
@@ -142,6 +170,7 @@ const listeners = new Set<() => void>();
 
 function setSession(next: Session | null) {
   session = next;
+  if (next !== null) markEverLoggedIn();
   if (LOGIN_ENABLED) writeStored(next);
   for (const listener of listeners) listener();
 }

@@ -15,11 +15,14 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/GlassView';
+import { HintBubble } from '@/components/HintBubble';
 import { BookmarkIcon } from '@/components/Icons';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { errorMessage } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
+import { track } from '@/data/events';
 import { orderByTaste } from '@/data/feedOrder';
+import { markHintDone, useHintOpen } from '@/data/hints';
 import { onHomeTabReselect } from '@/data/homeTab';
 import { useSession } from '@/data/session';
 import { heartStyleImage, loadArchive, loadFeed, unheartStyleImage, useArchiveState, useFeedState, useIsUnhearting, useSaved } from '@/data/store';
@@ -87,6 +90,8 @@ function filterOptions(images: readonly ArchiveImage[]) {
 const BUBBLE_HEIGHT = 28;
 const BUBBLE_MARGIN = 8;
 const BUBBLE_HIDE_MS = 1200;
+// '모든 저장' 글자 탭의 가운데(화면 왼쪽에서 px). 다음 할 일 말풍선 꼬리가 여기를 가리킨다.
+const SAVED_TAB_CENTER_X = 96;
 
 export default function HomeScreen() {
   const feed = useFeedState();
@@ -113,10 +118,20 @@ export default function HomeScreen() {
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const showBubble = folder === '모든 저장' && archiveImages.length > 0 && contentHeight > viewportHeight;
+  // 다음 할 일 말풍선: 피드에서 사진을 저장하면 '모든 저장'에서 비교하기, '모든 저장'에서는 사진을 눌러 비교 결과 보기.
+  const [justSaved, setJustSaved] = useState(false);
+  const saveHintOpen = useHintOpen('save_compare');
+  const openHintOpen = useHintOpen('archive_open');
+
+  function changeFolder(next: Folder) {
+    if (next === '모든 저장') markHintDone('save_compare');
+    setFolder(next);
+  }
 
   // 화면에 돌아올 때마다 사진 주소가 만료됐는지 보고 필요하면 새로 받는다.
   useFocusEffect(
     useCallback(() => {
+      track('feed_view');
       loadFeed();
       loadArchive({ force: true });
     }, []),
@@ -149,6 +164,9 @@ export default function HomeScreen() {
       }
       return;
     }
+    track('photo_save', { style_image_id: id, place: 'feed' });
+    markHintDone('home_after_closet');
+    setJustSaved(true);
     await heartStyleImage(id);
     // 저장 버튼은 화면을 열지 않는다. '모든 저장' 목록만 서버 상태와 맞춘다.
     await loadArchive({ force: true });
@@ -216,7 +234,10 @@ export default function HomeScreen() {
                 image={image}
                 colorIndex={(index + columnIndex) % 2}
                 saved={saved[image.id] !== undefined}
-                onOpen={() => router.push(`/style/${encodeURIComponent(image.id)}` as Href)}
+                onOpen={() => {
+                  track('photo_open', { style_image_id: image.id });
+                  router.push(`/style/${encodeURIComponent(image.id)}` as Href);
+                }}
                 onSave={() => onToggleSave(image.id)}
               />
             ))}
@@ -234,7 +255,19 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      <TextTabs options={FOLDERS} value={folder} onChange={setFolder} />
+      <TextTabs options={FOLDERS} value={folder} onChange={changeFolder} />
+
+      {folder === '피드' && justSaved && saveHintOpen && (
+        <HintBubble
+          id="save_compare"
+          text="저장했어요! '모든 저장'에서 사진을 누르면 내 옷장과 비교해 드려요"
+          actionLabel="모든 저장 보기"
+          tail="up"
+          tailX={SAVED_TAB_CENTER_X - layout.screenPaddingX}
+          onPress={() => setFolder('모든 저장')}
+          style={styles.hint}
+        />
+      )}
 
       {folder === '모든 저장' && archive.data.length > 0 && (
         <View style={styles.filterBar}>
@@ -248,6 +281,18 @@ export default function HomeScreen() {
           <View style={styles.filterSpacer} />
           <FilterPill label={filter.style ?? '스타일'} active={filter.style !== null} onPress={() => setPicking('style')} />
         </View>
+      )}
+      {folder === '모든 저장' && archiveImages.length > 0 && openHintOpen && (
+        <HintBubble
+          id="archive_open"
+          text="사진을 누르면 내 옷장과 비교해 드려요! 있는 옷, 비슷한 옷, 필요한 옷을 한눈에 볼 수 있어요"
+          actionLabel="첫 사진 비교 보기"
+          // 꼬리는 위 연도·계절 필터가 아니라 아래 첫 사진(3칸 중 첫 칸 가운데)을 가리킨다.
+          tail="down"
+          tailX={width / 6 - layout.screenPaddingX}
+          onPress={() => openArchiveImage(archiveImages[0])}
+          style={styles.hint}
+        />
       )}
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
 
@@ -530,6 +575,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     color: '#A23B3B',
+  },
+  hint: {
+    marginHorizontal: layout.screenPaddingX,
+    marginTop: 2,
+    marginBottom: 12,
   },
   columns: {
     flexDirection: 'row',

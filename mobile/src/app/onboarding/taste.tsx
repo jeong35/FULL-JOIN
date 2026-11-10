@@ -8,6 +8,7 @@ import { CheckMark } from '@/components/Icons';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { errorMessage, updateStylePreferences } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
+import { track } from '@/data/events';
 import { saveStyles, useSession } from '@/data/session';
 import { loadFeed, useFeedState } from '@/data/store';
 import type { StyleImage } from '@/data/types';
@@ -67,6 +68,11 @@ export default function TasteScreen() {
     if (session !== null) loadFeed();
   }, [session]);
 
+  // 튜토리얼 이탈 지점을 재려고 첫 고르기에서만 남긴다(마이 탭의 다시 고르기는 빼고).
+  useEffect(() => {
+    if (!isReplay) track('taste_view');
+  }, [isReplay]);
+
   // 로그인 없이 이 주소로 바로 온 경우.
   useEffect(() => {
     if (session === null) router.replace('/onboarding');
@@ -92,6 +98,10 @@ export default function TasteScreen() {
     try {
       const saved = await updateStylePreferences(styles);
       saveStyles(saved);
+      if (!isReplay) {
+        if (styles.length > 0) track('taste_done', { count: styles.length });
+        else track('taste_later');
+      }
       if (isReplay) {
         if (router.canGoBack()) router.back();
         else router.replace('/my');
