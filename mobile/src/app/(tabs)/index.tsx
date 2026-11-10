@@ -66,7 +66,7 @@ const NO_FILTER: ArchiveFilter = { year: null, season: null, style: null };
 const FILTER_LABELS: Record<FilterKey, string> = { year: '연도', season: '계절', style: '스타일' };
 const FILTER_NOTES: Record<FilterKey, string> = {
   year: '사진을 저장한 해예요.',
-  season: '저장한 달 기준이에요. 봄 3~5월 · 여름 6~8월 · 가을 9~11월 · 겨울 12~2월.',
+  season: '저장한 달 기준이에요.\n봄 3~5월 · 여름 6~8월 · 가을 9~11월 · 겨울 12~2월.',
   style: '사진에 붙은 스타일로 골라 봐요.',
 };
 
