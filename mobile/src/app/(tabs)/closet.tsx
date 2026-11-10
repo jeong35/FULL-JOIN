@@ -1,18 +1,20 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { ColorSwatch } from '@/components/ColorSwatch';
 import { KindIcon } from '@/components/KindIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { errorMessage } from '@/data/api';
 import { SLOTS, type Slot } from '@/data/catalog';
-import { loadWardrobe, removeWardrobeItem, useWardrobeState } from '@/data/store';
+import { loadWardrobe, removeWardrobeItems, useWardrobeState } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 // 옷장 탭. 모양은 design/screens/22-tab-closet.html을 따른다. 옷은 서버(GET /wardrobe)에서 받고, 새로 넣은 옷이 맨 앞에 보인다.
+// 지우기: '편집'을 누르면 옷마다 동그라미가 생기고, 여러 벌을 골라 아래 '고른 N벌 삭제'로 한 번에 지운다
+// (디자인 캔버스 '옷 삭제 — B. 편집 → 여러 벌 골라 삭제', 11/10 팀 결정).
 
 const FILTERS = ['전체', ...SLOTS] as const;
 type Filter = '전체' | Slot;
@@ -26,9 +28,22 @@ export default function ClosetScreen() {
   const wardrobe = wardrobeState.data;
   const loading = wardrobeState.status === 'idle' || wardrobeState.status === 'loading';
   const [filter, setFilter] = useState<Filter>('전체');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
+
+  // 다른 탭으로 가면 편집을 끝낸다.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setEditing(false);
+        setSelected(new Set());
+      },
+      [],
+    ),
+  );
 
   const tileWidth =
     (width - layout.screenPaddingX * 2 - GRID_COLUMN_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
@@ -42,45 +57,70 @@ export default function ClosetScreen() {
     router.push({ pathname: '/add-item/kind', params: { slot: filter } });
   }
 
-  function confirmDelete(item: WardrobeItem) {
-    const remove = () => {
-      setActionError(null);
-      setDeletingId(item.id);
-      void removeWardrobeItem(item.id)
-        .catch((error) => setActionError(errorMessage(error)))
-        .finally(() => setDeletingId(null));
-    };
+  function startEditing() {
+    setActionError(null);
+    setSelected(new Set());
+    setEditing(true);
+  }
 
-    // React Native Web의 Alert는 선택 버튼 콜백을 지원하지 않아 브라우저 확인창을 쓴다.
-    if (Platform.OS === 'web') {
-      if (globalThis.confirm(`${item.kind}을(를) 내 옷장에서 삭제할까요?`)) remove();
+  function stopEditing() {
+    setEditing(false);
+    setSelected(new Set());
+  }
+
+  function toggle(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function deleteSelected() {
+    if (selected.size === 0 || deleting) return;
+    setDeleting(true);
+    setActionError(null);
+    const failed = await removeWardrobeItems([...selected]);
+    setDeleting(false);
+    if (failed.length === 0) {
+      stopEditing();
       return;
     }
-    Alert.alert(
-      '옷을 삭제할까요?',
-      `${item.kind}을(를) 내 옷장에서 삭제해요.`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: remove,
-        },
-      ],
-    );
+    // 못 지운 옷은 고른 채로 남겨서 다시 누르면 바로 다시 지울 수 있게 한다.
+    setSelected(new Set(failed));
+    setActionError(`${failed.length}벌은 지우지 못했어요. 다시 시도해 주세요.`);
   }
+
+  const subtitle = editing
+    ? selected.size === 0
+      ? '지울 옷을 골라 주세요'
+      : `지울 옷을 골라 주세요 · ${selected.size}벌 골랐어요`
+    : loading && wardrobe.length === 0
+      ? '불러오는 중'
+      : `${wardrobe.length}벌 등록`;
 
   return (
     <TabScreen
       title="내 옷장"
-      subtitle={loading && wardrobe.length === 0 ? '불러오는 중' : `${wardrobe.length}벌 등록`}
+      subtitle={subtitle}
       headerRight={
-        <Pressable
-          onPress={addItem}
-          accessibilityRole="button"
-          style={styles.addButton}>
-          <Text style={styles.addButtonText}>+ 옷 추가</Text>
-        </Pressable>
+        editing ? (
+          <Pressable onPress={stopEditing} accessibilityRole="button" style={styles.doneButton}>
+            <Text style={styles.doneButtonText}>완료</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.headerButtons}>
+            {wardrobe.length > 0 && (
+              <Pressable onPress={startEditing} accessibilityRole="button" style={styles.editButton}>
+                <Text style={styles.editButtonText}>편집</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={addItem} accessibilityRole="button" style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ 옷 추가</Text>
+            </Pressable>
+          </View>
+        )
       }>
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
@@ -104,12 +144,32 @@ export default function ClosetScreen() {
               item={item}
               width={tileWidth}
               index={index}
-              deleting={deletingId === item.id}
-              onDelete={() => confirmDelete(item)}
+              editing={editing}
+              checked={selected.has(item.id)}
+              onToggle={() => toggle(item.id)}
             />
           ))
         )}
       </ScrollView>
+
+      {editing && (
+        <View style={styles.deleteBar}>
+          <Pressable
+            onPress={deleteSelected}
+            disabled={selected.size === 0 || deleting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: selected.size === 0 || deleting, busy: deleting }}
+            style={[styles.deleteButton, (selected.size === 0 || deleting) && styles.deleteButtonDisabled]}>
+            {deleting ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={styles.deleteButtonText}>
+                {selected.size === 0 ? '지울 옷을 골라 주세요' : `고른 ${selected.size}벌 삭제`}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      )}
     </TabScreen>
   );
 }
@@ -118,34 +178,42 @@ function WardrobeTile({
   item,
   width,
   index,
-  deleting,
-  onDelete,
+  editing,
+  checked,
+  onToggle,
 }: {
   item: WardrobeItem;
   width: number;
   index: number;
-  deleting: boolean;
-  onDelete: () => void;
+  editing: boolean;
+  checked: boolean;
+  onToggle: () => void;
 }) {
   const meta = item.visual_fit === null ? item.color : `${item.color} · ${item.visual_fit}`;
-  return (
-    <View style={{ width }} accessible accessibilityLabel={`${item.kind}, ${meta}`}>
+  const content = (
+    <>
       <View style={[styles.tileImage, { backgroundColor: TILE_COLORS[index % 2] }]}>
         <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={Math.min(width * 0.72, 96)} />
         <View style={styles.tileSwatch}>
           <ColorSwatch color={item.color} width={14} height={14} questionSize={9} lightBorderColor="#C9BFDB" />
         </View>
-        <Pressable
-          onPress={onDelete}
-          disabled={deleting}
-          accessibilityRole="button"
-          accessibilityLabel={`${item.kind} 삭제`}
-          hitSlop={6}
-          style={styles.deleteButton}>
-          {deleting
-            ? <ActivityIndicator size="small" color={colors.textSecondary} />
-            : <Text style={styles.deleteButtonText}>삭제</Text>}
-        </Pressable>
+        {editing && checked && <View style={styles.tileRing} />}
+        {editing && (
+          <View style={[styles.checkCircle, checked && styles.checkCircleOn]}>
+            {checked && (
+              <Svg width={14} height={14} viewBox="0 0 24 24">
+                <Path
+                  d="M5 12.5l4.5 4.5L19 7.5"
+                  fill="none"
+                  stroke={colors.white}
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            )}
+          </View>
+        )}
       </View>
       <Text style={styles.tileName} numberOfLines={1}>
         {item.kind}
@@ -153,11 +221,63 @@ function WardrobeTile({
       <Text style={styles.tileMeta} numberOfLines={1}>
         {meta}
       </Text>
-    </View>
+    </>
+  );
+
+  if (!editing) {
+    return (
+      <View style={{ width }} accessible accessibilityLabel={`${item.kind}, ${meta}`}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={`${item.kind}, ${meta}`}
+      style={{ width }}>
+      {content}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.onPurpleFill,
+  },
+  doneButton: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.onPurpleFill,
+  },
   addButton: {
     height: 40,
     paddingHorizontal: 14,
@@ -219,22 +339,32 @@ const styles = StyleSheet.create({
     left: 8,
     bottom: 8,
   },
-  deleteButton: {
+  // 고른 옷은 보라 테두리.
+  tileRing: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderWidth: 2,
+    borderColor: colors.textPurple,
+  },
+  checkCircle: {
     position: 'absolute',
     top: 6,
     right: 6,
-    minWidth: 36,
-    height: 28,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#B9AED0',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  deleteButtonText: {
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    color: colors.danger,
+  checkCircleOn: {
+    borderColor: colors.textPurple,
+    backgroundColor: colors.textPurple,
   },
   tileName: {
     marginTop: 6,
@@ -246,5 +376,27 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 11,
     color: colors.textSecondary,
+  },
+  deleteBar: {
+    paddingHorizontal: layout.screenPaddingX,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    backgroundColor: colors.background,
+  },
+  deleteButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonDisabled: {
+    opacity: 0.4,
+  },
+  deleteButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.white,
   },
 });
