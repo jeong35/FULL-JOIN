@@ -82,13 +82,22 @@ export default function TasteScreen() {
   const cardWidth = (width - layout.screenPaddingX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
   function toggle(style: Style) {
-    setPicked((current) =>
-      current.includes(style)
-        ? current.filter((s) => s !== style)
-        : current.length >= MAX_PICKS
-          ? [...current.slice(1), style] // 3개가 차 있으면 가장 먼저 고른 것을 빼고 넣는다
-          : [...current, style],
-    );
+    setPicked((current) => {
+      if (current.includes(style)) {
+        const next = current.filter((s) => s !== style);
+        track('taste_deselect', { style, selected_count: next.length, replay: isReplay });
+        return next;
+      }
+      if (current.length >= MAX_PICKS) {
+        track('taste_limit_reached', { selected_count: current.length, style, replay: isReplay });
+        const next = [...current.slice(1), style];
+        track('taste_select', { style, selected_count: next.length, replay: isReplay });
+        return next;
+      }
+      const next = [...current, style];
+      track('taste_select', { style, selected_count: next.length, replay: isReplay });
+      return next;
+    });
   }
 
   async function done(styles: Style[]) {
@@ -109,7 +118,10 @@ export default function TasteScreen() {
         router.replace('/onboarding/ready');
       }
     } catch (error) {
-      setSaveError(errorMessage(error));
+      const message = errorMessage(error);
+      track('taste_save_failed', { error_code: message, count: styles.length, replay: isReplay });
+      track('error_shown', { screen: 'taste', error_code: message });
+      setSaveError(message);
     } finally {
       setSaving(false);
     }

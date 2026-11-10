@@ -35,6 +35,7 @@ export default function AddItemKindScreen() {
 
   function selectSlot(next: Slot) {
     if (next === slot) return;
+    track('wardrobe_slot_select', { slot: next });
     setSlot(next);
     // 부위가 바뀌면 이전 부위에서 고른 종류는 무효.
     setKind(null);
@@ -61,7 +62,10 @@ export default function AddItemKindScreen() {
               name={k}
               width={cardWidth}
               selected={k === kind}
-              onPress={() => setKind(k)}
+              onPress={() => {
+                track('wardrobe_kind_select', { slot, kind: k });
+                setKind(k);
+              }}
             />
           ))}
         </View>

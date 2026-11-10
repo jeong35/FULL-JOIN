@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ export default function StyleDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const trackedItems = useRef(new Set<string>());
 
   const load = async () => {
     if (imageId === undefined) return;
@@ -45,7 +46,11 @@ export default function StyleDetailScreen() {
         if (active) setDetail(nextDetail);
       })
       .catch((loadError: unknown) => {
-        if (active) setError(errorMessage(loadError));
+        if (active) {
+          const message = errorMessage(loadError);
+          track('error_shown', { screen: 'style_detail', error_code: message });
+          setError(message);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -75,7 +80,12 @@ export default function StyleDetailScreen() {
       else {
         track('photo_save', { style_image_id: imageId, place: 'detail' });
         markHintDone('home_after_closet');
-        await heartStyleImage(imageId);
+        const ok = await heartStyleImage(imageId);
+        if (ok) track('photo_save_done', { style_image_id: imageId, place: 'detail' });
+        else {
+          track('photo_save_failed', { style_image_id: imageId, place: 'detail' });
+          track('error_shown', { screen: 'style_detail', error_code: 'photo_save_failed' });
+        }
       }
     } catch (saveError) {
       setError(errorMessage(saveError));
@@ -88,7 +98,20 @@ export default function StyleDetailScreen() {
     if (busy) return;
     setBusy(true);
     track('compare_open', { style_image_id: imageId, was_saved: isSaved });
-    if (!isSaved) await heartStyleImage(imageId);
+    if (!isSaved) {
+      const startedAt = Date.now();
+      track('photo_save', { style_image_id: imageId, place: 'compare' });
+      const ok = await heartStyleImage(imageId);
+      if (!ok) {
+        track('photo_save_failed', { style_image_id: imageId, place: 'compare' });
+        track('comparison_failed', { style_image_id: imageId, latency_ms: Date.now() - startedAt, error_code: 'save_failed' });
+        track('error_shown', { screen: 'style_detail', error_code: 'save_failed' });
+        setBusy(false);
+        return;
+      }
+      track('photo_save_done', { style_image_id: imageId, place: 'compare' });
+      track('comparison_done', { style_image_id: imageId, latency_ms: Date.now() - startedAt });
+    }
     setBusy(false);
     router.push({ pathname: '/result/[id]', params: { id: imageId } });
   };
@@ -149,7 +172,17 @@ export default function StyleDetailScreen() {
           <Text style={styles.sectionCount}>{detail.items.length}개</Text>
         </View>
         <View style={styles.itemList}>
-          {detail.items.map((item) => <ProductItem key={item.item_id} item={item} />)}
+          {detail.items.map((item) => (
+            <View
+              key={item.item_id}
+              onLayout={() => {
+                if (trackedItems.current.has(item.item_id)) return;
+                trackedItems.current.add(item.item_id);
+                track('style_detail_item_view', { item_id: item.item_id, kind: item.kind, color: item.color ?? null });
+              }}>
+              <ProductItem item={item} />
+            </View>
+          ))}
         </View>
 
         {products.length === 0 && (

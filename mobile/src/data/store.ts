@@ -185,9 +185,9 @@ export function useIsUnhearting(id: string | undefined): boolean {
 }
 
 // 사진을 저장하고 서버에서 옷장 대조 결과를 받는다. 이미 저장한 사진이면 지금 옷장으로 다시 맞춰 본다.
-export async function heartStyleImage(id: string): Promise<void> {
+export async function heartStyleImage(id: string): Promise<boolean> {
   const previous = state.hearts[id];
-  if (previous?.status === 'loading' || state.unhearting[id] === true) return;
+  if (previous?.status === 'loading' || state.unhearting[id] === true) return false;
   setState({
     saved: state.saved[id] === undefined ? { ...state.saved, [id]: Date.now() } : state.saved,
     hearts: { ...state.hearts, [id]: { status: 'loading', result: previous?.result ?? null } },
@@ -195,6 +195,7 @@ export async function heartStyleImage(id: string): Promise<void> {
   try {
     const result = await postHeart(id);
     setState({ hearts: { ...state.hearts, [id]: { status: 'ready', result } } });
+    return true;
   } catch (error) {
     setState({
       hearts: {
@@ -202,6 +203,7 @@ export async function heartStyleImage(id: string): Promise<void> {
         [id]: { status: 'error', result: previous?.result ?? null, error: errorMessage(error) },
       },
     });
+    return false;
   }
 }
 

@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -21,7 +21,7 @@ import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { errorMessage } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
 import { track } from '@/data/events';
-import { orderByTaste } from '@/data/feedOrder';
+import { NEIGHBOR_STYLES, orderByTaste } from '@/data/feedOrder';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { onHomeTabReselect } from '@/data/homeTab';
 import { useSession } from '@/data/session';
@@ -117,6 +117,10 @@ export default function HomeScreen() {
   const [scrollY] = useState(() => new Animated.Value(0));
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
+  const feedLayouts = useRef(new Map<string, { y: number; height: number }>());
+  const impressed = useRef(new Set<string>());
+  const scrollDepths = useRef(new Set<number>());
+  const feedLoadStartedAt = useRef<number | null>(null);
   const showBubble = folder === '모든 저장' && archiveImages.length > 0 && contentHeight > viewportHeight;
   // 다음 할 일 말풍선: 피드에서 사진을 저장하면 '모든 저장'에서 비교하기, '모든 저장'에서는 사진을 눌러 비교 결과 보기.
   const [justSaved, setJustSaved] = useState(false);
@@ -124,7 +128,10 @@ export default function HomeScreen() {
   const openHintOpen = useHintOpen('archive_open');
 
   function changeFolder(next: Folder) {
-    if (next === '모든 저장') markHintDone('save_compare');
+    if (next === '모든 저장') {
+      markHintDone('save_compare');
+      track('archive_view', { saved_count: archive.data.length });
+    }
     setFolder(next);
   }
 
@@ -132,10 +139,71 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       track('feed_view');
-      loadFeed();
-      loadArchive({ force: true });
+      void loadFeed();
+      void loadArchive({ force: true });
     }, []),
   );
+
+  useEffect(() => {
+    if (feed.status === 'loading') {
+      if (feedLoadStartedAt.current === null) feedLoadStartedAt.current = Date.now();
+      return;
+    }
+    if (feed.status === 'ready' && feedLoadStartedAt.current !== null) {
+      track('feed_load_done', {
+        latency_ms: Date.now() - feedLoadStartedAt.current,
+        item_count: feed.data.length,
+      });
+      feedLoadStartedAt.current = null;
+      return;
+    }
+    if (feed.status === 'error' && feedLoadStartedAt.current !== null) {
+      const code = feed.error ?? 'unknown';
+      track('feed_load_failed', { error_code: code, latency_ms: Date.now() - feedLoadStartedAt.current });
+      track('error_shown', { screen: 'feed', error_code: code });
+      feedLoadStartedAt.current = null;
+    }
+  }, [feed.status, feed.error, feed.data.length]);
+
+  useEffect(() => {
+    const listener = scrollY.addListener(({ value }) => {
+      if (folder !== '피드' || viewportHeight <= 0) return;
+      const depth = Math.min(100, Math.max(0, Math.round(((value + viewportHeight) / Math.max(contentHeight, 1)) * 100)));
+      for (const threshold of [25, 50, 75, 100]) {
+        if (depth >= threshold && !scrollDepths.current.has(threshold)) {
+          scrollDepths.current.add(threshold);
+          track('feed_scroll', { depth_percent: threshold, cards_seen: impressed.current.size });
+        }
+      }
+      for (const [id, layoutInfo] of feedLayouts.current) {
+        if (impressed.current.has(id)) continue;
+        if (!(layoutInfo.y < value + viewportHeight && layoutInfo.y + layoutInfo.height > value)) continue;
+        const position = feedImages.findIndex((image) => image.id === id);
+        const image = feedImages[position];
+        if (image === undefined) continue;
+        impressed.current.add(id);
+        const preferred = (taste ?? []).some((style) => image.style.includes(style));
+        const neighbor = !preferred && (taste ?? []).some((style) =>
+          NEIGHBOR_STYLES[style].some((near) => image.style.includes(near)));
+        track('feed_card_impression', {
+          style_image_id: id,
+          position,
+          recommendation: preferred ? 'preferred' : neighbor ? 'neighbor' : 'other',
+        });
+      }
+    });
+    return () => scrollY.removeListener(listener);
+  }, [scrollY, folder, viewportHeight, contentHeight, feedImages, taste]);
+
+  useEffect(() => {
+    if (folder === '모든 저장' && filtered && archive.status === 'ready' && archiveImages.length === 0) {
+      track('archive_zero_result', {
+        year: filter.year,
+        season: filter.season,
+        style: filter.style,
+      });
+    }
+  }, [folder, filtered, archive.status, archiveImages.length, filter.year, filter.season, filter.style]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -160,15 +228,23 @@ export default function HomeScreen() {
       try {
         await unheartStyleImage(id);
       } catch (error) {
-        setActionError(errorMessage(error));
+        const message = errorMessage(error);
+        track('error_shown', { screen: 'feed', error_code: message });
+        setActionError(message);
       }
       return;
     }
     track('photo_save', { style_image_id: id, place: 'feed' });
     markHintDone('home_after_closet');
     setJustSaved(true);
-    await heartStyleImage(id);
-    // 저장 버튼은 화면을 열지 않는다. '모든 저장' 목록만 서버 상태와 맞춘다.
+    const savedOk = await heartStyleImage(id);
+    if (!savedOk) {
+      track('photo_save_failed', { style_image_id: id, place: 'feed' });
+      track('error_shown', { screen: 'feed', error_code: 'photo_save_failed' });
+      setActionError('사진을 저장하지 못했어요. 다시 시도해 주세요.');
+      return;
+    }
+    track('photo_save_done', { style_image_id: id, place: 'feed', saved_count: Object.keys(saved).length + 1 });
     await loadArchive({ force: true });
   }
 
@@ -191,7 +267,7 @@ export default function HomeScreen() {
     body = (
       <View style={styles.center}>
         <Text style={styles.centerText}>피드 사진을 모두 저장했어요{'\n'}저장한 사진은 &apos;모든 저장&apos;에서 볼 수 있어요</Text>
-        <SmallWhiteButton label="모든 저장 보기" onPress={() => setFolder('모든 저장')} />
+        <SmallWhiteButton label="모든 저장 보기" onPress={() => changeFolder('모든 저장')} />
       </View>
     );
   } else if (folder !== '피드' && archive.data.length === 0 && archive.status !== 'error') {
@@ -212,7 +288,13 @@ export default function HomeScreen() {
     body = (
       <View style={styles.center}>
         <Text style={styles.centerText}>고른 조건에 맞는 저장 사진이 없어요</Text>
-        <SmallWhiteButton label="전체 보기" onPress={() => setFilter(NO_FILTER)} />
+        <SmallWhiteButton
+          label="전체 보기"
+          onPress={() => {
+            track('archive_filter_clear');
+            setFilter(NO_FILTER);
+          }}
+        />
       </View>
     );
   } else if (folder === '모든 저장') {
@@ -233,6 +315,21 @@ export default function HomeScreen() {
                 key={image.id}
                 image={image}
                 colorIndex={(index + columnIndex) % 2}
+                onLayout={(y, height) => {
+                  feedLayouts.current.set(image.id, { y, height });
+                  if (folder === '피드' && viewportHeight > 0 && y < viewportHeight && y + height > 0 && !impressed.current.has(image.id)) {
+                    impressed.current.add(image.id);
+                    const position = feedImages.findIndex((candidate) => candidate.id === image.id);
+                    const preferred = (taste ?? []).some((style) => image.style.includes(style));
+                    const neighbor = !preferred && (taste ?? []).some((style) =>
+                      NEIGHBOR_STYLES[style].some((near) => image.style.includes(near)));
+                    track('feed_card_impression', {
+                      style_image_id: image.id,
+                      position,
+                      recommendation: preferred ? 'preferred' : neighbor ? 'neighbor' : 'other',
+                    });
+                  }
+                }}
                 saved={saved[image.id] !== undefined}
                 onOpen={() => {
                   track('photo_open', { style_image_id: image.id });
@@ -264,7 +361,7 @@ export default function HomeScreen() {
           actionLabel="모든 저장 보기"
           tail="up"
           tailX={SAVED_TAB_CENTER_X - layout.screenPaddingX}
-          onPress={() => setFolder('모든 저장')}
+          onPress={() => changeFolder('모든 저장')}
           style={styles.hint}
         />
       )}
@@ -274,7 +371,14 @@ export default function HomeScreen() {
           <FilterPill label={filter.year === null ? '연도' : String(filter.year)} active={filter.year !== null} onPress={() => setPicking('year')} />
           <FilterPill label={filter.season ?? '계절'} active={filter.season !== null} onPress={() => setPicking('season')} />
           {filtered && (
-            <Pressable onPress={() => setFilter(NO_FILTER)} accessibilityRole="button" hitSlop={8} style={styles.clearFilter}>
+            <Pressable
+              onPress={() => {
+                track('archive_filter_clear');
+                setFilter(NO_FILTER);
+              }}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={styles.clearFilter}>
               <Text style={styles.clearFilterText}>전체</Text>
             </Pressable>
           )}
@@ -323,6 +427,7 @@ export default function HomeScreen() {
         filter={filter}
         options={options}
         onPick={(key, value) => {
+          track('archive_filter_apply', { filter_type: key, filter_value: value === null ? 'all' : String(value) });
           setFilter((current) => ({ ...current, [key]: value }));
           setPicking(null);
         }}
@@ -441,6 +546,7 @@ function FilterSheet({
 }
 
 function openArchiveImage(image: ArchiveImage) {
+  track('archive_image_open', { style_image_id: image.id });
   router.push({ pathname: '/result/[id]', params: { id: image.id } });
 }
 
@@ -495,17 +601,21 @@ function FeedPhoto({
   saved,
   onOpen,
   onSave,
+  onLayout,
 }: {
   image: StyleImage;
   colorIndex: number;
   saved: boolean;
   onOpen: () => void;
   onSave: () => void;
+  onLayout: (y: number, height: number) => void;
 }) {
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
   const unhearting = useIsUnhearting(image.id);
   return (
-    <View style={[styles.photo, { aspectRatio: ratio, backgroundColor: PHOTO_COLORS[colorIndex] }]}>
+    <View
+      style={[styles.photo, { aspectRatio: ratio, backgroundColor: PHOTO_COLORS[colorIndex] }]}
+      onLayout={(event) => onLayout(event.nativeEvent.layout.y, event.nativeEvent.layout.height)}>
       <Pressable
         onPress={onOpen}
         accessibilityRole="button"

@@ -42,6 +42,7 @@ export default function ChatScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const nextMessageId = useRef(1);
   const scrollRef = useRef<ElementRef<typeof ScrollView>>(null);
+  const inputStarted = useRef(false);
 
   // 비교 결과의 '챗봇에 물어보기'로 오면(image=사진 ID) 그 사진을 고른 채로 연다. 방금 저장한 사진일 수 있어 새로 받는다.
   const { image } = useLocalSearchParams<{ image?: string }>();
@@ -59,6 +60,10 @@ export default function ChatScreen() {
   useFocusEffect(useCallback(() => {
     loadArchive();
   }, []));
+
+  useEffect(() => {
+    if (archive.status === 'ready' && archive.data.length === 0) track('chat_no_saved');
+  }, [archive.status, archive.data.length]);
 
   const selected = archive.data.find((image) => image.id === selectedId) ?? archive.data[0] ?? null;
   const visibleMessages = selected?.id === conversationImageId ? messages : [];
@@ -85,6 +90,8 @@ export default function ChatScreen() {
       setMessages([userMessage]);
     }
     setSending(true);
+    const startedAt = Date.now();
+    inputStarted.current = false;
     // 질문 내용은 남기지 않고, 어느 사진에 몇 번째 질문인지만 남긴다.
     track('chat_send', { style_image_id: selected.id, turn: history.filter((message) => message.role === 'user').length + 1 });
     markHintDone('result_chat');
@@ -96,8 +103,12 @@ export default function ChatScreen() {
         text: result.answer,
         products: result.products,
       }]);
+      track('chat_response_done', { latency_ms: Date.now() - startedAt, product_count: result.products.length });
     } catch (error) {
-      setSendError(errorMessage(error));
+      const message = errorMessage(error);
+      track('chat_response_failed', { latency_ms: Date.now() - startedAt, error_code: message });
+      track('error_shown', { screen: 'chat', error_code: message });
+      setSendError(message);
     } finally {
       setSending(false);
     }
@@ -117,7 +128,13 @@ export default function ChatScreen() {
 
         {selected !== null ? (
           <>
-            <SelectedImage image={selected} onChange={() => setShowPicker((current) => !current)} />
+            <SelectedImage
+              image={selected}
+              onChange={() => {
+                track('chat_picker_open', { style_image_id: selected.id });
+                setShowPicker((current) => !current);
+              }}
+            />
             {showPicker && (
               <ScrollView
                 horizontal
@@ -128,6 +145,7 @@ export default function ChatScreen() {
                   <Pressable
                     key={image.id}
                     onPress={() => {
+                      track('chat_image_select', { style_image_id: image.id });
                       setSelectedId(image.id);
                       setShowPicker(false);
                       setMessages([]);
@@ -170,7 +188,13 @@ export default function ChatScreen() {
             <View style={styles.composer}>
               <TextInput
                 value={input}
-                onChangeText={setInput}
+                onChangeText={(text) => {
+                  if (!inputStarted.current && text.length > 0) {
+                    inputStarted.current = true;
+                    track('chat_input_start', { style_image_id: selected.id });
+                  }
+                  setInput(text);
+                }}
                 onSubmitEditing={send}
                 placeholder="메시지 입력"
                 placeholderTextColor={colors.textSecondary}
@@ -197,7 +221,13 @@ export default function ChatScreen() {
               <>
                 <Text style={styles.emptyChatTitle}>먼저 마음에 드는 사진을 저장해 주세요</Text>
                 <Text style={styles.emptyChatText}>{archive.error ?? '저장한 사진을 골라야 대화를 시작할 수 있어요.'}</Text>
-                <SmallWhiteButton label="피드로 가기" onPress={() => router.navigate('/')} />
+                <SmallWhiteButton
+                  label="피드로 가기"
+                  onPress={() => {
+                    track('chat_go_feed_click');
+                    router.navigate('/');
+                  }}
+                />
               </>
             )}
           </View>

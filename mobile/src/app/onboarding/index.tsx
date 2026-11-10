@@ -55,6 +55,11 @@ export default function OnboardingIntroScreen() {
     setIndex(index + 1);
   }
 
+  function previous() {
+    if (!isReplay) track('intro_prev', { step: index + 1 });
+    setIndex(index - 1);
+  }
+
   function skip() {
     if (!isReplay) track('intro_skip', { step: index + 1 });
     finish();
@@ -107,7 +112,7 @@ export default function OnboardingIntroScreen() {
           onPress={last ? done : next}
         />
         {index > 0 && (
-          <Pressable onPress={() => setIndex(index - 1)} accessibilityRole="button" style={styles.prev} hitSlop={8}>
+          <Pressable onPress={previous} accessibilityRole="button" style={styles.prev} hitSlop={8}>
             <Text style={styles.prevText}>이전</Text>
           </Pressable>
         )}

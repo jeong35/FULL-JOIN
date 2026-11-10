@@ -21,6 +21,8 @@ export default function LoginScreen() {
   const [tried, setTried] = useState(false);
   const [checking, setChecking] = useState(false);
   const pinRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const nicknameStarted = useRef(false);
+  const pinStarted = useRef(false);
 
   const nicknameError = nicknameProblem(nickname);
   const pinError = pinProblem(pin);
@@ -32,8 +34,19 @@ export default function LoginScreen() {
 
   async function submit() {
     setTried(true);
-    if (!valid || checking) return;
+    track('login_submit', { valid });
+    if (!valid) {
+      const validationError = nicknameError ?? pinError ?? 'invalid';
+      track('login_validation_failed', {
+        error_field: nicknameError !== null ? 'nickname' : 'pin',
+        error_type: validationError,
+      });
+      track('error_shown', { screen: 'login', error_code: validationError });
+      return;
+    }
+    if (checking) return;
     setChecking(true);
+    const startedAt = Date.now();
     const userId = userIdFor(nickname, pin);
     let returning = false;
     let savedStyles = [] as Awaited<ReturnType<typeof fetchStylePreferences>>;
@@ -41,6 +54,10 @@ export default function LoginScreen() {
       accountHasData(userId),
       fetchStylePreferences(userId),
     ]);
+    if (dataResult.status === 'rejected' && stylesResult.status === 'rejected') {
+      track('login_failed', { error_code: 'lookup_failed', latency_ms: Date.now() - startedAt });
+      track('error_shown', { screen: 'login', error_code: 'lookup_failed' });
+    }
     if (dataResult.status === 'fulfilled') returning = dataResult.value;
     if (stylesResult.status === 'fulfilled') {
       savedStyles = stylesResult.value;
@@ -62,7 +79,13 @@ export default function LoginScreen() {
           <GlassView radius={14} style={styles.inputBox}>
             <TextInput
               value={nickname}
-              onChangeText={setNickname}
+              onChangeText={(text) => {
+                if (!nicknameStarted.current && text.length > 0) {
+                  nicknameStarted.current = true;
+                  track('login_nickname_start');
+                }
+                setNickname(text);
+              }}
               placeholder={`예: 존재 (2~${NICKNAME_MAX}글자)`}
               placeholderTextColor={colors.textSecondary}
               maxLength={NICKNAME_MAX + 4}
@@ -81,7 +104,13 @@ export default function LoginScreen() {
             <TextInput
               ref={pinRef}
               value={pin}
-              onChangeText={(text) => setPin(text.replace(/[^0-9]/g, '').slice(0, 4))}
+              onChangeText={(text) => {
+                if (!pinStarted.current && text.length > 0) {
+                  pinStarted.current = true;
+                  track('login_pin_start');
+                }
+                setPin(text.replace(/[^0-9]/g, '').slice(0, 4));
+              }}
               placeholder="0000"
               placeholderTextColor={colors.textSecondary}
               keyboardType="number-pad"

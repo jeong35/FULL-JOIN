@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GlassView } from '@/components/GlassView';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton } from '@/components/ui';
+import { track } from '@/data/events';
 import { LOGIN_ENABLED, logout, useSession } from '@/data/session';
 import { resetUserData } from '@/data/store';
 import { colors, fonts, layout } from '@/theme';
@@ -16,6 +17,7 @@ export default function MyScreen() {
   const taste = session?.styles ?? [];
 
   function onLogout() {
+    track('logout_click');
     resetUserData();
     logout(); // 탭 화면이 로그인 전 상태를 보고 튜토리얼로 보낸다.
   }
@@ -35,7 +37,13 @@ export default function MyScreen() {
         <GlassView radius={16} style={styles.card}>
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>내 추구미</Text>
-            <SmallWhiteButton label="다시 고르기" onPress={() => router.push('/onboarding/taste?replay=1')} />
+            <SmallWhiteButton
+              label="다시 고르기"
+              onPress={() => {
+                track('taste_edit_start', { selected_count: taste.length });
+                router.push('/onboarding/taste?replay=1');
+              }}
+            />
           </View>
           {taste.length > 0 ? (
             <View style={styles.chips}>
@@ -51,7 +59,13 @@ export default function MyScreen() {
         </GlassView>
 
         <GlassView radius={16} style={styles.list}>
-          <Pressable onPress={() => router.push('/onboarding?replay=1')} accessibilityRole="button" style={styles.listItem}>
+          <Pressable
+            onPress={() => {
+              track('tutorial_replay_start');
+              router.push('/onboarding?replay=1');
+            }}
+            accessibilityRole="button"
+            style={styles.listItem}>
             <Text style={styles.listText}>튜토리얼 다시 보기</Text>
             <Text style={styles.chevron}>›</Text>
           </Pressable>

@@ -76,14 +76,23 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
     if (saving || color === null || (needsFit && fit === null)) return;
     setSaving(true);
     setSaveError(null);
+    track('wardrobe_add_submit', { slot, kind, color, fit: fit ?? null });
     try {
       await addWardrobeItem({ slot, kind, color, visual_fit: needsFit ? fit : null });
       // 옷장 크기는 활성화(옷 5벌 이상) 목표를 재려고 같이 남긴다.
-      track('wardrobe_add_done', { slot, kind, wardrobe_size: wardrobe.length + 1 });
+      const nextSize = wardrobe.length + 1;
+      track('wardrobe_add_done', { slot, kind, wardrobe_size: nextSize });
+      if ([1, 3, 5, 10].includes(nextSize)) {
+        const slotsCovered = new Set([...wardrobe.map((item) => item.slot), slot]).size;
+        track('wardrobe_milestone', { count: nextSize, slots_covered: slotsCovered });
+      }
       // 옷 추가 화면 두 장을 닫고 옷장 탭으로 돌아간다.
       router.dismissTo('/closet');
     } catch (error) {
-      setSaveError(errorMessage(error));
+      const message = errorMessage(error);
+      track('wardrobe_add_failed', { slot, kind, error_code: message });
+      track('error_shown', { screen: 'wardrobe_add_color_fit', error_code: message });
+      setSaveError(message);
       setSaving(false);
     }
   }
@@ -114,7 +123,10 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
                 color={c}
                 width={chipWidth}
                 selected={c === color}
-                onPress={() => setColor(c)}
+                onPress={() => {
+                  track('wardrobe_color_select', { kind, color: c });
+                  setColor(c);
+                }}
               />
             ))}
           </View>
@@ -123,7 +135,15 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
         {needsFit && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, styles.fitTitle]}>핏</Text>
-            <SegmentedControl options={fitOptions} value={fit} onChange={setFit} fontSize={13} />
+            <SegmentedControl
+              options={fitOptions}
+              value={fit}
+              onChange={(next) => {
+                track('wardrobe_fit_select', { kind, fit: next });
+                setFit(next);
+              }}
+              fontSize={13}
+            />
           </View>
         )}
       </ScrollView>

@@ -9,6 +9,7 @@ import { KindIcon } from '@/components/KindIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { SLOTS, type Slot } from '@/data/catalog';
+import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
@@ -69,6 +70,7 @@ export default function ClosetScreen() {
   }
 
   function startEditing() {
+    track('wardrobe_edit_start', { wardrobe_size: wardrobe.length });
     setActionError(null);
     setSelected(new Set());
     setEditing(true);
@@ -80,6 +82,7 @@ export default function ClosetScreen() {
   }
 
   function toggle(id: string) {
+    track('wardrobe_delete_select', { item_id: id, selected: !selected.has(id) });
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -92,12 +95,17 @@ export default function ClosetScreen() {
     if (selected.size === 0 || deleting) return;
     setDeleting(true);
     setActionError(null);
+    const requested = selected.size;
     const failed = await removeWardrobeItems([...selected]);
     setDeleting(false);
+    const deleted = requested - failed.length;
+    if (deleted > 0) track('wardrobe_delete_done', { delete_count: deleted, remaining_count: wardrobe.length - deleted });
     if (failed.length === 0) {
       stopEditing();
       return;
     }
+    track('wardrobe_delete_failed', { failed_count: failed.length });
+    track('error_shown', { screen: 'wardrobe', error_code: 'wardrobe_delete_failed' });
     // 못 지운 옷은 고른 채로 남겨서 다시 누르면 바로 다시 지울 수 있게 한다.
     setSelected(new Set(failed));
     setActionError(`${failed.length}벌은 지우지 못했어요. 다시 시도해 주세요.`);

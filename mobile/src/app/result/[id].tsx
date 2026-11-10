@@ -36,9 +36,30 @@ export default function SaveResultScreen() {
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   // 이 화면 주소로 바로 들어와(새로고침 등) 결과가 없으면 서버에 다시 맞춰 달라고 한다.
+  const comparisonStartedAt = useRef<number | null>(null);
   useEffect(() => {
-    if (imageId !== undefined && heart === undefined && !removing) heartStyleImage(imageId);
+    if (imageId !== undefined && heart === undefined && !removing) {
+      comparisonStartedAt.current = Date.now();
+      track('comparison_reopened', { style_image_id: imageId });
+      void heartStyleImage(imageId);
+    }
   }, [imageId, heart, removing]);
+
+  useEffect(() => {
+    if (imageId === undefined || comparisonStartedAt.current === null) return;
+    if (heart?.status === 'ready') {
+      track('comparison_done', { style_image_id: imageId, latency_ms: Date.now() - comparisonStartedAt.current });
+      comparisonStartedAt.current = null;
+    } else if (heart?.status === 'error') {
+      track('comparison_failed', {
+        style_image_id: imageId,
+        latency_ms: Date.now() - comparisonStartedAt.current,
+        error_code: heart.error,
+      });
+      track('error_shown', { screen: 'result', error_code: heart.error });
+      comparisonStartedAt.current = null;
+    }
+  }, [imageId, heart]);
 
   if (imageId === undefined) {
     return (
@@ -57,7 +78,9 @@ export default function SaveResultScreen() {
       await unheartStyleImage(imageId);
       router.back();
     } catch (error) {
-      setRemoveError(errorMessage(error));
+      const message = errorMessage(error);
+      track('error_shown', { screen: 'result', error_code: message });
+      setRemoveError(message);
       setRemoving(false);
     }
   }
@@ -168,6 +191,10 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
   const [decisions, setDecisions] = useState<Record<string, ItemDecisionResult>>({});
   const [pendingItems, setPendingItems] = useState<Record<string, boolean>>({});
   const [decisionErrors, setDecisionErrors] = useState<Record<string, string>>({});
+  const viewedGapItems = useRef(new Set<string>());
+  const viewedOutfits = useRef(new Set<string>());
+  const resultDepths = useRef(new Set<number>());
+  const outfitSectionViewed = useRef(false);
 
   const items = result.items.filter(hasKind);
   const missingInfo = result.items.length > 0 && items.length === 0;
@@ -207,6 +234,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
       wardrobe_size: wardrobe.length,
       outfits: showOutfits ? outfits.length : 0,
     });
+    if (wardrobeEmpty) track('comparison_empty_wardrobe', { style_image_id: imageId });
   });
 
   // 다음 할 일 말풍선: 결과를 끝까지 보면 이 사진으로 챗봇에 물어보기.
@@ -227,7 +255,9 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
         delete next[itemId];
         return next;
       });
-      setDecisionErrors((current) => ({ ...current, [itemId]: errorMessage(error) }));
+      const message = errorMessage(error);
+      track('error_shown', { screen: 'result', error_code: message });
+      setDecisionErrors((current) => ({ ...current, [itemId]: message }));
     } finally {
       setPendingItems((current) => {
         const next = { ...current };
@@ -239,7 +269,20 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
 
   return (
     <>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        scrollEventThrottle={64}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          const depth = Math.min(100, Math.round(((contentOffset.y + layoutMeasurement.height) / Math.max(contentSize.height, 1)) * 100));
+          for (const threshold of [25, 50, 75, 100]) {
+            if (depth >= threshold && !resultDepths.current.has(threshold)) {
+              resultDepths.current.add(threshold);
+              track('result_scroll', { style_image_id: imageId, depth_percent: threshold });
+            }
+          }
+        }}>
         <InfoBar style={styles.savedBar}>
           <BookmarkIcon color={colors.textPurple} size={15} filled />
           <Text style={styles.savedBarText}>모든 저장에 담았어요</Text>
@@ -253,15 +296,33 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
         {wardrobeEmpty && (
           <InfoBar
             style={styles.emptyBar}
-            right={<SmallWhiteButton label="옷 추가" onPress={() => router.push('/add-item/kind')} />}>
+            right={
+              <SmallWhiteButton
+                label="옷 추가"
+                onPress={() => {
+                  track('wardrobe_return_click', { reason: 'empty_wardrobe', style_image_id: imageId });
+                  router.push('/add-item/kind');
+                }}
+              />
+            }>
             <Text style={styles.emptyBarText}>가진 옷을 넣으면 활용·필요를 알려 드려요</Text>
           </InfoBar>
         )}
 
         <View style={styles.list}>
           {items.map((item, index) => (
-            <ResultCard
+            <View
               key={item.item_id}
+              onLayout={() => {
+                if (viewedGapItems.current.has(item.item_id)) return;
+                viewedGapItems.current.add(item.item_id);
+                track('gap_item_impression', {
+                  style_image_id: imageId,
+                  item_id: item.item_id,
+                  gap_status: item.gap_status ?? 'unknown',
+                });
+              }}>
+            <ResultCard
               item={item}
               wardrobe={wardrobe}
               thumbColor={index % 2 === 0 ? colors.line : '#DFD5F0'}
@@ -284,10 +345,28 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
                 else void choose(item.item_id, value);
               }}
             />
+            </View>
           ))}
         </View>
 
-        {showOutfits && <OutfitSection outfits={outfits} linksFor={linksFor} />}
+        {showOutfits && (
+          <View
+            onLayout={() => {
+              if (outfitSectionViewed.current) return;
+              outfitSectionViewed.current = true;
+              track('outfit_section_view', { style_image_id: imageId, outfit_count: outfits.length });
+            }}>
+            <OutfitSection
+              outfits={outfits}
+              linksFor={linksFor}
+              onView={(outfitId) => {
+                if (viewedOutfits.current.has(outfitId)) return;
+                viewedOutfits.current.add(outfitId);
+                track('outfit_view', { style_image_id: imageId, outfit_id: outfitId });
+              }}
+            />
+          </View>
+        )}
 
         {!wardrobeEmpty && items.length > 0 && chatHintOpen && (
           <HintBubble
@@ -514,16 +593,20 @@ function DecisionOutcome({
 function OutfitSection({
   outfits,
   linksFor,
+  onView,
 }: {
   outfits: OutfitSuggestion[];
   linksFor: (item: ShownItem) => Product[];
+  onView: (outfitId: string) => void;
 }) {
   return (
     <View style={styles.outfitSection}>
       <Text style={styles.sectionTitle} accessibilityRole="header">내 옷장으로 입어 보기</Text>
       <Text style={styles.sectionSub}>사진처럼 입을 수 있게 비슷한 옷까지 넣어 맞춰 봤어요</Text>
       {outfits.map((outfit, index) => (
-        <OutfitCard key={outfit.id} index={index} outfit={outfit} linksFor={linksFor} />
+        <View key={outfit.id} onLayout={() => onView(outfit.id)}>
+          <OutfitCard index={index} outfit={outfit} linksFor={linksFor} />
+        </View>
       ))}
     </View>
   );

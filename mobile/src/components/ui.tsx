@@ -1,9 +1,11 @@
 // 여러 화면이 같이 쓰는 작은 부품. 크기·모서리는 design/DESIGN.md 4절 표.
+import { usePathname } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { GlassView } from '@/components/GlassView';
 import { BackIcon } from '@/components/Icons';
+import { track } from '@/data/events';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // ── 상세 화면 머리: 뒤로 버튼(40×40, 모서리 13) + 제목 18/800 ──
@@ -27,8 +29,16 @@ export function BackButton({
   size: 40 | 44;
   style?: StyleProp<ViewStyle>;
 }) {
+  const pathname = usePathname();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="뒤로" style={style}>
+    <Pressable
+      onPress={() => {
+        track('back_click', { screen: pathname });
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel="뒤로"
+      style={style}>
       <GlassView radius={13} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <BackIcon color={colors.text} />
       </GlassView>

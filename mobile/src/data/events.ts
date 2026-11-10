@@ -1,6 +1,7 @@
 // 사용 기록(이벤트). 사람들이 어느 화면에서 멈추는지(이탈 지점)와 최종 목표(활성화·도달·재방문)를 재려고
 // 서버 /events로 보낸다(docs/EVENTS.md). 닉네임·숫자는 보내지 않는다 — 사용자 ID(닉네임·숫자의 해시)와
 // 이 브라우저가 만든 무작위 기기 ID만 보낸다. 보내기에 실패해도 앱 사용은 막지 않고 조용히 버린다.
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { API_URL } from './api';
@@ -9,6 +10,64 @@ import { getSession } from './session';
 // 서버 src/fulljoin/events.ts의 EVENT_NAMES와 같아야 한다(scripts/check-events.mjs가 확인).
 export const EVENT_NAMES = [
   'app_open',
+  'app_background',
+  'screen_view',
+  'screen_leave',
+  'tab_click',
+  'back_click',
+  'error_shown',
+  'intro_prev',
+  'login_nickname_start',
+  'login_pin_start',
+  'login_submit',
+  'login_validation_failed',
+  'login_failed',
+  'taste_select',
+  'taste_deselect',
+  'taste_limit_reached',
+  'taste_save_failed',
+  'wardrobe_slot_select',
+  'wardrobe_kind_select',
+  'wardrobe_color_select',
+  'wardrobe_fit_select',
+  'wardrobe_add_submit',
+  'wardrobe_add_failed',
+  'wardrobe_milestone',
+  'wardrobe_edit_start',
+  'wardrobe_delete_select',
+  'wardrobe_delete_done',
+  'wardrobe_delete_failed',
+  'feed_load_done',
+  'feed_load_failed',
+  'feed_scroll',
+  'feed_card_impression',
+  'photo_save_done',
+  'photo_save_failed',
+  'style_detail_item_view',
+  'comparison_done',
+  'comparison_failed',
+  'comparison_empty_wardrobe',
+  'comparison_reopened',
+  'result_scroll',
+  'gap_item_impression',
+  'outfit_section_view',
+  'outfit_view',
+  'wardrobe_return_click',
+  'archive_view',
+  'archive_image_open',
+  'archive_filter_apply',
+  'archive_filter_clear',
+  'archive_zero_result',
+  'chat_picker_open',
+  'chat_image_select',
+  'chat_input_start',
+  'chat_response_done',
+  'chat_response_failed',
+  'chat_no_saved',
+  'chat_go_feed_click',
+  'taste_edit_start',
+  'tutorial_replay_start',
+  'logout_click',
   'intro_view',
   'intro_next',
   'intro_skip',
@@ -68,6 +127,8 @@ function readDeviceId(): string {
 const deviceId = typeof window === 'undefined' ? 'server-render' : readDeviceId();
 const sessionId = randomId();
 const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
+const appVersion = Constants.expoConfig?.version ?? 'unknown';
+const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v2';
 let queue: QueuedEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -87,7 +148,12 @@ function clean(props: EventProps): EventProps {
 export function track(name: EventName, props: EventProps = {}): void {
   if (typeof window === 'undefined') return; // 서버에서 미리 그릴 때는 보내지 않는다.
   try {
-    queue.push({ name, ts: new Date().toISOString(), user_id: getSession()?.userId ?? null, props: clean(props) });
+    queue.push({
+      name,
+      ts: new Date().toISOString(),
+      user_id: getSession()?.userId ?? null,
+      props: clean({ app_version: appVersion, analytics_version: analyticsVersion, ...props }),
+    });
     if (queue.length >= MAX_BATCH) flushEvents();
     else if (timer === null) timer = setTimeout(flushEvents, FLUSH_MS);
   } catch {
