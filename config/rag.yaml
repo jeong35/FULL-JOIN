@@ -1,2 +1,16 @@
-# RAG 설정 — FULL JOIN
-# 상태: 자리만 잡아 둔 파일 (강의 6에서 채운다).
+# RAG 설정 — FULL JOIN (뼈대, 11/17). 값과 이유는 두 사람이 정해 config/rag.yaml로 옮긴다.
+# 상태: ____ (구현됨 / 구현 중 / 11/18 이후 구현)
+
+documents:            # 대상 문서
+  source: ____        # 예: 상품이 연결된 피드 아이템
+  text_template: ____ # 예: "{color} {visual_fit} {kind} · {style} · {product_name} · {shop}"
+chunking: ____        # 상품 한 개가 한 문서라 나누지 않는다면 그 이유
+embedding:
+  model: ____
+  dimensions: ____
+store: ____           # 예: Supabase Postgres + pgvector
+retrieval:
+  top_k: ____
+  min_score: ____     # 이 값 미만이면 "근거 부족"으로 보고 상품을 말하지 않는다
+enforced_rules:       # 검색이 아니라 코드로 강제하는 것
+  - ____              # 예: 검색된 상품 밖의 브랜드·제품명은 답변에 넣지 않는다 (AC2)
