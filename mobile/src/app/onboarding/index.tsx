@@ -7,7 +7,7 @@ import { GlassView } from '@/components/GlassView';
 import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { PrimaryButton } from '@/components/ui';
-import type { Color, Kind, VisualFit } from '@/data/catalog';
+import { kindLabel, type Color, type Kind, type VisualFit } from '@/data/catalog';
 import { track } from '@/data/events';
 import { getSession, hasLoggedInBefore, markIntroSeen } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
@@ -201,7 +201,7 @@ function ClosetPicture() {
             <View style={pic.closetImage}>
               <KindIcon kind={item.kind} color={item.color} fit={item.fit} size={52} />
             </View>
-            <Text style={pic.closetName}>{item.kind}</Text>
+            <Text style={pic.closetName}>{kindLabel(item.kind)}</Text>
           </GlassView>
         ))}
       </View>

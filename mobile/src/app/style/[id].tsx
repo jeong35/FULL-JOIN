@@ -9,6 +9,7 @@ import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { BackButton, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, fetchStyleImageDetail } from '@/data/api';
+import { kindLabel } from '@/data/catalog';
 import { track } from '@/data/events';
 import { markHintDone } from '@/data/hints';
 import { heartStyleImage, unheartStyleImage, useSaved } from '@/data/store';
@@ -207,7 +208,7 @@ export default function StyleDetailScreen() {
 
 function ProductItem({ item }: { item: StyleImageDetailItem }) {
   // 제목은 다른 아이템과 같은 '색 · 핏 · 종류'. 쇼핑몰 상품명은 길고 브랜드가 겹쳐서 보여 주지 않고 링크로만 연다.
-  const label = [item.color, item.visual_fit, item.kind].filter(Boolean).join(' · ');
+  const label = [item.color, item.visual_fit, kindLabel(item.kind)].filter(Boolean).join(' · ');
   const groundedBrand = item.brand_source === '없음' ? null : item.brand;
   const source = [...new Set([groundedBrand, item.shop].filter((value): value is string => Boolean(value)))].join(' · ');
   return (

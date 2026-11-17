@@ -8,7 +8,7 @@ import { HintBubble } from '@/components/HintBubble';
 import { KindIcon } from '@/components/KindIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { SLOTS, type Slot } from '@/data/catalog';
+import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
@@ -260,7 +260,7 @@ function WardrobeTile({
         )}
       </View>
       <Text style={styles.tileName} numberOfLines={1}>
-        {item.kind}
+        {kindLabel(item.kind)}
       </Text>
       <Text style={styles.tileMeta} numberOfLines={1}>
         {meta}
@@ -270,7 +270,7 @@ function WardrobeTile({
 
   if (!editing) {
     return (
-      <View style={{ width }} accessible accessibilityLabel={`${item.kind}, ${meta}`}>
+      <View style={{ width }} accessible accessibilityLabel={`${kindLabel(item.kind)}, ${meta}`}>
         {content}
       </View>
     );
@@ -280,7 +280,7 @@ function WardrobeTile({
       onPress={onToggle}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
-      accessibilityLabel={`${item.kind}, ${meta}`}
+      accessibilityLabel={`${kindLabel(item.kind)}, ${meta}`}
       style={{ width }}>
       {content}
     </Pressable>

@@ -15,6 +15,46 @@ export const KINDS_BY_SLOT = {
 
 export type Kind = (typeof KINDS_BY_SLOT)[Slot][number];
 
+// 화면에 보이는 종류 이름(11/16 옷 추가 시안, 지그재그 기준). DB·태깅 값(kind)은 그대로 두고 보이는 이름만 바꾼다.
+const KIND_LABELS: Partial<Record<Kind, string>> = {
+  반소매티셔츠: '반소매티',
+  긴소매티셔츠: '긴소매티',
+  민소매: '슬리브리스',
+  야상: '사파리재킷',
+};
+
+export function kindLabel(kind: Kind): string {
+  return KIND_LABELS[kind] ?? kind;
+}
+
+// 옷 추가 ①에서 종류를 묶어 보여 주는 칸(11/16 시안). 각 부위의 KINDS_BY_SLOT 값을 빠짐없이 한 번씩 담는다.
+// 묶음이 하나뿐인 부위(원피스·신발·가방)는 묶음 제목을 안 보여 준다.
+export type KindGroup = { title: string; kinds: readonly Kind[] };
+
+export const KIND_GROUPS: Record<Slot, readonly KindGroup[]> = {
+  상의: [
+    { title: '티셔츠 · 슬리브리스', kinds: ['반소매티셔츠', '긴소매티셔츠', '민소매'] },
+    { title: '셔츠 · 블라우스', kinds: ['셔츠', '블라우스'] },
+    { title: '니트 · 맨투맨', kinds: ['니트', '맨투맨', '후드'] },
+    { title: '걸치는 옷', kinds: ['카디건', '후드집업', '베스트'] },
+  ],
+  하의: [
+    { title: '바지', kinds: ['데님팬츠', '슬랙스', '코튼팬츠', '조거팬츠', '숏팬츠', '레깅스'] },
+    { title: '스커트', kinds: ['미니스커트', '미디스커트', '롱스커트'] },
+    { title: '기타', kinds: ['점프수트'] },
+  ],
+  원피스: [{ title: '원피스', kinds: KINDS_BY_SLOT.원피스 }],
+  아우터: [
+    { title: '재킷', kinds: ['재킷', '레더재킷', '데님재킷'] },
+    { title: '점퍼', kinds: ['점퍼', '야상', '플리스'] },
+    { title: '코트', kinds: ['코트', '트렌치코트'] },
+    { title: '패딩', kinds: ['숏패딩', '롱패딩', '경량패딩'] },
+    { title: '걸치는 옷', kinds: ['카디건', '후드집업', '베스트'] },
+  ],
+  신발: [{ title: '신발', kinds: KINDS_BY_SLOT.신발 }],
+  가방: [{ title: '가방', kinds: KINDS_BY_SLOT.가방 }],
+};
+
 export function isSlot(value: unknown): value is Slot {
   return typeof value === 'string' && (SLOTS as readonly string[]).includes(value);
 }
