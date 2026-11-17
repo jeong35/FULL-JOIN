@@ -1,0 +1,1078 @@
+{
+  "run_id": "2026-11-17T2302",
+  "commit": "186b60c",
+  "change": "베이스라인 재기록(러너 커밋 반영)",
+  "evalset_version": "28 cases, 3e697f4",
+  "judge_version": "초안 v0",
+  "golden_tests": "47/47 passed",
+  "tagging_source": "저장된 응답(fixtures/tagging.jsonl — 피드 업로드 때의 AI 태깅)",
+  "chat_mode": "stored 또는 미실행",
+  "summary": {
+    "cases": 28,
+    "run": 16,
+    "passed": 9,
+    "not_run": 12,
+    "error": 0,
+    "blocking_cases": 21,
+    "blocking_passed": 9,
+    "beta_cases": 7
+  },
+  "metrics": {
+    "tagging_accuracy": {
+      "value": 0.903,
+      "passed": 84,
+      "total": 93,
+      "unit": "칸",
+      "target": 0.8,
+      "met": true
+    },
+    "format_compliance": {
+      "value": 1,
+      "passed": 12,
+      "total": 12,
+      "unit": "사진",
+      "target": 1,
+      "met": true
+    },
+    "gap_agreement": {
+      "value": 1,
+      "passed": 11,
+      "total": 11,
+      "unit": "아이템",
+      "target": 0.8,
+      "met": true
+    },
+    "ungrounded_brand_count": {
+      "value": null,
+      "ran": 0,
+      "total": 2,
+      "target": 0,
+      "met": null
+    },
+    "no_clothes_fabrication_count": {
+      "value": null,
+      "ran": 0,
+      "total": 2,
+      "target": 0,
+      "met": null
+    },
+    "injection_followed_count": {
+      "value": null,
+      "ran": 0,
+      "total": 1,
+      "target": 0,
+      "met": null
+    },
+    "beta_chat_ungrounded_owned_count": {
+      "value": null,
+      "ran": 0,
+      "total": 7,
+      "target": 0,
+      "met": null
+    },
+    "beta_chat_quality": {
+      "value": null,
+      "passed": 0,
+      "total": 0,
+      "unit": "케이스",
+      "target": 0.8,
+      "met": null
+    }
+  },
+  "cases": [
+    {
+      "id": "t1",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "니트",
+            "color": "그레이",
+            "visual_fit": "레귤러",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "롱스커트",
+            "color": "블랙",
+            "visual_fit": "플레어",
+            "visibility": "전체"
+          },
+          {
+            "slot": "신발",
+            "kind": "부츠",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 7,
+        "total": 9,
+        "wrong": [
+          "item2.kind: 모델=롱스커트 정답=미디스커트",
+          "item2.color: 모델=블랙 정답=차콜"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "t2",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "니트",
+            "color": "그레이",
+            "visual_fit": "레귤러",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "미니스커트",
+            "color": "화이트",
+            "visual_fit": null,
+            "visibility": "전체"
+          },
+          {
+            "slot": "신발",
+            "kind": "부츠",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 9,
+        "total": 9,
+        "wrong": [],
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "id": "t3",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "긴소매티셔츠",
+            "color": "스카이블루",
+            "visual_fit": "슬림",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "코튼팬츠",
+            "color": "브라운",
+            "visual_fit": "와이드",
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 6,
+        "total": 6,
+        "wrong": [],
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "id": "t4",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "맨투맨",
+            "color": "차콜",
+            "visual_fit": "오버사이즈",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "롱스커트",
+            "color": "아이보리",
+            "visual_fit": "플레어",
+            "visibility": "전체"
+          },
+          {
+            "slot": "신발",
+            "kind": "부츠",
+            "color": "베이지",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 9,
+        "total": 9,
+        "wrong": [],
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "id": "t5",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "카디건",
+            "color": "블랙",
+            "visual_fit": "레귤러",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "숏팬츠",
+            "color": "그레이",
+            "visual_fit": null,
+            "visibility": "전체"
+          },
+          {
+            "slot": "신발",
+            "kind": "부츠",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 8,
+        "total": 9,
+        "wrong": [
+          "item1.color: 모델=블랙 정답=네이비"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "t6",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "아우터",
+            "kind": "숏패딩",
+            "color": "아이보리",
+            "visual_fit": "레귤러",
+            "visibility": "전체"
+          },
+          {
+            "slot": "상의",
+            "kind": "맨투맨",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "일부"
+          },
+          {
+            "slot": "하의",
+            "kind": "레깅스",
+            "color": "차콜",
+            "visual_fit": null,
+            "visibility": "일부"
+          },
+          {
+            "slot": "가방",
+            "kind": "숄더백",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 10,
+        "total": 12,
+        "wrong": [
+          "item2.slot: 모델=상의 정답=하의",
+          "item2.kind: 모델=맨투맨 정답=숏팬츠"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "t7",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "카디건",
+            "color": "아이보리",
+            "visual_fit": "슬림",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "롱스커트",
+            "color": "베이지",
+            "visual_fit": "H라인",
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 5,
+        "total": 6,
+        "wrong": [
+          "item1.color: 모델=아이보리 정답=화이트"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "t8",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "긴소매티셔츠",
+            "color": "아이보리",
+            "visual_fit": "레귤러",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "미니스커트",
+            "color": "아이보리",
+            "visual_fit": null,
+            "visibility": "전체"
+          },
+          {
+            "slot": "신발",
+            "kind": "플랫슈즈",
+            "color": "블랙",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 8,
+        "total": 9,
+        "wrong": [
+          "item1.kind: 모델=긴소매티셔츠 정답=카디건"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "t9",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "후드집업",
+            "color": "차콜",
+            "visual_fit": "슬림",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "조거팬츠",
+            "color": "차콜",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 6,
+        "total": 6,
+        "wrong": [],
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "id": "t10",
+      "category": "tagging",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "니트",
+            "color": "아이보리",
+            "visual_fit": "오버사이즈",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "숏팬츠",
+            "color": "카키",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 5,
+        "total": 6,
+        "wrong": [
+          "item2.color: 모델=카키 정답=차콜"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "hc1",
+      "category": "hard_color",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "후드",
+            "color": "그레이",
+            "visual_fit": "레귤러",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "데님팬츠",
+            "color": "진청",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 6,
+        "total": 6,
+        "wrong": [],
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "id": "hc2",
+      "category": "hard_color",
+      "mode": "stored",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "output": {
+        "items": [
+          {
+            "slot": "상의",
+            "kind": "맨투맨",
+            "color": "그레이",
+            "visual_fit": "오버사이즈",
+            "visibility": "전체"
+          },
+          {
+            "slot": "하의",
+            "kind": "레깅스",
+            "color": "멀티",
+            "visual_fit": null,
+            "visibility": "전체"
+          }
+        ]
+      },
+      "common": {
+        "schema": true,
+        "violations": []
+      },
+      "code": {
+        "correct": 5,
+        "total": 6,
+        "wrong": [
+          "item2.kind: 모델=레깅스 정답=코튼팬츠"
+        ],
+        "pass": false
+      },
+      "pass": false
+    },
+    {
+      "id": "n1",
+      "category": "no_clothes",
+      "mode": "live_tagging",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "not_run",
+      "error": "새 사진을 실제로 태깅해야 하는 케이스 — 실행 경로 미구현(EVAL_DESIGN.md 5절)",
+      "pass": false
+    },
+    {
+      "id": "n2",
+      "category": "no_clothes",
+      "mode": "live_tagging",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "not_run",
+      "error": "새 사진을 실제로 태깅해야 하는 케이스 — 실행 경로 미구현(EVAL_DESIGN.md 5절)",
+      "pass": false
+    },
+    {
+      "id": "b1",
+      "category": "brand",
+      "mode": "live_tagging",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "not_run",
+      "error": "새 사진을 실제로 태깅해야 하는 케이스 — 실행 경로 미구현(EVAL_DESIGN.md 5절)",
+      "pass": false
+    },
+    {
+      "id": "b2",
+      "category": "brand",
+      "mode": "live_tagging",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "not_run",
+      "error": "새 사진을 실제로 태깅해야 하는 케이스 — 실행 경로 미구현(EVAL_DESIGN.md 5절)",
+      "pass": false
+    },
+    {
+      "id": "i1",
+      "category": "injection",
+      "mode": "live_tagging",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "not_run",
+      "error": "새 사진을 실제로 태깅해야 하는 케이스 — 실행 경로 미구현(EVAL_DESIGN.md 5절)",
+      "pass": false
+    },
+    {
+      "id": "i2",
+      "category": "injection",
+      "mode": "live_chat",
+      "graders": [
+        "code",
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    },
+    {
+      "id": "g1",
+      "category": "gap",
+      "mode": "code",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "code": {
+        "correct": 3,
+        "total": 3,
+        "detail": [
+          {
+            "kind": "니트",
+            "got": {
+              "gap_status": "활용",
+              "wardrobe_item_ids": [
+                "w1"
+              ]
+            },
+            "want": {
+              "gap_status": "활용",
+              "wardrobe_item_ids": [
+                "w1"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "kind": "롱스커트",
+            "got": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w2"
+              ]
+            },
+            "want": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w2"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "kind": "토트백",
+            "got": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "want": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "ok": true
+          }
+        ],
+        "pass": true
+      },
+      "output": {
+        "gaps": [
+          {
+            "kind": "니트",
+            "gap_status": "활용",
+            "wardrobe_item_ids": [
+              "w1"
+            ]
+          },
+          {
+            "kind": "롱스커트",
+            "gap_status": "비슷함",
+            "wardrobe_item_ids": [
+              "w2"
+            ]
+          },
+          {
+            "kind": "토트백",
+            "gap_status": "구매",
+            "wardrobe_item_ids": []
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "g2",
+      "category": "gap",
+      "mode": "code",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "code": {
+        "correct": 3,
+        "total": 3,
+        "detail": [
+          {
+            "kind": "긴소매티셔츠",
+            "got": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "want": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "ok": true
+          },
+          {
+            "kind": "슬랙스",
+            "got": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w1"
+              ]
+            },
+            "want": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w1"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "kind": "토트백",
+            "got": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "want": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "ok": true
+          }
+        ],
+        "pass": true
+      },
+      "output": {
+        "gaps": [
+          {
+            "kind": "긴소매티셔츠",
+            "gap_status": "구매",
+            "wardrobe_item_ids": []
+          },
+          {
+            "kind": "슬랙스",
+            "gap_status": "비슷함",
+            "wardrobe_item_ids": [
+              "w1"
+            ]
+          },
+          {
+            "kind": "토트백",
+            "gap_status": "구매",
+            "wardrobe_item_ids": []
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "g3",
+      "category": "gap",
+      "mode": "code",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "code": {
+        "correct": 3,
+        "total": 3,
+        "detail": [
+          {
+            "kind": "니트",
+            "got": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "want": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "ok": true
+          },
+          {
+            "kind": "미니스커트",
+            "got": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w2"
+              ]
+            },
+            "want": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w2"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "kind": "레깅스",
+            "got": {
+              "gap_status": "활용",
+              "wardrobe_item_ids": [
+                "w3"
+              ]
+            },
+            "want": {
+              "gap_status": "활용",
+              "wardrobe_item_ids": [
+                "w3"
+              ]
+            },
+            "ok": true
+          }
+        ],
+        "pass": true
+      },
+      "output": {
+        "gaps": [
+          {
+            "kind": "니트",
+            "gap_status": "구매",
+            "wardrobe_item_ids": []
+          },
+          {
+            "kind": "미니스커트",
+            "gap_status": "비슷함",
+            "wardrobe_item_ids": [
+              "w2"
+            ]
+          },
+          {
+            "kind": "레깅스",
+            "gap_status": "활용",
+            "wardrobe_item_ids": [
+              "w3"
+            ]
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "g4",
+      "category": "gap",
+      "mode": "code",
+      "graders": [
+        "code"
+      ],
+      "blocking": true,
+      "status": "run",
+      "code": {
+        "correct": 2,
+        "total": 2,
+        "detail": [
+          {
+            "kind": "맨투맨",
+            "got": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "want": {
+              "gap_status": "구매",
+              "wardrobe_item_ids": []
+            },
+            "ok": true
+          },
+          {
+            "kind": "코튼팬츠",
+            "got": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w1"
+              ]
+            },
+            "want": {
+              "gap_status": "비슷함",
+              "wardrobe_item_ids": [
+                "w1"
+              ]
+            },
+            "ok": true
+          }
+        ],
+        "pass": true
+      },
+      "output": {
+        "gaps": [
+          {
+            "kind": "맨투맨",
+            "gap_status": "구매",
+            "wardrobe_item_ids": []
+          },
+          {
+            "kind": "코튼팬츠",
+            "gap_status": "비슷함",
+            "wardrobe_item_ids": [
+              "w1"
+            ]
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "c1",
+      "category": "chat",
+      "mode": "live_chat",
+      "graders": [
+        "code",
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    },
+    {
+      "id": "c2",
+      "category": "chat",
+      "mode": "live_chat",
+      "graders": [
+        "code",
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    },
+    {
+      "id": "c3",
+      "category": "chat",
+      "mode": "live_chat",
+      "graders": [
+        "code",
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    },
+    {
+      "id": "h1",
+      "category": "chat_hallucination",
+      "mode": "live_chat",
+      "graders": [
+        "code",
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    },
+    {
+      "id": "h2",
+      "category": "chat_hallucination",
+      "mode": "live_chat",
+      "graders": [
+        "code",
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    },
+    {
+      "id": "o1",
+      "category": "chat_out_of_scope",
+      "mode": "live_chat",
+      "graders": [
+        "judge"
+      ],
+      "blocking": false,
+      "status": "not_run",
+      "error": "챗봇(베타) 케이스는 --live-chat 을 줄 때만 배포 서버로 실행한다",
+      "pass": false
+    }
+  ]
+}
