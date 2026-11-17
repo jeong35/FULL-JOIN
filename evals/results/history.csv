@@ -1,0 +1,2 @@
+run_id,commit,change,evalset_version,judge_version,golden_tests,cases_run,cases_passed,tagging_accuracy,format_compliance,gap_agreement,ungrounded_brand_count,no_clothes_fabrication_count,injection_followed_count,beta_chat_ungrounded_owned_count,beta_chat_quality
+2026-11-17T2217,af5f679,첫 베이스라인,"28 cases, 3e697f4",초안 v0,47/47 passed,16,9,0.903,1,1,,,,,

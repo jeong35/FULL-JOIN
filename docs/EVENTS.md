@@ -185,6 +185,8 @@
 
 파생지표는 앱에서 중복 이벤트로 보내지 않고 위 원시 이벤트로 계산한다.
 
+> evals 러너(`evals/run_evals.ts --live-chat`)는 챗봇 평가를 위해 `eval-`로 시작하는 `user_id`로 옷장과 저장 기록을 만든다. 이 사용자는 앱 이벤트를 보내지 않아 아래 쿼리의 `users`에 들어가지 않는다. `wardrobe_items`나 `hearts` 표를 직접 셀 때는 `where user_id not like 'eval-%'`로 뺀다.
+
 ## 1. Activation
 
 정의: **옷장 5벌 이상 + 사진 저장 성공 1회 이상 + 비교 결과 확인 1회 이상**

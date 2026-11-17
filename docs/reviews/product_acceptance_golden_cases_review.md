@@ -35,7 +35,7 @@
 | AC12 | `empty_wardrobe_does_not_force_purchase` | 갭 분석 안 함, 구매 단정 안 함 |
 | AC13 | `wardrobe_registration_allows_four_selections_max`, `wardrobe_registration_does_not_require_photo` | 사진 필수 아님, 사용자 선택 ≤ 4회 |
 | AC14 | `chat_reuses_analysis_and_only_claims_registered_clothes` | 저장 분석 재사용, 등록 옷만, AC2·AC6 준수 |
-| AC15 | `home_feed_uses_70_20_10_and_style_filter_is_strict` | 홈 14·4·2, 필터 결과 전부 선택 스타일 |
+| AC15 | `home_feed_orders_preference_then_neighbor_then_other` (10/14 승인 당시 이름: `home_feed_uses_70_20_10_and_style_filter_is_strict`) | 홈은 취향 → 이웃 → 나머지 묶음 순서, 필터 결과 전부 선택 스타일 (10/14 승인 당시: 홈 14·4·2) |
 
 ## 사람 확인 체크리스트
 
@@ -46,3 +46,7 @@
 - [x] 검토 후 골든 파일과 테스트 파일의 해시를 `scripts/check-agent-harness.mjs`에 고정한다.
 
 2026-10-14에 사람이 위 항목을 모두 확인하고 `product_golden_cases.yaml`과 `test_acceptance_contracts_golden.ts`를 전체 AC의 계약 판정 기준으로 최종 수용했다. 이 수용은 아직 구현하지 않은 앱 기능이 완료됐다는 의미가 아니며, 각 기능 구현 시 실제 출력을 동일한 판정기에 연결해야 한다.
+
+## 승인 뒤 바뀐 것
+
+- 2026-11-04: AC15를 개수 비율(20장 중 취향 14·이웃 4·나머지 2)에서 묶음 순서 규칙(취향 → 이웃 → 나머지, 묶음 안에서는 스타일을 돌아가며 한 장씩, 사진이 부족하면 다음 묶음으로 이어서)으로 바꿨다. 사진 수가 적어 비율을 채울 수 없었고, 1차 교수 평가 3-1에서 "취향 사진이 14장보다 적을 때의 동작"을 지적받았기 때문이다. 골든 케이스도 같은 날 `home_feed_orders_preference_then_neighbor_then_other`로 교체했다. 현재 기준은 `docs/SPEC.md` AC15다.
