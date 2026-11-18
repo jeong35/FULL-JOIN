@@ -22,7 +22,7 @@
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
-| `POST` | `/chat` | 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변 |
+| `POST` | `/chat` | 베타 기능. 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변(MVP 필수 평가 제외) |
 | `POST` | `/events` | 앱 사용 기록(이탈 지점·최종 목표 측정용) 저장, 이름은 `docs/EVENTS.md` 목록만 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
@@ -69,7 +69,7 @@
 
 ## 저장 사진 챗봇
 
-`POST /chat`은 `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. `claimed_owned_item_ids`에는 실제 등록된 옷장 ID만 들어가며, 쇼핑 질문은 브랜드나 상품을 지어내지 않고 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다.
+`POST /chat`은 현재 **베타 API이며 필수 MVP 완료 판정에서 제외**한다. `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. `claimed_owned_item_ids`에는 실제 등록된 옷장 ID만 들어가며, 쇼핑 질문은 브랜드나 상품을 지어내지 않고 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다. 이 계약은 향후 안정화를 위한 진단 기준이며 현재 응답 품질의 안정성을 보장한다는 뜻은 아니다.
 
 ## 사용 기록
 
@@ -101,6 +101,8 @@ npm run import:style-images -- --csv /절대/경로/images.csv --photos /절대/
 ```
 
 검증 후 실제 Storage 업로드와 분석을 실행한다. 이미 Storage에 올린 경우 `--photos`를 생략해도 되며 기본 경로는 `feed/<file_name>`이다.
+
+피드 원본, 출처표, 실제 `data/seed/style_images.jsonl`은 공개 저장소에 커밋하지 않는다. 사진은 Supabase Private Storage, 운영 기준 데이터는 Supabase DB에 두며 JSONL은 로컬 import 과정에서만 사용한다.
 
 ```bash
 npm run import:style-images -- --sheet-url 'https://docs.google.com/spreadsheets/d/문서_ID/edit?gid=0' --apply

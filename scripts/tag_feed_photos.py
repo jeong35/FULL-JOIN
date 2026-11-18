@@ -1,12 +1,14 @@
 """
-피드 사진 일괄 태깅 → data/seed/style_images.jsonl 만들기 (SPEC 5절 '데이터 보관 (11/4)' 형식)
+피드 사진 일괄 태깅 → 로컬 DB import용 data/seed/style_images.jsonl 만들기
 
 하는 일
   feed_photos/ 의 사진(IMG-번호.jpg/png)과 출처 표(feed_photos/meta.csv)를 읽고,
   사진마다 AI 태깅을 한 번 돌려(구조화 출력, 스파이크와 같은 방식)
   data/seed/style_images.jsonl 에 한 줄에 사진 1장씩 정리한다.
   이 파일을 정인이 DB(style_images · style_image_items)에 한 번에 넣는다.
-  사진 원본은 저장소에 올리지 않는다(feed_photos/ 는 .gitignore). JSONL에는 경로와 태그만 들어간다.
+  사진 원본은 저장소에 올리지 않는다(feed_photos/ 는 .gitignore).
+  JSONL도 Storage 경로·출처·상품 메타데이터·허락 상태를 포함할 수 있는 로컬 임시 파일이므로
+  .gitignore 대상이며 저장소에 커밋하지 않는다. 서비스의 기준 데이터는 import한 Supabase DB다.
 
 준비 (한 번만)
   1) python3 -m pip install openai jsonschema
@@ -38,7 +40,7 @@
   이미 태깅한 사진은 건너뛰므로, 중간에 멈춰도 다시 실행하면 이어서 한다.
 
 결과
-  data/seed/style_images.jsonl   (번호 순서로 정렬, 저장소에 커밋)
+  data/seed/style_images.jsonl   (번호 순서로 정렬, 로컬 전용·Git 커밋 금지)
   화면에 사진별 결과 · 옷이 없는 사진(넣지 않음) · 실패 · 모델과 팀의 스타일이 다른 사진 요약
 """
 import argparse, base64, csv, datetime, json, mimetypes, os, re, subprocess, sys, time

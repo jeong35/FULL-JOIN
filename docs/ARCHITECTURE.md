@@ -6,7 +6,7 @@
 ## 1. 한눈에 보는 데이터 흐름
 
 - 사진 올릴 때(운영자, 사진당 1회): 피드 사진 → AI 태깅(구조화 출력) → 사람 검수 → 공개
-- 사용자가 쓸 때: 피드 사진 저장 → 저장된 태깅 + 내 옷장 → 판정(활용·비슷함·필요) → 코디 조합 + 쇼핑 링크 → (선택) 챗봇 질문
+- 사용자가 쓸 때: 피드 사진 저장 → 저장된 태깅 + 내 옷장 → 판정(활용·비슷함·필요) → 코디 조합 + 쇼핑 링크 → (선택·베타) 챗봇 질문
 - 한 줄로 다시 쓰기: ____
 
 ## 2. 구성 요소
@@ -18,7 +18,7 @@
 | `src/fulljoin/gap_analysis.ts` | 판정 `classifyGap` (규칙, LLM 없음) | 강의 5 |
 | `src/fulljoin/outfit.ts` | 코디 조합, 대체 짝 | ____ |
 | `src/fulljoin/shopping.ts` | 비슷한 상품 검색 링크 | ____ |
-| `src/fulljoin/chat.ts` | 챗봇 근거 계산과 고정 규칙 답변 | ____ |
+| `src/fulljoin/chat.ts` | 베타 챗봇의 근거 계산과 고정 규칙 답변(필수 MVP 평가 제외) | ____ |
 | `src/fulljoin/feed.ts`, `archive.ts`, `heart.ts`, `decision.ts`, `review.ts`, `product_metadata.ts`, `events.ts`, `catalog.ts` | ____ | ____ |
 | `supabase/functions/api/index.ts` | 서버(Edge Function 하나). OpenAI 호출은 여기서만 | ____ |
 | `supabase/migrations/` | DB 표 | ____ |
@@ -58,7 +58,7 @@
 
 | 상황 | 지금 동작 |
 |---|---|
-| 챗봇 OpenAI 호출 실패 | 고정 규칙 답변(`buildChatResponse`)으로 대체 |
+| 베타 챗봇 OpenAI 호출 실패 | 고정 규칙 답변(`buildChatResponse`)으로 대체. 챗봇은 필수 MVP 완료 판정에서 제외 |
 | 옷장이 비어 있음 | 판정하지 않고 "옷장을 등록하면 가진 옷과 맞춰 드려요" (AC12) |
 | 사진에서 옷을 못 찾음 | ____ (AC10) |
 | 태깅 응답이 스키마에 안 맞음 | ____ |
