@@ -131,6 +131,8 @@ StyleImage ─♡→ 옷장(WardrobeItem)과 대조
 
 ## 6. 수용 기준 (Definition of Done)
 
+> MVP에 포함하는 AC(필수): AC1·AC2·AC3·AC4·AC5·AC6·AC7·AC9·AC10·AC11·AC12·AC13·AC15. AC14(챗봇)는 베타 기능이라 MVP에 포함하지 않는다. AC8은 사용하지 않는 번호다.
+
 **태깅**
 - **AC1 [상시 적용]**: 앱은 항상 `style`, `Item.slot`·`kind`·`color`·`visual_fit`, 옷장 칩 값을 **같은 enum 목록** 값으로만 쓴다 — 목록 밖 값이 하나라도 있으면 실패. (스키마 검증으로 판정 / 같은 목록이어야 대조가 성립한다 / 목록: `src/fulljoin/schemas/style_image.schema.json`)
 - **AC2 [상시 적용]**: 앱은 항상 캡션·이미지 속 글자·저장된 쇼핑몰 상품 정보(`brand_source: 쇼핑몰_상품정보`)·사용자 입력에 근거가 없는 브랜드명·제품명을 출력하지 않는다 — 근거가 없으면 `brand_source: 없음`, `product_name: null`, 링크는 "비슷한 상품"(`match_type: similar`)으로만 표시한다. (로그 3, 4, 5, 8, 10 — 똑같은 제품을 원하므로 비슷한 상품을 같은 상품처럼 보이면 신뢰를 잃는다)
