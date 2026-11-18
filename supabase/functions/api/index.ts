@@ -527,7 +527,16 @@ async function handleWardrobe(request: Request, url: URL, db: SupabaseClient): P
   const parsed = wardrobeInputSchema.safeParse(body);
   if (!parsed.success) {
     const field = invalidEnumField(parsed.error);
-    const labels: Record<string, string> = { slot: "부위", kind: "종류", color: "색", visual_fit: "핏" };
+    const labels: Record<string, string> = {
+      slot: "부위",
+      kind: "종류",
+      color: "색",
+      visual_fit: "핏",
+      material: "소재",
+      pattern: "무늬",
+      seasons: "계절",
+      details: "세부",
+    };
     return apiError(400, "invalid_enum", `${field === undefined ? "값" : labels[field] ?? field}을(를) 고를 수 없어요`, field);
   }
   const { data, error } = await db.from("wardrobe_items").insert(parsed.data)
