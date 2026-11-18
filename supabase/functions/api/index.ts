@@ -514,7 +514,7 @@ async function handleWardrobe(request: Request, url: URL, db: SupabaseClient): P
     const userId = url.searchParams.get("user_id")?.trim();
     if (!userId) return apiError(400, "invalid_request", "사용자 식별자가 필요해요", "user_id");
     const { data, error } = await db.from("wardrobe_items")
-      .select("id,user_id,slot,kind,color,visual_fit,created_at")
+      .select("id,user_id,slot,kind,color,visual_fit,material,pattern,seasons,details,created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .order("id", { ascending: true });
@@ -528,11 +528,20 @@ async function handleWardrobe(request: Request, url: URL, db: SupabaseClient): P
   const parsed = wardrobeInputSchema.safeParse(body);
   if (!parsed.success) {
     const field = invalidEnumField(parsed.error);
-    const labels: Record<string, string> = { slot: "부위", kind: "종류", color: "색", visual_fit: "핏" };
+    const labels: Record<string, string> = {
+      slot: "부위",
+      kind: "종류",
+      color: "색",
+      visual_fit: "핏",
+      material: "소재",
+      pattern: "무늬",
+      seasons: "계절",
+      details: "세부",
+    };
     return apiError(400, "invalid_enum", `${field === undefined ? "값" : labels[field] ?? field}을(를) 고를 수 없어요`, field);
   }
   const { data, error } = await db.from("wardrobe_items").insert(parsed.data)
-    .select("id,user_id,slot,kind,color,visual_fit").single();
+    .select("id,user_id,slot,kind,color,visual_fit,material,pattern,seasons,details").single();
   if (error !== null) throw error;
   return json({ wardrobe_item: data }, 201);
 }

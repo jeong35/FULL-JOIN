@@ -8,20 +8,22 @@ export const VISIBILITIES = ["전체", "일부", "판단불가"] as const;
 export const MODEL_BRAND_SOURCES = ["캡션", "이미지_글자", "없음"] as const;
 
 const kindsBySlot: Record<(typeof SLOTS)[number], readonly string[]> = {
-  상의: ["반소매티셔츠", "긴소매티셔츠", "민소매", "셔츠", "블라우스", "니트", "맨투맨", "후드", "카디건", "후드집업", "베스트"],
-  하의: ["데님팬츠", "슬랙스", "코튼팬츠", "조거팬츠", "숏팬츠", "레깅스", "미니스커트", "미디스커트", "롱스커트", "점프수트"],
+  상의: ["반소매티셔츠", "긴소매티셔츠", "민소매", "셔츠", "블라우스", "니트", "맨투맨", "후드", "트레이닝상의", "카디건", "후드집업", "베스트"],
+  하의: ["데님팬츠", "슬랙스", "코튼팬츠", "카고팬츠", "조거팬츠", "숏팬츠", "레깅스", "미니스커트", "미디스커트", "롱스커트", "점프수트"],
   원피스: ["미니원피스", "미디원피스", "롱원피스", "점프수트"],
-  아우터: ["카디건", "재킷", "레더재킷", "데님재킷", "점퍼", "후드집업", "야상", "플리스", "베스트", "트렌치코트", "코트", "숏패딩", "롱패딩", "경량패딩"],
+  아우터: ["카디건", "재킷", "트위드자켓", "레더재킷", "데님재킷", "점퍼", "후드집업", "야상", "플리스", "베스트", "퍼자켓", "퍼코트", "무스탕", "트렌치코트", "코트", "숏코트", "하프코트", "롱코트", "숏패딩", "롱패딩", "경량패딩"],
   신발: ["스니커즈", "로퍼", "플랫슈즈", "힐", "부츠", "샌들", "슬리퍼"],
   가방: ["숄더백", "크로스백", "토트백", "백팩", "에코백", "클러치"],
+  잡화: ["스타킹", "양말", "모자", "벨트"],
 };
 
 const upperFits = new Set(["슬림", "레귤러", "오버사이즈"]);
-const trouserFits = new Set(["스키니", "일자", "와이드", "부츠컷"]);
-const skirtFits = new Set(["A라인", "H라인", "플레어"]);
-const trouserKinds = new Set(["데님팬츠", "슬랙스", "코튼팬츠", "조거팬츠"]);
-const skirtKinds = new Set(["미니스커트", "미디스커트", "롱스커트"]);
-const noFitKinds = new Set(["숏팬츠", "레깅스", "스니커즈", "로퍼", "플랫슈즈", "힐", "부츠", "샌들", "슬리퍼", "숄더백", "크로스백", "토트백", "백팩", "에코백", "클러치"]);
+const trouserFits = new Set(["스키니", "일자", "와이드", "부츠컷", "벌룬"]);
+const joggerFits = new Set(["조거", "일자", "와이드"]);
+const miniSkirtFits = new Set(["A라인", "H라인", "플레어", "테니스", "캉캉"]);
+const longSkirtFits = new Set(["A라인", "H라인", "플레어", "플리츠", "캉캉"]);
+const trouserKinds = new Set(["데님팬츠", "슬랙스", "코튼팬츠", "카고팬츠"]);
+const noFitKinds = new Set(["레깅스", "스니커즈", "로퍼", "플랫슈즈", "힐", "부츠", "샌들", "슬리퍼", "숄더백", "크로스백", "토트백", "백팩", "에코백", "클러치", "스타킹", "양말", "모자", "벨트"]);
 
 export const analysisItemSchema = z.object({
   slot: z.enum(SLOTS),
@@ -33,6 +35,9 @@ export const analysisItemSchema = z.object({
   product_name: z.string().trim().min(1).nullable(),
   brand_source: z.enum(MODEL_BRAND_SOURCES),
 }).strict().superRefine((item, context) => {
+  if (item.slot === "잡화") {
+    context.addIssue({ code: "custom", path: ["slot"], message: "잡화는 옷장에만 등록하고 사진에서는 태깅하지 않아요" });
+  }
   if (!kindsBySlot[item.slot].includes(item.kind)) {
     context.addIssue({ code: "custom", path: ["kind"], message: "부위와 종류가 맞지 않아요" });
   }
@@ -44,8 +49,12 @@ export const analysisItemSchema = z.object({
   if (item.visual_fit === null) return;
   const validFit = trouserKinds.has(item.kind)
     ? trouserFits.has(item.visual_fit)
-    : skirtKinds.has(item.kind)
-      ? skirtFits.has(item.visual_fit)
+    : item.kind === "조거팬츠"
+      ? joggerFits.has(item.visual_fit)
+      : item.kind === "미니스커트"
+          ? miniSkirtFits.has(item.visual_fit)
+          : item.kind === "미디스커트" || item.kind === "롱스커트"
+            ? longSkirtFits.has(item.visual_fit)
       : noFitKinds.has(item.kind)
         ? false
         : upperFits.has(item.visual_fit);
