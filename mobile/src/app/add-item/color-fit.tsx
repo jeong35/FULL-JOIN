@@ -114,7 +114,10 @@ function AddItemForm({ art, spec, slot, kind }: { art: WardrobeArt; spec: AddIte
   const fit = fitValue === null || fitValue === UNKNOWN_FIT ? null : (fitValue as VisualFit);
   const mainGroups = spec.groups.filter((g) => !g.more && g.role !== 'color');
   const moreGroups = spec.groups.filter((g) => g.more);
-  const look = lookFor(art, spec, sel, kind, fit);
+  // 짜임 칸(니트·카디건)을 안 건드렸으면 '안 고름'으로 본다 — 옷장에서처럼 지금 앱 그림(꽈배기)으로 보인다.
+  const weaveGroup = spec.groups.find((g) => g.weave);
+  const lookSel = weaveGroup && !touched.has(weaveGroup.title) ? { ...sel, [weaveGroup.title]: [] } : sel;
+  const look = lookFor(art, spec, lookSel, kind, fit);
   const ovKey = overlayKey(spec, sel);
   const pattern = patternFill(sel);
 

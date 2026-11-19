@@ -8,11 +8,11 @@ import { HintBubble } from '@/components/HintBubble';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
+import { kindLabel, SEASONS, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
-import type { WardrobeItem } from '@/data/types';
+import type { Season, WardrobeItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 // 옷장 탭. 모양은 design/screens/22-tab-closet.html을 따른다. 옷은 서버(GET /wardrobe)에서 받고, 새로 넣은 옷이 맨 앞에 보인다.
@@ -31,6 +31,8 @@ export default function ClosetScreen() {
   const wardrobe = wardrobeState.data;
   const loading = wardrobeState.status === 'idle' || wardrobeState.status === 'loading';
   const [filter, setFilter] = useState<Filter>('전체');
+  // 계절 거르기(11/19 옷 추가 시안). 계절을 안 고른 옷은 사계절 옷이라 어느 계절에도 보인다.
+  const [season, setSeason] = useState<Season | '전체'>('전체');
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
@@ -61,7 +63,13 @@ export default function ClosetScreen() {
 
   const tileWidth =
     (width - layout.screenPaddingX * 2 - GRID_COLUMN_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
-  const visible = filter === '전체' ? wardrobe : wardrobe.filter((item) => item.slot === filter);
+  const visible = wardrobe.filter(
+    (item) =>
+      (filter === '전체' || item.slot === filter) &&
+      (season === '전체' || !item.seasons?.length || item.seasons.includes(season)),
+  );
+  const emptyText =
+    season === '전체' ? '아직 등록한 옷이 없어요' : `${season}에 입는 ${filter === '전체' ? '옷' : filter}이 아직 없어요`;
 
   function addItem() {
     if (filter === '전체') {
@@ -159,6 +167,22 @@ export default function ClosetScreen() {
         />
       )}
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
+      <View style={styles.seasonRow}>
+        {(['전체', ...SEASONS] as const).map((s) => {
+          const on = s === season;
+          return (
+            <Pressable
+              key={s}
+              onPress={() => setSeason(s)}
+              accessibilityRole="button"
+              accessibilityLabel={s === '전체' ? '모든 계절' : s}
+              accessibilityState={{ selected: on }}
+              style={[styles.seasonPill, on && styles.seasonPillOn]}>
+              <Text style={[styles.seasonText, on && styles.seasonTextOn]}>{s === '전체' ? '모든 계절' : s}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
 
       {/* 아래 말풍선이 떠 있으면 마지막 줄 옷이 가려지지 않게 그만큼 더 내려 볼 수 있게 한다. */}
@@ -173,7 +197,7 @@ export default function ClosetScreen() {
             <SmallWhiteButton label="다시 시도" onPress={() => loadWardrobe()} />
           </View>
         ) : visible.length === 0 ? (
-          <Text style={styles.empty}>아직 등록한 옷이 없어요</Text>
+          <Text style={styles.empty}>{emptyText}</Text>
         ) : (
           visible.map((item, index) => (
             <WardrobeTile
@@ -289,6 +313,9 @@ function WardrobeTile({
       </Text>
       <Text style={styles.tileMeta} numberOfLines={1}>
         {meta}
+      </Text>
+      <Text style={styles.tileSeason} numberOfLines={1}>
+        {item.seasons?.length ? item.seasons.join(' · ') : '사계절'}
       </Text>
     </>
   );
@@ -454,6 +481,40 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 13,
     color: colors.text,
+  },
+  seasonRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: layout.screenPaddingX,
+    paddingBottom: 10,
+  },
+  seasonPill: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  seasonPillOn: {
+    backgroundColor: colors.purpleFill,
+    borderColor: colors.purpleFill,
+  },
+  seasonText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  seasonTextOn: {
+    fontFamily: fonts.bold,
+    color: colors.onPurpleFill,
+  },
+  tileSeason: {
+    marginTop: 1,
+    fontFamily: fonts.regular,
+    fontSize: 10.5,
+    color: colors.textSecondary,
+    opacity: 0.8,
   },
   tileMeta: {
     fontFamily: fonts.regular,

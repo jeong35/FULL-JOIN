@@ -7,6 +7,7 @@
   weaves.json  짜임·털 결 19개(니트·카디건 골지·꽈배기·아가일, 퍼 결)
   specs.json   종류 61개의 고르는 칸(색·핏·목 모양·기장·소재·무늬·계절 …)과 조합 그림
   mdesc.json   소재 설명
+  extra_icons.json  시안에 없던 모자(캡·비니·베레모)·벨트 그림(11/19, make_extra.py로 만듦)
   + design/kind-icons/icons_v12.json (지금 앱 그림 48종)
 
 만드는 것:
@@ -25,6 +26,37 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SRC = os.path.join(os.path.dirname(__file__), 'source')
 J = lambda f: json.load(open(os.path.join(SRC, f), encoding='utf-8'))
 ICONS, WEAVES, SPECS, MDESC = J('icons.json'), J('weaves.json'), J('specs.json'), J('mdesc.json')
+EXTRA = J('extra_icons.json')
+# 모자·벨트: 시안에 화면이 없어서 니트 화면의 색 · 소재 · 무늬 · 계절 칸을 빌려 만든다(처음 값은 비움). 그림 id는 x_ + 종류.
+_knit = next(s for s in SPECS if s['name'] == '니트')
+
+
+def _borrow(title, note=None):
+    g = json.loads(json.dumps(next(x for x in _knit['groups'] if x['title'] == title)))
+    for o in g['options']:
+        o['on'] = o['def'] if title == '무늬' else False
+    if note is not None:
+        g['note'] = note
+    return g
+
+
+HAT_SHAPES = {'캡': 'x_모자', '비니': 'x_모자_비니', '베레모': 'x_모자_베레모'}   # 11/19 은재 님: 모자는 이 3가지만
+for key, icon in EXTRA.items():
+    ICONS['x_' + key] = icon
+
+
+def _hat_shape_group():
+    opts = [{'v': v, 'label': v, 'icon': i, 'def': v == '캡', 'on': v == '캡', 'new': False, 'iconColor': '', 'iconPat': '', 'iconOv': ''}
+            for v, i in HAT_SHAPES.items()]
+    return {'title': '모양', 'note': '', 'ui': 'grid', 'role': '', 'multi': False, 'fixed': False, 'noswap': False,
+            'nooverlay': False, 'weave': '', 'inDetails': False, 'cond': None, 'options': opts}
+
+
+for name in ('모자', '벨트'):
+    groups = [_borrow('색')] + ([_hat_shape_group()] if name == '모자' else []) + [
+        _borrow('소재', '여러 개 골라도 돼요'), _borrow('무늬'), _borrow('계절')]
+    SPECS.append({'name': name, 'slot': '잡화', 'baseIcon': 'x_' + name, 'combos': [], 'groups': groups})
+
 V12 = json.load(open(os.path.join(ROOT, 'design/kind-icons/icons_v12.json'), encoding='utf-8'))
 
 # 시안 화면 이름 → 서버 kind 값(친구분 서버 catalog.ts). 나머지는 이름 그대로.
@@ -70,6 +102,8 @@ def scale_for(kind):
 
 def place_for(kind, base_id):
     """그 종류 그림 전체에 씌울 [x 이동, y 이동, 배율]: 기본 그림을 배율만큼 키우고 칸 가운데로."""
+    if base_id.startswith('x_'):
+        return [0, 0, 1]   # 모자·벨트는 처음부터 v12 크기로 그렸다
     s = scale_for(kind)
     a = bbox(ICONS[base_id])
     cx, cy = (a[0] + a[2]) / 2, (a[1] + a[3]) / 2
@@ -96,7 +130,7 @@ for s in SPECS:
     for c in s.get('combos', []):
         used |= set(c['map'].values())
 icons_out = {}
-for iid in sorted(used, key=lambda x: int(x[1:])):
+for iid in sorted(used, key=lambda x: (x.startswith('x_'), int(x[1:]) if x[1:].isdigit() else 0, x)):
     ic = ICONS[iid]
     o = {}
     for k in LAYERS:
@@ -195,5 +229,7 @@ for kind in NEW_LIKE:
     for k in ('tex', 'sheer'):
         ic.pop(k, None)
     v13[kind] = ic
+for name in ('모자', '벨트'):
+    v13[name] = dict(EXTRA[name])
 json.dump(v13, open(os.path.join(ROOT, 'design/kind-icons/icons_v13.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 print(f'wardrobeArt.ts {os.path.getsize(out) // 1024}KB · 그림 {len(icons_out)} · 선 {len(paths)} · 종류 {len(specs_out)} · v13 {len(v13)}종')

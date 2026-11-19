@@ -52,7 +52,7 @@ export default function AddItemKindScreen() {
       <DetailHeader title="옷 추가" onBack={() => router.back()} />
       <ProgressSteps current={[0, 1]} />
 
-      <SegmentedControl options={SLOTS} value={slot} onChange={selectSlot} style={styles.segment} />
+      <SegmentedControl options={SLOTS} value={slot} onChange={selectSlot} style={styles.segment} evenGaps />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionTitle}>종류를 골라 주세요</Text>

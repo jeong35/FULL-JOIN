@@ -61,12 +61,12 @@ export const KIND_GROUPS: Record<Slot, readonly KindGroup[]> = {
   ],
   신발: [{ title: '신발', kinds: KINDS_BY_SLOT.신발 }],
   가방: [{ title: '가방', kinds: KINDS_BY_SLOT.가방 }],
-  잡화: [{ title: '잡화', kinds: ['스타킹', '양말'] }],
+  잡화: [{ title: '잡화', kinds: ['스타킹', '양말', '모자', '벨트'] }],
 };
 
 // 서버 목록에는 있지만 옷 추가에서 고르게 하지 않는 종류. 예전에 넣은 옷(플리스·코트)은 옷장에 그대로 보인다.
-// 플리스는 소재 '플리스'로, 코트는 숏·하프·롱코트로 나눠 고른다. 모자·벨트는 그림이 생기면 연다.
-export const HIDDEN_KINDS: ReadonlySet<Kind> = new Set<Kind>(['플리스', '코트', '모자', '벨트']);
+// 플리스는 소재 '플리스'로, 코트는 숏·하프·롱코트로 나눠 고른다.
+export const HIDDEN_KINDS: ReadonlySet<Kind> = new Set<Kind>(['플리스', '코트']);
 
 export function isSlot(value: unknown): value is Slot {
   return typeof value === 'string' && (SLOTS as readonly string[]).includes(value);

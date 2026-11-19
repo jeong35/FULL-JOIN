@@ -229,6 +229,8 @@ export function wardrobeFields(
     else if (g.title === '계절') seasons = v as Season[];
     else {
       if (!visible(g, sel)) continue;
+      // '모르겠어요'(스타킹 두께 등)는 안 고른 것과 같다 — 서버에 보내지 않는다.
+      if (v.includes('모르겠어요')) continue;
       const changed = (initial[g.title] ?? []).join('+') !== v.join('+');
       if (!v.length || !(changed || touched.has(g.title))) continue;
       details[detailKey(g.title)] = g.multi ? [...v] : v[0];
