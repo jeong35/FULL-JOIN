@@ -107,9 +107,9 @@ export async function updateStylePreferences(styles: readonly Style[]): Promise<
 // ── 옷장 ────────────────────────────────────────────
 
 // 옷장 확장(소재·무늬·계절·자세한 모양, 새 종류·색·핏)이 서버에 배포됐는지.
-// codex/wardrobe-db-expansion이 main에 들어가고 DB·서버가 배포되면 true로 바꾼다.
-// false인 동안에는 새 칸을 서버에 보내지 않고(앱을 새로 열면 사라짐), 새 종류·색·핏은 넣지 않는다.
-export const SERVER_HAS_WARDROBE_DETAILS = false;
+// 11/20: 서버(main 3e2799b·7ff6d72)와 DB 마이그레이션(202611160002·202611200001) 배포 뒤 true로 바꿨다.
+// false로 두면 새 칸을 서버에 보내지 않고(앱을 새로 열면 사라짐), 새 종류·색·핏은 넣지 않는다.
+export const SERVER_HAS_WARDROBE_DETAILS = true;
 
 const OLD_SERVER_NEW_VALUES: ReadonlySet<string> = new Set([
   '잡화', '트레이닝상의', '카고팬츠', '트위드자켓', '퍼자켓', '퍼코트', '무스탕', '숏코트', '하프코트', '롱코트',
