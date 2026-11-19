@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     paddingLeft: 15,
     paddingRight: 11,
     borderRadius: RADIUS,
-    boxShadow: '0 8px 24px rgba(46,26,92,0.16)',
+    boxShadow: '0 8px 24px rgba(30,20,50,0.16)',
   },
   // 웹에서는 겹쳐 놓은 층이 글자 위에 그려지지 않게 내용 뒤로 보낸다(GlassView와 같은 방식).
   layer: Platform.OS === 'web' ? { zIndex: -1 } : {},

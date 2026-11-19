@@ -5,14 +5,14 @@ import Svg, { Path } from 'react-native-svg';
 
 import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
-import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { SLOTS, type Slot } from '@/data/catalog';
+import { kindLabel, SEASONS, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
-import type { WardrobeItem } from '@/data/types';
+import type { Season, WardrobeItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 // 옷장 탭. 모양은 design/screens/22-tab-closet.html을 따른다. 옷은 서버(GET /wardrobe)에서 받고, 새로 넣은 옷이 맨 앞에 보인다.
@@ -24,16 +24,20 @@ type Filter = '전체' | Slot;
 
 const GRID_COLUMNS = 3;
 const GRID_COLUMN_GAP = 2;
-const TILE_COLORS = [colors.line, '#DFD5F0'] as const;
+const TILE_COLORS = [colors.line, '#E4E1EC'] as const;
 
 export default function ClosetScreen() {
   const wardrobeState = useWardrobeState();
   const wardrobe = wardrobeState.data;
   const loading = wardrobeState.status === 'idle' || wardrobeState.status === 'loading';
   const [filter, setFilter] = useState<Filter>('전체');
+  // 계절 거르기(11/19 옷 추가 시안). 계절을 안 고른 옷은 사계절 옷이라 어느 계절에도 보인다.
+  const [season, setSeason] = useState<Season | '전체'>('전체');
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
+  // '고른 N벌 삭제'를 누른 뒤 한 번 더 묻는 중인지.
+  const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const archive = useArchiveState();
@@ -59,7 +63,13 @@ export default function ClosetScreen() {
 
   const tileWidth =
     (width - layout.screenPaddingX * 2 - GRID_COLUMN_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
-  const visible = filter === '전체' ? wardrobe : wardrobe.filter((item) => item.slot === filter);
+  const visible = wardrobe.filter(
+    (item) =>
+      (filter === '전체' || item.slot === filter) &&
+      (season === '전체' || !item.seasons?.length || item.seasons.includes(season)),
+  );
+  const emptyText =
+    season === '전체' ? '아직 등록한 옷이 없어요' : `${season}에 입는 ${filter === '전체' ? '옷' : filter}이 아직 없어요`;
 
   function addItem() {
     if (filter === '전체') {
@@ -78,11 +88,13 @@ export default function ClosetScreen() {
 
   function stopEditing() {
     setEditing(false);
+    setConfirming(false);
     setSelected(new Set());
   }
 
   function toggle(id: string) {
     track('wardrobe_delete_select', { item_id: id, selected: !selected.has(id) });
+    setConfirming(false);
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -93,6 +105,7 @@ export default function ClosetScreen() {
 
   async function deleteSelected() {
     if (selected.size === 0 || deleting) return;
+    setConfirming(false);
     setDeleting(true);
     setActionError(null);
     const requested = selected.size;
@@ -154,6 +167,22 @@ export default function ClosetScreen() {
         />
       )}
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
+      <View style={styles.seasonRow}>
+        {(['전체', ...SEASONS] as const).map((s) => {
+          const on = s === season;
+          return (
+            <Pressable
+              key={s}
+              onPress={() => setSeason(s)}
+              accessibilityRole="button"
+              accessibilityLabel={s === '전체' ? '모든 계절' : s}
+              accessibilityState={{ selected: on }}
+              style={[styles.seasonPill, on && styles.seasonPillOn]}>
+              <Text style={[styles.seasonText, on && styles.seasonTextOn]}>{s === '전체' ? '모든 계절' : s}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
 
       {/* 아래 말풍선이 떠 있으면 마지막 줄 옷이 가려지지 않게 그만큼 더 내려 볼 수 있게 한다. */}
@@ -168,7 +197,7 @@ export default function ClosetScreen() {
             <SmallWhiteButton label="다시 시도" onPress={() => loadWardrobe()} />
           </View>
         ) : visible.length === 0 ? (
-          <Text style={styles.empty}>아직 등록한 옷이 없어요</Text>
+          <Text style={styles.empty}>{emptyText}</Text>
         ) : (
           visible.map((item, index) => (
             <WardrobeTile
@@ -198,20 +227,38 @@ export default function ClosetScreen() {
 
       {editing && (
         <View style={styles.deleteBar}>
-          <Pressable
-            onPress={deleteSelected}
-            disabled={selected.size === 0 || deleting}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: selected.size === 0 || deleting, busy: deleting }}
-            style={[styles.deleteButton, (selected.size === 0 || deleting) && styles.deleteButtonDisabled]}>
-            {deleting ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.deleteButtonText}>
-                {selected.size === 0 ? '지울 옷을 골라 주세요' : `고른 ${selected.size}벌 삭제`}
-              </Text>
-            )}
-          </Pressable>
+          {confirming && !deleting ? (
+            // 지우기 전에 한 번 더 묻는다. 지운 옷은 되돌릴 수 없다(동료 피드백 11/14).
+            <>
+              <Text style={styles.confirmText}>{selected.size}벌을 옷장에서 지울까요? 지우면 되돌릴 수 없어요.</Text>
+              <View style={styles.confirmRow}>
+                <Pressable
+                  onPress={() => setConfirming(false)}
+                  accessibilityRole="button"
+                  style={[styles.deleteButton, styles.cancelButton]}>
+                  <Text style={styles.cancelButtonText}>취소</Text>
+                </Pressable>
+                <Pressable onPress={deleteSelected} accessibilityRole="button" style={[styles.deleteButton, styles.confirmButton]}>
+                  <Text style={styles.deleteButtonText}>지우기</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <Pressable
+              onPress={() => setConfirming(true)}
+              disabled={selected.size === 0 || deleting}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: selected.size === 0 || deleting, busy: deleting }}
+              style={[styles.deleteButton, (selected.size === 0 || deleting) && styles.deleteButtonDisabled]}>
+              {deleting ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.deleteButtonText}>
+                  {selected.size === 0 ? '지울 옷을 골라 주세요' : `고른 ${selected.size}벌 삭제`}
+                </Text>
+              )}
+            </Pressable>
+          )}
         </View>
       )}
     </TabScreen>
@@ -233,11 +280,13 @@ function WardrobeTile({
   checked: boolean;
   onToggle: () => void;
 }) {
-  const meta = item.visual_fit === null ? item.color : `${item.color} · ${item.visual_fit}`;
+  // 색(+ 무늬) · 핏. 무늬는 '더 자세히'에서 고른 옷만(11/19).
+  const colorText = item.pattern ? `${item.color} ${item.pattern}` : item.color;
+  const meta = item.visual_fit === null ? colorText : `${colorText} · ${item.visual_fit}`;
   const content = (
     <>
       <View style={[styles.tileImage, { backgroundColor: TILE_COLORS[index % 2] }]}>
-        <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={Math.min(width * 0.72, 96)} />
+        <ItemIcon item={item} size={Math.min(width * 0.72, 96)} />
         <View style={styles.tileSwatch}>
           <ColorSwatch color={item.color} width={14} height={14} questionSize={9} lightBorderColor="#C9BFDB" />
         </View>
@@ -260,17 +309,20 @@ function WardrobeTile({
         )}
       </View>
       <Text style={styles.tileName} numberOfLines={1}>
-        {item.kind}
+        {kindLabel(item.kind)}
       </Text>
       <Text style={styles.tileMeta} numberOfLines={1}>
         {meta}
+      </Text>
+      <Text style={styles.tileSeason} numberOfLines={1}>
+        {item.seasons?.length ? item.seasons.join(' · ') : '사계절'}
       </Text>
     </>
   );
 
   if (!editing) {
     return (
-      <View style={{ width }} accessible accessibilityLabel={`${item.kind}, ${meta}`}>
+      <View style={{ width }} accessible accessibilityLabel={`${kindLabel(item.kind)}, ${meta}`}>
         {content}
       </View>
     );
@@ -280,7 +332,7 @@ function WardrobeTile({
       onPress={onToggle}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
-      accessibilityLabel={`${item.kind}, ${meta}`}
+      accessibilityLabel={`${kindLabel(item.kind)}, ${meta}`}
       style={{ width }}>
       {content}
     </Pressable>
@@ -430,6 +482,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
   },
+  seasonRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: layout.screenPaddingX,
+    paddingBottom: 10,
+  },
+  seasonPill: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  seasonPillOn: {
+    backgroundColor: colors.purpleFill,
+    borderColor: colors.purpleFill,
+  },
+  seasonText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  seasonTextOn: {
+    fontFamily: fonts.bold,
+    color: colors.onPurpleFill,
+  },
+  tileSeason: {
+    marginTop: 1,
+    fontFamily: fonts.regular,
+    fontSize: 10.5,
+    color: colors.textSecondary,
+    opacity: 0.8,
+  },
   tileMeta: {
     fontFamily: fonts.regular,
     fontSize: 11,
@@ -456,5 +542,31 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 15,
     color: colors.white,
+  },
+  confirmText: {
+    marginBottom: 10,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.text,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+  },
+  cancelButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  confirmButton: {
+    flex: 1,
   },
 });

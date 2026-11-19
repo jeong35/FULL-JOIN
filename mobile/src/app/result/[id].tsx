@@ -8,10 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
 import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
-import type { Kind } from '@/data/catalog';
+import { kindLabel, type Kind } from '@/data/catalog';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { buildOutfits, substitutesFor, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
@@ -325,7 +326,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
             <ResultCard
               item={item}
               wardrobe={wardrobe}
-              thumbColor={index % 2 === 0 ? colors.line : '#DFD5F0'}
+              thumbColor={index % 2 === 0 ? colors.line : '#E4E1EC'}
               choice={choices[item.item_id] ?? null}
               decision={decisions[item.item_id] ?? null}
               links={item.gap_status === null || item.gap_status === '구매' || choices[item.item_id] === '구매' ? linksFor(item) : []}
@@ -395,9 +396,8 @@ function describe(item: ShownItem, wardrobe: readonly WardrobeItem[], substitute
     case '활용':
       return `${prefix}옷장에 같은 색 있음`;
     case '구매':
-      return substituteKinds.length > 0
-        ? `${prefix}가진 ${withRo(substituteKinds.join('·'))} 대체 가능`
-        : `${prefix}옷장에 없음`;
+      if (substituteKinds.length > 0) return `${prefix}가진 ${withRo(substituteKinds.join('·'))} 대체 가능`;
+      return `${prefix}${missingReason(item, wardrobe)}`;
     case '비슷함': {
       const matched = wardrobe.filter((w) => item.wardrobe_item_ids.includes(w.id));
       const matchedColors = [...new Set(matched.map((w) => w.color))].join('·');
@@ -432,7 +432,7 @@ function ResultCard({
   onChoose: (value: SimilarChoice) => void;
 }) {
   const fit = item.visual_fit ?? null;
-  const name = fit === null ? item.kind : `${item.kind} (${fit})`;
+  const name = fit === null ? kindLabel(item.kind) : `${kindLabel(item.kind)} (${fit})`;
   const hasSubstitute = item.gap_status === '구매' && substitutes.length > 0;
   return (
     <GlassView radius={16} style={styles.card}>
@@ -445,7 +445,7 @@ function ResultCard({
             {name}
           </Text>
           <Text style={styles.cardMeta} numberOfLines={1}>
-            {describe(item, wardrobe, [...new Set(substitutes.map((substitute) => substitute.kind))])}
+            {describe(item, wardrobe, [...new Set(substitutes.map((substitute) => kindLabel(substitute.kind)))])}
           </Text>
         </View>
         {item.gap_status !== null && <GapTag status={item.gap_status} substitute={hasSubstitute} />}
@@ -527,10 +527,10 @@ function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; 
             void WebBrowser.openBrowserAsync(product.url);
           }}
           accessibilityRole="link"
-          accessibilityLabel={`${item.kind} ${product.platform}에서 찾기`}
+          accessibilityLabel={`${kindLabel(item.kind)} ${product.platform}에서 찾기`}
           style={styles.decisionLink}>
           <Text style={styles.decisionLinkText}>
-            {product.match_type === 'exact' ? `사진 속 ${item.kind}` : product.platform} ›
+            {product.match_type === 'exact' ? `사진 속 ${kindLabel(item.kind)}` : product.platform} ›
           </Text>
         </Pressable>
       ))}
@@ -539,6 +539,15 @@ function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; 
 }
 
 // 조사: 받침이 없거나 ㄹ 받침이면 '로', 아니면 '으로' / 받침이 있으면 '을', 없으면 '를'.
+// '필요'인 이유를 한 줄로: 같은 종류가 아예 없는지, 종류는 있는데 색이 다른지(동료 피드백 11/17).
+// 판정은 서버가 한 그대로 두고, 이미 받아 둔 옷장으로 설명만 만든다.
+function missingReason(item: ShownItem, wardrobe: readonly WardrobeItem[]): string {
+  const sameKind = wardrobe.filter((w) => w.kind === item.kind);
+  if (sameKind.length === 0) return `옷장에 ${withIGa(item.kind)} 없어요`;
+  const ownedColors = [...new Set(sameKind.map((w) => w.color))].join('·');
+  return `${withEunNeun(item.kind)} 있지만 색이 달라요 (가진 색: ${ownedColors})`;
+}
+
 function finalConsonant(word: string): number | null {
   const code = word.charCodeAt(word.length - 1) - 0xac00;
   return code < 0 || code > 11171 ? null : code % 28;
@@ -549,13 +558,23 @@ function withRo(word: string): string {
   return final === null || final === 0 || final === 8 ? `${word}로` : `${word}으로`;
 }
 
+function withIGa(word: string): string {
+  const final = finalConsonant(word);
+  return final === null || final === 0 ? `${word}가` : `${word}이`;
+}
+
+function withEunNeun(word: string): string {
+  const final = finalConsonant(word);
+  return final === null || final === 0 ? `${word}는` : `${word}은`;
+}
+
 function withEulReul(word: string): string {
   const final = finalConsonant(word);
   return final === null || final === 0 ? `${word}를` : `${word}을`;
 }
 
 function wardrobeLabel(item: WardrobeItem): string {
-  return [item.color, item.visual_fit, item.kind].filter(Boolean).join(' · ');
+  return [item.color, item.visual_fit, kindLabel(item.kind)].filter(Boolean).join(' · ');
 }
 
 function DecisionOutcome({
@@ -642,13 +661,13 @@ function OutfitCard({
         <View style={styles.outfitNotes}>
           {substitutes.map((piece) => (
             <Text key={piece.item.item_id} style={styles.outfitNote}>
-              사진 속 {withEulReul(piece.item.kind ?? '옷')} 내 {piece.wardrobeItem.color} {withRo(piece.wardrobeItem.kind)} 대체
+              사진 속 {withEulReul(piece.item.kind !== undefined ? kindLabel(piece.item.kind) : '옷')} 내 {piece.wardrobeItem.color} {withRo(kindLabel(piece.wardrobeItem.kind))} 대체
             </Text>
           ))}
           {missing.map((piece) => hasKind(piece.item) && (
             <View key={piece.item.item_id} style={styles.needRow}>
               <Text style={styles.needLabel} numberOfLines={1}>
-                {[piece.item.color, piece.item.kind].filter(Boolean).join(' ')} 찾기
+                {[piece.item.color, piece.item.kind !== undefined ? kindLabel(piece.item.kind) : null].filter(Boolean).join(' ')} 찾기
               </Text>
               <ShopLinks item={piece.item} links={linksFor(piece.item)} place="outfit" />
             </View>
@@ -666,16 +685,16 @@ function OutfitPieceView({ piece }: { piece: OutfitPiece }) {
       <View
         style={styles.piece}
         accessible
-        accessibilityLabel={`${piece.substitute ? `사진 속 ${piece.item.kind ?? '옷'} 대체, ` : ''}내 옷 ${wardrobeItem.color} ${wardrobeItem.visual_fit ?? ''} ${wardrobeItem.kind}`}>
+        accessibilityLabel={`${piece.substitute ? `사진 속 ${piece.item.kind !== undefined ? kindLabel(piece.item.kind) : '옷'} 대체, ` : ''}내 옷 ${wardrobeItem.color} ${wardrobeItem.visual_fit ?? ''} ${kindLabel(wardrobeItem.kind)}`}>
         <View style={styles.pieceThumb}>
-          <KindIcon kind={wardrobeItem.kind} color={wardrobeItem.color} fit={wardrobeItem.visual_fit} size={44} />
+          <ItemIcon item={wardrobeItem} size={44} />
           {piece.substitute && (
             <View style={styles.pieceBadge}>
               <Text style={styles.pieceBadgeText}>대체</Text>
             </View>
           )}
         </View>
-        <Text style={styles.pieceName} numberOfLines={1}>{wardrobeItem.kind}</Text>
+        <Text style={styles.pieceName} numberOfLines={1}>{kindLabel(wardrobeItem.kind)}</Text>
         <Text style={styles.pieceMeta} numberOfLines={1}>
           {piece.similar ? `${wardrobeItem.color}(비슷)` : wardrobeItem.color}
         </Text>
@@ -687,7 +706,7 @@ function OutfitPieceView({ piece }: { piece: OutfitPiece }) {
   }
   const kind = piece.item.kind;
   return (
-    <View style={styles.piece} accessible accessibilityLabel={`필요한 옷 ${kind ?? ''}`}>
+    <View style={styles.piece} accessible accessibilityLabel={`필요한 옷 ${kind !== undefined ? kindLabel(kind) : ''}`}>
       <View style={[styles.pieceThumb, styles.pieceThumbMissing]}>
         {kind !== undefined && (
           <View style={styles.pieceFaded}>
@@ -695,7 +714,7 @@ function OutfitPieceView({ piece }: { piece: OutfitPiece }) {
           </View>
         )}
       </View>
-      <Text style={styles.pieceName} numberOfLines={1}>{kind ?? '아이템'}</Text>
+      <Text style={styles.pieceName} numberOfLines={1}>{kind !== undefined ? kindLabel(kind) : '아이템'}</Text>
       <Text style={[styles.pieceMeta, styles.pieceNeed]} numberOfLines={1}>필요</Text>
     </View>
   );
@@ -786,7 +805,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 6px 20px rgba(46,26,92,0.08)',
+    boxShadow: '0 6px 20px rgba(30,20,50,0.08)',
   },
   removeError: {
     position: 'absolute',
@@ -815,7 +834,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#DFD5F0',
+    backgroundColor: '#E4E1EC',
     alignSelf: 'center',
   },
   scroll: {
@@ -925,7 +944,7 @@ const styles = StyleSheet.create({
     marginLeft: 52,
     padding: 3,
     borderRadius: 13,
-    backgroundColor: 'rgba(46,26,92,0.05)',
+    backgroundColor: 'rgba(30,20,50,0.05)',
   },
   choiceGuide: {
     marginTop: 10,

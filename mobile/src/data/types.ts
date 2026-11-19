@@ -1,13 +1,18 @@
 // AGENTS.md 2절 용어집의 대표어를 그대로 쓴다. 서버 응답(docs/API_MVP.md)과 같은 모양이다.
-import type { Color, Kind, Slot, Style, VisualFit } from './catalog';
+import type { Color, Kind, Material, Pattern, Slot, Style, VisualFit, WardrobeDetails } from './catalog';
 
 // 사용자가 가진 옷(옷장 칩으로 등록).
+// material·pattern·seasons·details는 옷 추가 '더 자세히'에서 고른 것(11/19). 서버 옷장 확장이 배포되기 전에 넣은 옷에는 없다.
 export type WardrobeItem = {
   id: string;
   slot: Slot;
   kind: Kind;
   color: Color;
   visual_fit: VisualFit | null;
+  material?: Material[];
+  pattern?: Pattern | null;
+  seasons?: Season[];
+  details?: WardrobeDetails;
 };
 
 export type StyleImageSource = '쇼핑몰' | '인플루언서' | '연예인' | '자체_촬영';

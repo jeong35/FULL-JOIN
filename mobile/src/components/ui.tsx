@@ -88,12 +88,15 @@ export function SegmentedControl<T extends string>({
   onChange,
   fontSize = 14,
   style,
+  evenGaps = false,
 }: {
   options: readonly T[];
   value: T | null;
   onChange: (value: T) => void;
   fontSize?: number;
   style?: StyleProp<ViewStyle>;
+  /** 칸 너비를 글자 길이에 맞춰 글자 사이 간격을 같게 한다(옷 추가 부위 7칸처럼 글자 수가 섞일 때). */
+  evenGaps?: boolean;
 }) {
   return (
     <GlassView radius={13} style={[styles.segment, style]}>
@@ -105,7 +108,7 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(option)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            style={[styles.segmentItem, selected && styles.segmentItemSelected]}>
+            style={[styles.segmentItem, evenGaps && styles.segmentItemEven, selected && styles.segmentItemSelected]}>
             <Text
               style={[
                 { fontSize },
@@ -248,6 +251,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  segmentItemEven: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    paddingHorizontal: 2,
+  },
   segmentItemSelected: {
     backgroundColor: colors.white,
     boxShadow: glass.selectedInnerShadow,
@@ -279,7 +288,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 9,
     backgroundColor: colors.white,
-    boxShadow: '0 1px 4px rgba(46,26,92,0.12)',
+    boxShadow: '0 1px 4px rgba(30,20,50,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },

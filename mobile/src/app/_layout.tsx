@@ -46,7 +46,9 @@ export default function RootLayout() {
     NotoSansKR_800ExtraBold,
   });
 
-  const ready = fontsLoaded || fontError !== null;
+  // 웹은 글꼴(4종, 합쳐서 12MB쯤)을 다 받을 때까지 기다리면 그동안 빈 화면이라, 기본 글꼴로 먼저 그리고
+  // 받은 뒤 바뀌게 한다(동료 피드백 11/14). 앱(iOS·안드로이드)은 글꼴이 앱 안에 있어 금방이라 기다린다.
+  const ready = Platform.OS === 'web' || fontsLoaded || fontError !== null;
   const session = useSession();
   const pathname = usePathname();
   const backgroundRecorded = useRef(false);
