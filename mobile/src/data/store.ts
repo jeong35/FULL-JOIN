@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { createWardrobeItem, deleteHeart, deleteWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
+import { track } from './analytics';
 import type { ArchiveImage, HeartResult, StyleImage, WardrobeItem } from './types';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -78,6 +79,7 @@ export async function loadWardrobe(): Promise<void> {
     setState({ wardrobe: { status: 'ready', data: items, error: null, loadedAt: Date.now() } });
   } catch (error) {
     setState({ wardrobe: { ...state.wardrobe, status: 'error', error: errorMessage(error) } });
+    void track('error_shown', { screenName: 'closet', properties: { source: 'wardrobe_load' } });
   }
 }
 
@@ -87,6 +89,16 @@ export async function loadWardrobe(): Promise<void> {
 export async function addWardrobeItem(input: Omit<WardrobeItem, 'id'>): Promise<WardrobeItem> {
   const item = await createWardrobeItem(input);
   setState({ wardrobe: { ...state.wardrobe, data: [item, ...state.wardrobe.data] }, hearts: {} });
+  void track('wardrobe_add_done', {
+    screenName: 'add_item_color_fit',
+    properties: { slot: item.slot, kind: item.kind, wardrobe_count: state.wardrobe.data.length },
+  });
+  if ([1, 3, 5, 10].includes(state.wardrobe.data.length)) {
+    void track('wardrobe_milestone', {
+      screenName: 'add_item_color_fit',
+      properties: { wardrobe_count: state.wardrobe.data.length },
+    });
+  }
   return item;
 }
 
@@ -117,6 +129,11 @@ export async function removeWardrobeItems(ids: readonly string[]): Promise<strin
       },
     });
   }
+  const deletedCount = removing.length - failed.size;
+  if (deletedCount > 0) {
+    void track('wardrobe_delete_done', { screenName: 'closet', properties: { deleted_count: deletedCount } });
+  }
+  if (failed.size > 0) void track('wardrobe_delete_failed', { screenName: 'closet', properties: { failed_count: failed.size } });
   return [...failed];
 }
 
@@ -137,8 +154,11 @@ export async function loadFeed({ force = false }: { force?: boolean } = {}): Pro
   try {
     const images = await fetchFeed();
     setState({ feed: { status: 'ready', data: images, error: null, loadedAt: Date.now() } });
+    void track('feed_load_done', { screenName: 'home', properties: { image_count: images.length } });
   } catch (error) {
     setState({ feed: { ...state.feed, status: 'error', error: errorMessage(error) } });
+    void track('feed_load_failed', { screenName: 'home' });
+    void track('error_shown', { screenName: 'home', properties: { source: 'feed_load' } });
   }
 }
 
@@ -169,6 +189,7 @@ export async function loadArchive({ force = false }: { force?: boolean } = {}): 
     setState({ archive: { status: 'ready', data: images, error: null, loadedAt: Date.now() }, saved });
   } catch (error) {
     setState({ archive: { ...state.archive, status: 'error', error: errorMessage(error) } });
+    void track('error_shown', { screenName: 'home', properties: { source: 'archive_load' } });
   }
 }
 
@@ -188,6 +209,10 @@ export function useIsUnhearting(id: string | undefined): boolean {
 export async function heartStyleImage(id: string): Promise<void> {
   const previous = state.hearts[id];
   if (previous?.status === 'loading' || state.unhearting[id] === true) return;
+  const startedAt = Date.now();
+  const newlySaved = state.saved[id] === undefined;
+  void track(newlySaved ? 'photo_save' : 'comparison_reopened', { properties: { style_image_id: id } });
+  void track('compare_open', { properties: { style_image_id: id } });
   setState({
     saved: state.saved[id] === undefined ? { ...state.saved, [id]: Date.now() } : state.saved,
     hearts: { ...state.hearts, [id]: { status: 'loading', result: previous?.result ?? null } },
@@ -195,6 +220,11 @@ export async function heartStyleImage(id: string): Promise<void> {
   try {
     const result = await postHeart(id);
     setState({ hearts: { ...state.hearts, [id]: { status: 'ready', result } } });
+    if (newlySaved) void track('photo_save_done', { properties: { style_image_id: id, place: 'detail' } });
+    void track('comparison_done', {
+      durationMs: Date.now() - startedAt,
+      properties: { style_image_id: id, item_count: result.items.length },
+    });
   } catch (error) {
     setState({
       hearts: {
@@ -202,6 +232,9 @@ export async function heartStyleImage(id: string): Promise<void> {
         [id]: { status: 'error', result: previous?.result ?? null, error: errorMessage(error) },
       },
     });
+    if (newlySaved) void track('photo_save_failed', { properties: { style_image_id: id, place: 'detail' } });
+    void track('comparison_failed', { properties: { style_image_id: id } });
+    void track('error_shown', { properties: { source: 'comparison' } });
   }
 }
 

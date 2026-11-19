@@ -7,6 +7,7 @@ import { ColorSwatch } from '@/components/ColorSwatch';
 import { KindIcon } from '@/components/KindIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
+import { track } from '@/data/analytics';
 import { SLOTS, type Slot } from '@/data/catalog';
 import { loadWardrobe, removeWardrobeItems, useWardrobeState } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
@@ -61,6 +62,7 @@ export default function ClosetScreen() {
     setActionError(null);
     setSelected(new Set());
     setEditing(true);
+    void track('wardrobe_edit_start', { screenName: 'closet' });
   }
 
   function stopEditing() {
@@ -69,6 +71,7 @@ export default function ClosetScreen() {
   }
 
   function toggle(id: string) {
+    void track('wardrobe_delete_select', { screenName: 'closet', properties: { wardrobe_item_id: id } });
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);

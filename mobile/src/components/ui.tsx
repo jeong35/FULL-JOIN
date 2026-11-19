@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type Vie
 
 import { GlassView } from '@/components/GlassView';
 import { BackIcon } from '@/components/Icons';
+import { track } from '@/data/analytics';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // ── 상세 화면 머리: 뒤로 버튼(40×40, 모서리 13) + 제목 18/800 ──
@@ -28,7 +29,10 @@ export function BackButton({
   style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="뒤로" style={style}>
+    <Pressable onPress={() => {
+      void track('back_click');
+      onPress();
+    }} accessibilityRole="button" accessibilityLabel="뒤로" style={style}>
       <GlassView radius={13} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <BackIcon color={colors.text} />
       </GlassView>

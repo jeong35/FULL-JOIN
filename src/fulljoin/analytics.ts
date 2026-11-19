@@ -1,0 +1,140 @@
+import { z } from "zod";
+
+export const ANALYTICS_EVENT_NAMES = [
+  "app_open",
+  "screen_view",
+  "screen_leave",
+  "app_background",
+  "tab_click",
+  "back_click",
+  "error_shown",
+  "intro_view",
+  "intro_next",
+  "intro_prev",
+  "intro_skip",
+  "intro_done",
+  "login_nickname_start",
+  "login_pin_start",
+  "login_submit",
+  "login_validation_failed",
+  "login_failed",
+  "login_success",
+  "taste_select",
+  "taste_deselect",
+  "taste_limit_reached",
+  "taste_done",
+  "taste_later",
+  "taste_save_failed",
+  "ready_choice",
+  "wardrobe_add_start",
+  "wardrobe_slot_select",
+  "wardrobe_kind_select",
+  "wardrobe_color_select",
+  "wardrobe_fit_select",
+  "wardrobe_add_submit",
+  "wardrobe_add_done",
+  "wardrobe_add_failed",
+  "wardrobe_milestone",
+  "wardrobe_edit_start",
+  "wardrobe_delete_select",
+  "wardrobe_delete_done",
+  "wardrobe_delete_failed",
+  "feed_load_done",
+  "feed_load_failed",
+  "feed_scroll",
+  "feed_card_impression",
+  "photo_open",
+  "photo_save",
+  "photo_save_done",
+  "photo_save_failed",
+  "archive_image_open",
+  "archive_filter_apply",
+  "archive_filter_clear",
+  "archive_zero_result",
+  "style_detail_item_view",
+  "compare_open",
+  "comparison_done",
+  "comparison_failed",
+  "comparison_reopened",
+  "comparison_empty_wardrobe",
+  "result_view",
+  "result_scroll",
+  "gap_item_impression",
+  "item_choice",
+  "outfit_section_view",
+  "outfit_view",
+  "shop_link_click",
+  "wardrobe_return_click",
+  "hint_view",
+  "hint_click",
+  "hint_close",
+  "chat_no_saved",
+  "chat_go_feed_click",
+  "chat_picker_open",
+  "chat_image_select",
+  "chat_input_start",
+  "chat_send",
+  "chat_response_done",
+  "chat_response_failed",
+  "taste_edit_start",
+  "tutorial_replay_start",
+  "logout_click",
+] as const;
+
+export const ANALYTICS_SCREENS = [
+  "unknown",
+  "onboarding_intro",
+  "onboarding_login",
+  "onboarding_taste",
+  "onboarding_ready",
+  "home",
+  "closet",
+  "recommend",
+  "chat",
+  "my",
+  "add_item_kind",
+  "add_item_color_fit",
+  "style_detail",
+  "comparison_result",
+] as const;
+
+const propertyValueSchema = z.union([
+  z.string().trim().max(120),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
+
+export const analyticsEventInputSchema = z.object({
+  event_id: z.string().uuid(),
+  user_id: z.string().trim().min(1).max(120),
+  session_id: z.string().trim().min(8).max(120),
+  event_name: z.enum(ANALYTICS_EVENT_NAMES),
+  screen_name: z.enum(ANALYTICS_SCREENS),
+  occurred_at: z.iso.datetime({ offset: true }),
+  duration_ms: z.number().int().min(0).max(24 * 60 * 60 * 1000).nullable(),
+  platform: z.enum(["ios", "android", "web", "unknown"]),
+  app_version: z.string().trim().min(1).max(40),
+  properties: z.record(z.string().trim().min(1).max(60), propertyValueSchema)
+    .refine((properties) => Object.keys(properties).length <= 20, "이벤트 속성은 20개 이하만 보낼 수 있어요"),
+}).strict().superRefine((event, context) => {
+  const acceptsDuration = ["screen_leave", "comparison_done", "chat_response_done"].includes(event.event_name);
+  if (acceptsDuration !== (event.duration_ms !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["duration_ms"],
+      message: acceptsDuration ? "이 이벤트에는 duration_ms가 필요해요" : "이 이벤트에는 duration_ms를 보내지 않아요",
+    });
+  }
+});
+
+export type AnalyticsEventInput = z.infer<typeof analyticsEventInputSchema>;
+
+export const analyticsRangeSchema = z.object({
+  from: z.iso.datetime({ offset: true }),
+  to: z.iso.datetime({ offset: true }),
+}).refine((range) => Date.parse(range.from) < Date.parse(range.to), {
+  message: "from은 to보다 이전이어야 해요",
+  path: ["from"],
+});
+

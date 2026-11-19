@@ -22,6 +22,9 @@
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
+| `POST` | `/events` | 모바일 공통 규격의 사용 이벤트 기록 |
+| `GET` | `/analytics/summary?from=&to=&exclude_user_ids=` | 관리자용 기간 지표·퍼널·화면 체류시간 집계. 11/11까지 옷을 등록한 계정 자동 제외, 추가 ID도 제외 가능 |
+| `GET` | `/analytics/users/{user_id}?from=&to=` | 관리자용 사용자별 이벤트 여정 |
 | `POST` | `/chat` | 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |

@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { fetchStylePreferences, updateStylePreferences } from '@/data/api';
+import { AnalyticsTracker } from '@/data/analytics';
 import { getSession, restoreStyles, useSession } from '@/data/session';
 import { loadFeed, loadWardrobe, resetUserData } from '@/data/store';
 import { colors } from '@/theme';
@@ -69,6 +70,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="dark" />
+      <AnalyticsTracker />
       <Stack
         screenOptions={{
           headerShown: false,

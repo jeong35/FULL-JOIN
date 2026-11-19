@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -18,6 +18,7 @@ import { GlassView } from '@/components/GlassView';
 import { BookmarkIcon } from '@/components/Icons';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { errorMessage } from '@/data/api';
+import { track } from '@/data/analytics';
 import { STYLES, type Style } from '@/data/catalog';
 import { orderByTaste } from '@/data/feedOrder';
 import { onHomeTabReselect } from '@/data/homeTab';
@@ -112,7 +113,20 @@ export default function HomeScreen() {
   const [scrollY] = useState(() => new Animated.Value(0));
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
+  const scrollDepths = useRef(new Set<number>());
   const showBubble = folder === '모든 저장' && archiveImages.length > 0 && contentHeight > viewportHeight;
+
+  useEffect(() => {
+    scrollDepths.current.clear();
+    if (folder === '피드') {
+      for (const image of feedImages.slice(0, 6)) {
+        void track('feed_card_impression', { screenName: 'home', properties: { style_image_id: image.id } });
+      }
+    }
+    if (folder === '모든 저장' && filtered && archiveImages.length === 0) {
+      void track('archive_zero_result', { screenName: 'home' });
+    }
+  }, [folder, filtered, archiveImages.length, feedImages]);
 
   // 화면에 돌아올 때마다 사진 주소가 만료됐는지 보고 필요하면 새로 받는다.
   useFocusEffect(
@@ -216,7 +230,10 @@ export default function HomeScreen() {
                 image={image}
                 colorIndex={(index + columnIndex) % 2}
                 saved={saved[image.id] !== undefined}
-                onOpen={() => router.push(`/style/${encodeURIComponent(image.id)}` as Href)}
+                onOpen={() => {
+                  void track('photo_open', { screenName: 'home', properties: { style_image_id: image.id } });
+                  router.push(`/style/${encodeURIComponent(image.id)}` as Href);
+                }}
                 onSave={() => onToggleSave(image.id)}
               />
             ))}
@@ -241,7 +258,10 @@ export default function HomeScreen() {
           <FilterPill label={filter.year === null ? '연도' : String(filter.year)} active={filter.year !== null} onPress={() => setPicking('year')} />
           <FilterPill label={filter.season ?? '계절'} active={filter.season !== null} onPress={() => setPicking('season')} />
           {filtered && (
-            <Pressable onPress={() => setFilter(NO_FILTER)} accessibilityRole="button" hitSlop={8} style={styles.clearFilter}>
+            <Pressable onPress={() => {
+              setFilter(NO_FILTER);
+              void track('archive_filter_clear', { screenName: 'home' });
+            }} accessibilityRole="button" hitSlop={8} style={styles.clearFilter}>
               <Text style={styles.clearFilterText}>전체</Text>
             </Pressable>
           )}
@@ -256,7 +276,19 @@ export default function HomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+          onScroll={(event) => {
+            const y = event.nativeEvent.contentOffset.y;
+            scrollY.setValue(y);
+            if (folder !== '피드') return;
+            const max = Math.max(1, event.nativeEvent.contentSize.height - event.nativeEvent.layoutMeasurement.height);
+            const percent = Math.min(100, Math.round((y / max) * 100));
+            for (const threshold of [25, 50, 75, 100]) {
+              if (percent >= threshold && !scrollDepths.current.has(threshold)) {
+                scrollDepths.current.add(threshold);
+                void track('feed_scroll', { screenName: 'home', properties: { depth_percent: threshold } });
+              }
+            }
+          }}
           onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
           onContentSizeChange={(_, height) => setContentHeight(height)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textPurple} />}>
@@ -279,6 +311,10 @@ export default function HomeScreen() {
         options={options}
         onPick={(key, value) => {
           setFilter((current) => ({ ...current, [key]: value }));
+          void track(value === null ? 'archive_filter_clear' : 'archive_filter_apply', {
+            screenName: 'home',
+            properties: { filter: key, value: value === null ? null : String(value) },
+          });
           setPicking(null);
         }}
         onClose={() => setPicking(null)}
@@ -396,6 +432,7 @@ function FilterSheet({
 }
 
 function openArchiveImage(image: ArchiveImage) {
+  void track('archive_image_open', { screenName: 'home', properties: { style_image_id: image.id } });
   router.push({ pathname: '/result/[id]', params: { id: image.id } });
 }
 

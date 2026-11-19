@@ -24,6 +24,7 @@ import { buildPhotoOutfits, findSubstitutes } from "../../../src/fulljoin/outfit
 import { extractProductMetadata, type ProductMetadata } from "../../../src/fulljoin/product_metadata.ts";
 import { styleImagePublishInputSchema, styleImageReviewInputSchema } from "../../../src/fulljoin/review.ts";
 import { similarSearchProducts, type SearchableItem } from "../../../src/fulljoin/shopping.ts";
+import { analyticsEventInputSchema, analyticsRangeSchema } from "../../../src/fulljoin/analytics.ts";
 import { ANALYSIS_JSON_SCHEMA, ANALYSIS_SYSTEM_PROMPT } from "./generated_analysis_contract.ts";
 
 const corsHeaders = {
@@ -91,6 +92,241 @@ function adminTokenIsValid(request: Request): boolean {
   const expected = Deno.env.get("ANALYZE_ADMIN_TOKEN");
   const actual = request.headers.get("x-admin-token");
   return expected !== undefined && expected.length >= 24 && actual === expected;
+}
+
+type AnalyticsEventRow = {
+  event_id: string;
+  user_id: string;
+  session_id: string;
+  event_name: string;
+  screen_name: string;
+  occurred_at: string;
+  duration_ms: number | null;
+  platform: string;
+  app_version: string;
+  properties: Record<string, unknown>;
+};
+
+// 동료 사용 주간 이전에 옷장을 만든 팀·시연 계정을 분석 코호트에서 제외한다.
+// 2026-11-12 00:00 KST 미만 = 2026-11-11 23:59:59 KST까지.
+const ANALYTICS_COHORT_CUTOFF = "2026-11-12T00:00:00+09:00";
+
+function analyticsRange(url: URL): { from: string; to: string } | null {
+  const parsed = analyticsRangeSchema.safeParse({
+    from: url.searchParams.get("from"),
+    to: url.searchParams.get("to"),
+  });
+  return parsed.success ? parsed.data : null;
+}
+
+function analyticsExcludedUserIds(url: URL): string[] | null {
+  const values = (url.searchParams.get("exclude_user_ids") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  const unique = [...new Set(values)];
+  return unique.length <= 50 && unique.every((value) => value.length <= 120) ? unique : null;
+}
+
+function seoulDay(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const value = (type: Intl.DateTimeFormatPartTypes): string => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function roundedRate(numerator: number, denominator: number): number {
+  return denominator === 0 ? 0 : Math.round((numerator / denominator) * 1000) / 10;
+}
+
+function percentile(values: readonly number[], fraction: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)] ?? null;
+}
+
+async function handleAnalyticsEvent(request: Request, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "POST") return apiError(405, "method_not_allowed", "POST 요청만 지원해요");
+  const parsed = analyticsEventInputSchema.safeParse(await bodyAsObject(request));
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0];
+    return apiError(400, "invalid_event", parsed.error.issues[0]?.message ?? "이벤트 형식을 확인해 주세요", typeof field === "string" ? field : undefined);
+  }
+  const { error } = await db.from("user_events").upsert(parsed.data, {
+    onConflict: "event_id",
+    ignoreDuplicates: true,
+  });
+  if (error !== null) throw error;
+  return json({ accepted: true }, 202);
+}
+
+async function preCohortUserIds(db: SupabaseClient): Promise<string[]> {
+  const { data, error } = await db
+    .from("wardrobe_items")
+    .select("user_id")
+    .lt("created_at", ANALYTICS_COHORT_CUTOFF)
+    .limit(10_000);
+  if (error !== null) throw error;
+  return [...new Set(((data ?? []) as { user_id: string }[]).map((row) => row.user_id))];
+}
+
+async function analyticsRows(
+  url: URL,
+  db: SupabaseClient,
+  excludedUserIds: readonly string[],
+): Promise<AnalyticsEventRow[] | null> {
+  const range = analyticsRange(url);
+  if (range === null) return null;
+  const { data, error } = await db
+    .from("user_events")
+    .select("event_id,user_id,session_id,event_name,screen_name,occurred_at,duration_ms,platform,app_version,properties")
+    .gte("occurred_at", range.from)
+    .lt("occurred_at", range.to)
+    .order("occurred_at", { ascending: true })
+    .order("event_id", { ascending: true })
+    .limit(10_000);
+  if (error !== null) throw error;
+  const excluded = new Set(excludedUserIds);
+  return ((data ?? []) as AnalyticsEventRow[]).filter((event) => !excluded.has(event.user_id));
+}
+
+async function handleAnalyticsSummary(request: Request, url: URL, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "GET") return apiError(405, "method_not_allowed", "GET 요청만 지원해요");
+  if (!adminTokenIsValid(request)) return apiError(401, "admin_required", "관리자 토큰이 필요해요");
+  const range = analyticsRange(url);
+  const manualExcludedUserIds = analyticsExcludedUserIds(url);
+  if (range === null || manualExcludedUserIds === null) {
+    return apiError(400, "invalid_analytics_query", "기간과 제외 사용자 ID를 확인해 주세요");
+  }
+  const automaticExcludedUserIds = await preCohortUserIds(db);
+  const excludedUserIds = [...new Set([...automaticExcludedUserIds, ...manualExcludedUserIds])];
+  const events = await analyticsRows(url, db, excludedUserIds);
+  if (events === null) return apiError(400, "invalid_analytics_query", "기간을 확인해 주세요");
+
+  const userIds = [...new Set(events.map((event) => event.user_id))];
+  const wardrobeCounts = new Map<string, number>();
+  if (userIds.length > 0) {
+    const { data, error } = await db.from("wardrobe_items").select("user_id").in("user_id", userIds);
+    if (error !== null) throw error;
+    for (const row of (data ?? []) as { user_id: string }[]) {
+      wardrobeCounts.set(row.user_id, (wardrobeCounts.get(row.user_id) ?? 0) + 1);
+    }
+  }
+
+  const eventNamesByUser = new Map<string, Set<string>>();
+  const activeDaysByUser = new Map<string, Set<string>>();
+  const firstSeen = new Map<string, string>();
+  const lastSeen = new Map<string, string>();
+  const eventCountByUser = new Map<string, number>();
+  const daily = new Map<string, { events: number; users: Set<string> }>();
+  const screenDurations = new Map<string, number[]>();
+  for (const event of events) {
+    if (!eventNamesByUser.has(event.user_id)) eventNamesByUser.set(event.user_id, new Set());
+    eventNamesByUser.get(event.user_id)?.add(event.event_name);
+    if (!activeDaysByUser.has(event.user_id)) activeDaysByUser.set(event.user_id, new Set());
+    activeDaysByUser.get(event.user_id)?.add(seoulDay(event.occurred_at));
+    if (!firstSeen.has(event.user_id)) firstSeen.set(event.user_id, event.occurred_at);
+    lastSeen.set(event.user_id, event.occurred_at);
+    eventCountByUser.set(event.user_id, (eventCountByUser.get(event.user_id) ?? 0) + 1);
+    const day = seoulDay(event.occurred_at);
+    const dayEntry = daily.get(day) ?? { events: 0, users: new Set<string>() };
+    dayEntry.events += 1;
+    dayEntry.users.add(event.user_id);
+    daily.set(day, dayEntry);
+    if (event.event_name === "screen_leave" && event.duration_ms !== null) {
+      const durations = screenDurations.get(event.screen_name) ?? [];
+      durations.push(event.duration_ms);
+      screenDurations.set(event.screen_name, durations);
+    }
+  }
+
+  const hasEvent = (userId: string, eventName: string): boolean => eventNamesByUser.get(userId)?.has(eventName) === true;
+  const activatedUsers = userIds.filter((userId) => (wardrobeCounts.get(userId) ?? 0) >= 5);
+  const savedUsers = userIds.filter((userId) => hasEvent(userId, "photo_save_done"));
+  const comparedUsers = userIds.filter((userId) => hasEvent(userId, "photo_save_done") && hasEvent(userId, "result_view"));
+  const returningUsers = userIds.filter((userId) => (activeDaysByUser.get(userId)?.size ?? 0) >= 2);
+  const latencies = events
+    .filter((event) => event.event_name === "comparison_done" && event.duration_ms !== null)
+    .map((event) => event.duration_ms as number);
+
+  const users = userIds.map((userId) => {
+    const names = eventNamesByUser.get(userId) ?? new Set<string>();
+    const stage = names.has("result_view")
+      ? "result_view"
+      : names.has("photo_save_done")
+        ? "photo_save_done"
+        : (wardrobeCounts.get(userId) ?? 0) >= 5
+          ? "wardrobe_5"
+          : names.has("wardrobe_add_done")
+            ? "wardrobe_started"
+            : "app_open";
+    return {
+      user_id: userId,
+      first_seen_at: firstSeen.get(userId),
+      last_seen_at: lastSeen.get(userId),
+      active_days: activeDaysByUser.get(userId)?.size ?? 0,
+      event_count: eventCountByUser.get(userId) ?? 0,
+      wardrobe_count: wardrobeCounts.get(userId) ?? 0,
+      last_stage: stage,
+    };
+  }).sort((left, right) => String(right.last_seen_at).localeCompare(String(left.last_seen_at)));
+
+  return json({
+    range,
+    excluded_user_ids: excludedUserIds,
+    automatic_excluded_user_ids: automaticExcludedUserIds,
+    manual_excluded_user_ids: manualExcludedUserIds,
+    cohort_cutoff: ANALYTICS_COHORT_CUTOFF,
+    cards: {
+      users: userIds.length,
+      activated_users: activatedUsers.length,
+      activation_rate: roundedRate(activatedUsers.length, userIds.length),
+      compared_users: comparedUsers.length,
+      comparison_rate: roundedRate(comparedUsers.length, userIds.length),
+      returning_users: returningUsers.length,
+      return_rate: roundedRate(returningUsers.length, userIds.length),
+      comparison_average_ms: latencies.length === 0 ? null : Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length),
+      comparison_p95_ms: percentile(latencies, 0.95),
+    },
+    funnel: [
+      { stage: "app_open", label: "앱 사용", users: userIds.length },
+      { stage: "wardrobe_started", label: "옷 등록 시작", users: userIds.filter((id) => hasEvent(id, "wardrobe_add_start")).length },
+      { stage: "wardrobe_5", label: "옷 5벌 이상", users: activatedUsers.length },
+      { stage: "photo_save_done", label: "사진 저장", users: savedUsers.length },
+      { stage: "result_view", label: "비교 결과 확인", users: comparedUsers.length },
+    ],
+    daily: [...daily.entries()].map(([date, value]) => ({ date, users: value.users.size, events: value.events })),
+    screens: [...screenDurations.entries()].map(([screen_name, values]) => ({
+      screen_name,
+      views: values.length,
+      average_duration_ms: Math.round(values.reduce((sum, value) => sum + value, 0) / values.length),
+      p95_duration_ms: percentile(values, 0.95),
+    })).sort((left, right) => right.average_duration_ms - left.average_duration_ms),
+    users,
+    truncated: events.length === 10_000,
+  });
+}
+
+async function handleAnalyticsUser(request: Request, userId: string, url: URL, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "GET") return apiError(405, "method_not_allowed", "GET 요청만 지원해요");
+  if (!adminTokenIsValid(request)) return apiError(401, "admin_required", "관리자 토큰이 필요해요");
+  const range = analyticsRange(url);
+  if (range === null) return apiError(400, "invalid_range", "from과 to를 ISO 시각으로 보내 주세요");
+  const { data, error } = await db
+    .from("user_events")
+    .select("event_id,user_id,session_id,event_name,screen_name,occurred_at,duration_ms,platform,app_version,properties")
+    .eq("user_id", userId)
+    .gte("occurred_at", range.from)
+    .lt("occurred_at", range.to)
+    .order("occurred_at", { ascending: true })
+    .order("event_id", { ascending: true })
+    .limit(2_000);
+  if (error !== null) throw error;
+  return json({ user_id: userId, range, events: data ?? [], truncated: (data?.length ?? 0) === 2_000 });
 }
 
 function imageMimeType(blob: Blob, imagePath: string): string | null {
@@ -539,7 +775,8 @@ async function handleWardrobe(request: Request, url: URL, db: SupabaseClient): P
     };
     return apiError(400, "invalid_enum", `${field === undefined ? "값" : labels[field] ?? field}을(를) 고를 수 없어요`, field);
   }
-  const { data, error } = await db.from("wardrobe_items").insert(parsed.data)
+  const { user_id, slot, kind, color, visual_fit } = parsed.data;
+  const { data, error } = await db.from("wardrobe_items").insert({ user_id, slot, kind, color, visual_fit })
     .select("id,user_id,slot,kind,color,visual_fit").single();
   if (error !== null) throw error;
   return json({ wardrobe_item: data }, 201);
@@ -960,6 +1197,12 @@ export default {
 
     try {
       if (path === "/health" && request.method === "GET") return json({ ok: true });
+      if (path === "/events") return await handleAnalyticsEvent(request, db);
+      if (path === "/analytics/summary") return await handleAnalyticsSummary(request, url, db);
+      const analyticsUserMatch = path.match(/^\/analytics\/users\/([^/]+)$/);
+      if (analyticsUserMatch?.[1] !== undefined) {
+        return await handleAnalyticsUser(request, decodeURIComponent(analyticsUserMatch[1]), url, db);
+      }
       if (path === "/analyze") return await handleAnalyze(request, db);
       if (path === "/wardrobe") return await handleWardrobe(request, url, db);
       if (path === "/style-preferences") return await handleStylePreferences(request, url, db);

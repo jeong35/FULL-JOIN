@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>odit. 사용 분석</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">FULL JOIN · PRODUCT ANALYTICS</p>
+        <h1>사용 흐름 대시보드</h1>
+        <p class="subtitle">누가 어디서 오래 머물고, 어느 단계에서 멈췄는지 확인합니다.</p>
+      </div>
+      <button id="refresh" class="primary">데이터 새로고침</button>
+    </header>
+
+    <main>
+      <section class="filters panel">
+        <label>시작일<input id="from" type="date" /></label>
+        <label>종료일<input id="to" type="date" /></label>
+        <label>추가 제외 사용자 ID<input id="excluded-users" type="text" autocomplete="off" placeholder="예: u-0123…, team-demo" /><small>11월 11일까지 옷을 등록한 계정은 자동 제외</small></label>
+        <label>관리자 토큰<input id="token" type="password" autocomplete="off" placeholder="브라우저 세션에만 보관" /></label>
+      </section>
+
+      <div id="notice" class="notice">기간과 관리자 토큰을 입력한 뒤 새로고침을 눌러 주세요.</div>
+
+      <section id="cards" class="cards" aria-label="핵심 지표"></section>
+
+      <section class="grid two">
+        <article class="panel">
+          <div class="section-title"><h2>핵심 퍼널</h2><span>사용자 기준</span></div>
+          <div id="funnel" class="funnel empty">데이터가 없습니다.</div>
+        </article>
+        <article class="panel">
+          <div class="section-title"><h2>일별 활동</h2><span>Asia/Seoul</span></div>
+          <div id="daily" class="chart empty">데이터가 없습니다.</div>
+        </article>
+      </section>
+
+      <section class="grid two">
+        <article class="panel">
+          <div class="section-title"><h2>화면별 평균 체류시간</h2><span>긴 화면부터</span></div>
+          <div id="screens" class="bars empty">데이터가 없습니다.</div>
+        </article>
+        <article class="panel">
+          <div class="section-title"><h2>목표 판정</h2><span>동료 사용 기간</span></div>
+          <div id="goals" class="goals empty">데이터가 없습니다.</div>
+        </article>
+      </section>
+
+      <section class="panel users-panel">
+        <div class="section-title"><h2>사용자별 마지막 도달 단계</h2><span>행을 누르면 여정을 봅니다</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>사용자</th><th>옷장</th><th>활성일</th><th>이벤트</th><th>마지막 단계</th><th>마지막 활동</th></tr></thead>
+            <tbody id="users"><tr><td colspan="6" class="empty-cell">데이터가 없습니다.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <dialog id="journey-dialog">
+        <div class="dialog-head"><div><p class="eyebrow">USER JOURNEY</p><h2 id="journey-title">사용자 여정</h2></div><button id="close-dialog" class="icon-button">닫기</button></div>
+        <div id="journey" class="timeline"></div>
+      </dialog>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
+

@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { BackButton, PrimaryButton, SmallWhiteButton } from '@/components/ui';
+import { track } from '@/data/analytics';
 import { errorMessage, fetchStyleImageDetail } from '@/data/api';
 import { heartStyleImage, unheartStyleImage, useSaved } from '@/data/store';
 import type { StyleImageDetail, StyleImageDetailItem } from '@/data/types';
@@ -52,6 +53,16 @@ export default function StyleDetailScreen() {
       active = false;
     };
   }, [imageId]);
+
+  useEffect(() => {
+    if (detail === null || imageId === undefined) return;
+    for (const item of detail.items) {
+      void track('style_detail_item_view', {
+        screenName: 'style_detail',
+        properties: { style_image_id: imageId, item_id: item.item_id },
+      });
+    }
+  }, [detail, imageId]);
 
   if (imageId === undefined) {
     return (
@@ -142,7 +153,7 @@ export default function StyleDetailScreen() {
           <Text style={styles.sectionCount}>{detail.items.length}개</Text>
         </View>
         <View style={styles.itemList}>
-          {detail.items.map((item) => <ProductItem key={item.item_id} item={item} />)}
+          {detail.items.map((item) => <ProductItem key={item.item_id} item={item} styleImageId={imageId} />)}
         </View>
 
         {products.length === 0 && (
@@ -165,7 +176,7 @@ export default function StyleDetailScreen() {
   );
 }
 
-function ProductItem({ item }: { item: StyleImageDetailItem }) {
+function ProductItem({ item, styleImageId }: { item: StyleImageDetailItem; styleImageId: string }) {
   // 제목은 다른 아이템과 같은 '색 · 핏 · 종류'. 쇼핑몰 상품명은 길고 브랜드가 겹쳐서 보여 주지 않고 링크로만 연다.
   const label = [item.color, item.visual_fit, item.kind].filter(Boolean).join(' · ');
   const groundedBrand = item.brand_source === '없음' ? null : item.brand;
@@ -180,7 +191,13 @@ function ProductItem({ item }: { item: StyleImageDetailItem }) {
         {source !== '' && <Text style={styles.itemMeta}>{source}</Text>}
         {item.product_url !== null ? (
           <Pressable
-            onPress={() => WebBrowser.openBrowserAsync(item.product_url!)}
+            onPress={() => {
+              void track('shop_link_click', {
+                screenName: 'style_detail',
+                properties: { style_image_id: styleImageId, item_id: item.item_id, platform: item.shop ?? 'exact', match_type: 'exact' },
+              });
+              void WebBrowser.openBrowserAsync(item.product_url!);
+            }}
             accessibilityRole="link"
             style={styles.productLink}>
             <Text style={styles.productLinkText}>이 상품 보기 ›</Text>

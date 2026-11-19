@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView } from '@/components/GlassView';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { accountHasData, fetchStylePreferences } from '@/data/api';
+import { track } from '@/data/analytics';
 import { NICKNAME_MAX, login, nicknameProblem, pinProblem, userIdFor } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
@@ -27,7 +28,11 @@ export default function LoginScreen() {
 
   async function submit() {
     setTried(true);
-    if (!valid || checking) return;
+    void track('login_submit', { screenName: 'onboarding_login' });
+    if (!valid || checking) {
+      if (!valid) void track('login_validation_failed', { screenName: 'onboarding_login', properties: { field: nicknameError !== null ? 'nickname' : 'pin' } });
+      return;
+    }
     setChecking(true);
     const userId = userIdFor(nickname, pin);
     let returning = false;
@@ -41,7 +46,13 @@ export default function LoginScreen() {
       savedStyles = stylesResult.value;
       returning ||= savedStyles.length > 0;
     }
+    if (dataResult.status === 'rejected' && stylesResult.status === 'rejected') {
+      void track('login_failed', { screenName: 'onboarding_login' });
+      setChecking(false);
+      return;
+    }
     login(nickname, pin, returning, savedStyles);
+    void track('login_success', { screenName: 'onboarding_login', properties: { returning } });
     router.replace(returning ? '/' : '/onboarding/taste');
   }
 
@@ -62,6 +73,7 @@ export default function LoginScreen() {
               maxLength={NICKNAME_MAX + 4}
               autoCapitalize="none"
               autoCorrect={false}
+              onFocus={() => void track('login_nickname_start', { screenName: 'onboarding_login' })}
               returnKeyType="next"
               onSubmitEditing={() => pinRef.current?.focus()}
               style={styles.input}
@@ -83,6 +95,7 @@ export default function LoginScreen() {
               secureTextEntry
               maxLength={4}
               returnKeyType="done"
+              onFocus={() => void track('login_pin_start', { screenName: 'onboarding_login' })}
               onSubmitEditing={submit}
               style={[styles.input, styles.pinInput]}
               accessibilityLabel="숫자 4자리"

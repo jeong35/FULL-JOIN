@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckMark } from '@/components/Icons';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { errorMessage, updateStylePreferences } from '@/data/api';
+import { track } from '@/data/analytics';
 import { STYLES, type Style } from '@/data/catalog';
 import { saveStyles, useSession } from '@/data/session';
 import { loadFeed, useFeedState } from '@/data/store';
@@ -65,7 +66,8 @@ export default function TasteScreen() {
 
   useEffect(() => {
     if (session !== null) loadFeed();
-  }, [session]);
+    if (isReplay) void track('taste_edit_start', { screenName: 'onboarding_taste' });
+  }, [session, isReplay]);
 
   // 로그인 없이 이 주소로 바로 온 경우.
   useEffect(() => {
@@ -76,6 +78,11 @@ export default function TasteScreen() {
   const cardWidth = (width - layout.screenPaddingX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
   function toggle(style: Style) {
+    const selected = picked.includes(style);
+    void track(selected ? 'taste_deselect' : 'taste_select', { screenName: 'onboarding_taste', properties: { style } });
+    if (!selected && picked.length >= MAX_PICKS) {
+      void track('taste_limit_reached', { screenName: 'onboarding_taste', properties: { limit: MAX_PICKS } });
+    }
     setPicked((current) =>
       current.includes(style)
         ? current.filter((s) => s !== style)
@@ -92,6 +99,10 @@ export default function TasteScreen() {
     try {
       const saved = await updateStylePreferences(styles);
       saveStyles(saved);
+      void track(styles.length === 0 ? 'taste_later' : 'taste_done', {
+        screenName: 'onboarding_taste',
+        properties: { style_count: saved.length, replay: isReplay },
+      });
       if (isReplay) {
         if (router.canGoBack()) router.back();
         else router.replace('/my');
@@ -100,6 +111,8 @@ export default function TasteScreen() {
       }
     } catch (error) {
       setSaveError(errorMessage(error));
+      void track('taste_save_failed', { screenName: 'onboarding_taste', properties: { replay: isReplay } });
+      void track('error_shown', { screenName: 'onboarding_taste', properties: { source: 'taste_save' } });
     } finally {
       setSaving(false);
     }

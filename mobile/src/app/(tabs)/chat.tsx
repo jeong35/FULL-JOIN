@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import type { ElementRef } from 'react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SmallWhiteButton } from '@/components/ui';
+import { track } from '@/data/analytics';
 import { errorMessage, postChat } from '@/data/api';
 import { loadArchive, useArchiveState } from '@/data/store';
 import type { ArchiveImage, Product } from '@/data/types';
@@ -48,6 +49,10 @@ export default function ChatScreen() {
   const selected = archive.data.find((image) => image.id === selectedId) ?? archive.data[0] ?? null;
   const visibleMessages = selected?.id === conversationImageId ? messages : [];
 
+  useEffect(() => {
+    if (archive.status === 'ready' && archive.data.length === 0) void track('chat_no_saved', { screenName: 'chat' });
+  }, [archive.status, archive.data.length]);
+
   async function send() {
     const text = input.trim();
     if (selected === null || text.length === 0 || sending) return;
@@ -70,6 +75,8 @@ export default function ChatScreen() {
       setMessages([userMessage]);
     }
     setSending(true);
+    const startedAt = Date.now();
+    void track('chat_send', { screenName: 'chat', properties: { style_image_id: selected.id } });
     try {
       const result = await postChat(selected.id, text, history);
       setMessages((current) => [...current, {
@@ -78,8 +85,15 @@ export default function ChatScreen() {
         text: result.answer,
         products: result.products,
       }]);
+      void track('chat_response_done', {
+        screenName: 'chat',
+        durationMs: Date.now() - startedAt,
+        properties: { style_image_id: selected.id },
+      });
     } catch (error) {
       setSendError(errorMessage(error));
+      void track('chat_response_failed', { screenName: 'chat', properties: { style_image_id: selected.id } });
+      void track('error_shown', { screenName: 'chat', properties: { source: 'chat_response' } });
     } finally {
       setSending(false);
     }
@@ -99,7 +113,10 @@ export default function ChatScreen() {
 
         {selected !== null ? (
           <>
-            <SelectedImage image={selected} onChange={() => setShowPicker((current) => !current)} />
+            <SelectedImage image={selected} onChange={() => {
+              void track('chat_picker_open', { screenName: 'chat' });
+              setShowPicker((current) => !current);
+            }} />
             {showPicker && (
               <ScrollView
                 horizontal
@@ -110,6 +127,7 @@ export default function ChatScreen() {
                   <Pressable
                     key={image.id}
                     onPress={() => {
+                      void track('chat_image_select', { screenName: 'chat', properties: { style_image_id: image.id } });
                       setSelectedId(image.id);
                       setShowPicker(false);
                       setMessages([]);
@@ -158,6 +176,7 @@ export default function ChatScreen() {
                 placeholderTextColor={colors.textSecondary}
                 returnKeyType="send"
                 editable={!sending}
+                onFocus={() => void track('chat_input_start', { screenName: 'chat', properties: { style_image_id: selected.id } })}
                 style={styles.input}
                 accessibilityLabel="챗봇 메시지"
               />
@@ -179,7 +198,10 @@ export default function ChatScreen() {
               <>
                 <Text style={styles.emptyChatTitle}>먼저 마음에 드는 사진을 저장해 주세요</Text>
                 <Text style={styles.emptyChatText}>{archive.error ?? '저장한 사진을 골라야 대화를 시작할 수 있어요.'}</Text>
-                <SmallWhiteButton label="피드로 가기" onPress={() => router.navigate('/')} />
+                <SmallWhiteButton label="피드로 가기" onPress={() => {
+                  void track('chat_go_feed_click', { screenName: 'chat' });
+                  router.navigate('/');
+                }} />
               </>
             )}
           </View>

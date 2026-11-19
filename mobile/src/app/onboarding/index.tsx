@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,6 +7,7 @@ import { GlassView } from '@/components/GlassView';
 import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { PrimaryButton } from '@/components/ui';
+import { track } from '@/data/analytics';
 import type { Color, Kind, VisualFit } from '@/data/catalog';
 import { getSession, markIntroSeen } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
@@ -42,7 +43,15 @@ export default function OnboardingIntroScreen() {
   const slide = SLIDES[index];
   const last = index === SLIDES.length - 1;
 
+  useEffect(() => {
+    void track('intro_view', { screenName: 'onboarding_intro', properties: { step: index + 1, replay: isReplay } });
+  }, [index, isReplay]);
+
   function finish() {
+    void track(isReplay ? 'intro_skip' : last ? 'intro_done' : 'intro_skip', {
+      screenName: 'onboarding_intro',
+      properties: { step: index + 1, replay: isReplay },
+    });
     if (isReplay) {
       if (router.canGoBack()) router.back();
       else router.replace('/');
@@ -81,10 +90,16 @@ export default function OnboardingIntroScreen() {
         </View>
         <PrimaryButton
           label={last ? (isReplay ? '닫기' : '시작하기') : '다음'}
-          onPress={last ? finish : () => setIndex(index + 1)}
+          onPress={last ? finish : () => {
+            void track('intro_next', { screenName: 'onboarding_intro', properties: { step: index + 1 } });
+            setIndex(index + 1);
+          }}
         />
         {index > 0 && (
-          <Pressable onPress={() => setIndex(index - 1)} accessibilityRole="button" style={styles.prev} hitSlop={8}>
+          <Pressable onPress={() => {
+            void track('intro_prev', { screenName: 'onboarding_intro', properties: { step: index + 1 } });
+            setIndex(index - 1);
+          }} accessibilityRole="button" style={styles.prev} hitSlop={8}>
             <Text style={styles.prevText}>이전</Text>
           </Pressable>
         )}

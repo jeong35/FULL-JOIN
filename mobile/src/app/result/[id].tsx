@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,6 +9,7 @@ import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
+import { track } from '@/data/analytics';
 import { errorMessage, postItemDecision } from '@/data/api';
 import type { Kind } from '@/data/catalog';
 import { buildOutfits, substitutesFor, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
@@ -165,6 +166,15 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
   const [decisions, setDecisions] = useState<Record<string, ItemDecisionResult>>({});
   const [pendingItems, setPendingItems] = useState<Record<string, boolean>>({});
   const [decisionErrors, setDecisionErrors] = useState<Record<string, string>>({});
+  const resultScrollDepths = useRef(new Set<number>());
+  const trackedResultId = useRef<string | null>(null);
+
+  useEffect(() => {
+    void track('result_view', {
+      screenName: 'comparison_result',
+      properties: { style_image_id: imageId, item_count: result.items.length },
+    });
+  }, [imageId, result]);
 
   const items = result.items.filter(hasKind);
   const missingInfo = result.items.length > 0 && items.length === 0;
@@ -179,6 +189,19 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
   // 활용·필요만 있으면 코디가 위 목록과 같은 내용이라, 비슷함·대체 옷이 들어간 코디가 있을 때만 보여 준다(11/10 팀 결정).
   const showOutfits = outfits.some((outfit) =>
     outfit.pieces.some((piece) => piece.type === 'owned' && (piece.similar || piece.substitute)));
+
+  useEffect(() => {
+    if (trackedResultId.current === imageId) return;
+    trackedResultId.current = imageId;
+    if (wardrobeEmpty) void track('comparison_empty_wardrobe', { screenName: 'comparison_result', properties: { style_image_id: imageId } });
+    for (const item of items) {
+      void track('gap_item_impression', {
+        screenName: 'comparison_result',
+        properties: { style_image_id: imageId, item_id: item.item_id, gap_status: item.gap_status },
+      });
+    }
+    if (showOutfits) void track('outfit_section_view', { screenName: 'comparison_result', properties: { outfit_count: outfits.length } });
+  }, [imageId, items, wardrobeEmpty, showOutfits, outfits.length]);
   const linksFor = (item: HeartItem): Product[] => shoppingLinksFor(
     item,
     decisions[item.item_id]?.products ?? result.products.filter((candidate) => candidate.item_id === item.item_id),
@@ -192,6 +215,10 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
     try {
       const decision = await postItemDecision(imageId, itemId, value);
       setDecisions((current) => ({ ...current, [itemId]: decision }));
+      void track('item_choice', {
+        screenName: 'comparison_result',
+        properties: { style_image_id: imageId, item_id: itemId, decision: value },
+      });
     } catch (error) {
       setChoices((current) => {
         if (previousChoice !== undefined) return { ...current, [itemId]: previousChoice };
@@ -211,7 +238,21 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
 
   return (
     <>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        scrollEventThrottle={16}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          const max = Math.max(1, contentSize.height - layoutMeasurement.height);
+          const percent = Math.min(100, Math.round((contentOffset.y / max) * 100));
+          for (const threshold of [25, 50, 75, 100]) {
+            if (percent >= threshold && !resultScrollDepths.current.has(threshold)) {
+              resultScrollDepths.current.add(threshold);
+              void track('result_scroll', { screenName: 'comparison_result', properties: { depth_percent: threshold } });
+            }
+          }
+        }}>
         <InfoBar style={styles.savedBar}>
           <BookmarkIcon color={colors.textPurple} size={15} filled />
           <Text style={styles.savedBarText}>모든 저장에 담았어요</Text>
@@ -225,7 +266,10 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
         {wardrobeEmpty && (
           <InfoBar
             style={styles.emptyBar}
-            right={<SmallWhiteButton label="옷 추가" onPress={() => router.push('/add-item/kind')} />}>
+            right={<SmallWhiteButton label="옷 추가" onPress={() => {
+              void track('wardrobe_return_click', { screenName: 'comparison_result', properties: { source: 'empty_wardrobe' } });
+              router.push('/add-item/kind');
+            }} />}>
             <Text style={styles.emptyBarText}>가진 옷을 넣으면 활용·필요를 알려 드려요</Text>
           </InfoBar>
         )}
@@ -388,7 +432,13 @@ function ShopLinks({ item, links }: { item: ShownItem; links: Product[] }) {
       {links.map((product) => (
         <Pressable
           key={`${product.platform}-${product.match_type}`}
-          onPress={() => WebBrowser.openBrowserAsync(product.url)}
+          onPress={() => {
+            void track('shop_link_click', {
+              screenName: 'comparison_result',
+              properties: { item_id: item.item_id, platform: product.platform, match_type: product.match_type },
+            });
+            void WebBrowser.openBrowserAsync(product.url);
+          }}
           accessibilityRole="link"
           accessibilityLabel={`${item.kind} ${product.platform}에서 찾기`}
           style={styles.decisionLink}>
@@ -483,6 +533,9 @@ function OutfitCard({
   const owned = outfit.pieces.filter((piece): piece is Extract<OutfitPiece, { type: 'owned' }> => piece.type === 'owned');
   const substitutes = owned.filter((piece) => piece.substitute);
   const missing = outfit.pieces.filter((piece) => piece.type === 'missing');
+  useEffect(() => {
+    void track('outfit_view', { screenName: 'comparison_result', properties: { outfit_id: outfit.id, index: index + 1 } });
+  }, [index, outfit.id]);
   return (
     <GlassView radius={16} style={styles.outfitCard}>
       <View style={styles.outfitHead}>

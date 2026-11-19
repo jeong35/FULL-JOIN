@@ -25,6 +25,7 @@ import {
   type VisualFit,
 } from '@/data/catalog';
 import { errorMessage } from '@/data/api';
+import { track } from '@/data/analytics';
 import { addWardrobeItem } from '@/data/store';
 import { colors, fonts, layout } from '@/theme';
 
@@ -72,6 +73,7 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
 
   async function save() {
     if (saving || color === null || (needsFit && fit === null)) return;
+    void track('wardrobe_add_submit', { screenName: 'add_item_color_fit', properties: { slot, kind, color, fit } });
     setSaving(true);
     setSaveError(null);
     try {
@@ -80,6 +82,8 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
       router.dismissTo('/closet');
     } catch (error) {
       setSaveError(errorMessage(error));
+      void track('wardrobe_add_failed', { screenName: 'add_item_color_fit', properties: { slot, kind } });
+      void track('error_shown', { screenName: 'add_item_color_fit', properties: { source: 'wardrobe_add' } });
       setSaving(false);
     }
   }
@@ -110,7 +114,10 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
                 color={c}
                 width={chipWidth}
                 selected={c === color}
-                onPress={() => setColor(c)}
+                onPress={() => {
+                  setColor(c);
+                  void track('wardrobe_color_select', { screenName: 'add_item_color_fit', properties: { color: c } });
+                }}
               />
             ))}
           </View>
@@ -119,7 +126,10 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
         {needsFit && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, styles.fitTitle]}>핏</Text>
-            <SegmentedControl options={fitOptions} value={fit} onChange={setFit} fontSize={13} />
+            <SegmentedControl options={fitOptions} value={fit} onChange={(nextFit) => {
+              setFit(nextFit);
+              void track('wardrobe_fit_select', { screenName: 'add_item_color_fit', properties: { fit: nextFit } });
+            }} fontSize={13} />
           </View>
         )}
       </ScrollView>

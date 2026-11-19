@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
 import { PrimaryButton } from '@/components/ui';
+import { track } from '@/data/analytics';
 import { finishOnboarding, useSession } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
@@ -17,12 +18,14 @@ export default function ReadyScreen() {
 
   function goCloset() {
     finishOnboarding();
+    void track('ready_choice', { screenName: 'onboarding_ready', properties: { style_count: taste.length, choice: 'closet' } });
     router.replace('/closet');
     router.push('/add-item/kind');
   }
 
   function goFeed() {
     finishOnboarding();
+    void track('ready_choice', { screenName: 'onboarding_ready', properties: { style_count: taste.length, choice: 'feed' } });
     router.replace('/');
   }
 

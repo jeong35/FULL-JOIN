@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,6 +7,7 @@ import { GlassView } from '@/components/GlassView';
 import { CheckMark } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { DetailHeader, PrimaryButton, ProgressSteps, SegmentedControl } from '@/components/ui';
+import { track } from '@/data/analytics';
 import { isSlot, KINDS_BY_SLOT, SLOTS, type Kind, type Slot } from '@/data/catalog';
 import { colors, fonts, glass, layout } from '@/theme';
 
@@ -27,15 +28,21 @@ export default function AddItemKindScreen() {
     (width - layout.screenPaddingX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
   const kinds: readonly Kind[] = KINDS_BY_SLOT[slot];
 
+  useEffect(() => {
+    void track('wardrobe_add_start', { screenName: 'add_item_kind', properties: { initial_slot: initialSlot } });
+  }, [initialSlot]);
+
   function selectSlot(next: Slot) {
     if (next === slot) return;
     setSlot(next);
     // 부위가 바뀌면 이전 부위에서 고른 종류는 무효.
     setKind(null);
+    void track('wardrobe_slot_select', { screenName: 'add_item_kind', properties: { slot: next } });
   }
 
   function goNext() {
     if (kind === null) return;
+    void track('wardrobe_kind_select', { screenName: 'add_item_kind', properties: { slot, kind } });
     router.push({ pathname: '/add-item/color-fit', params: { slot, kind } });
   }
 
@@ -55,7 +62,10 @@ export default function AddItemKindScreen() {
               name={k}
               width={cardWidth}
               selected={k === kind}
-              onPress={() => setKind(k)}
+              onPress={() => {
+                setKind(k);
+                void track('wardrobe_kind_select', { screenName: 'add_item_kind', properties: { slot, kind: k } });
+              }}
             />
           ))}
         </View>
