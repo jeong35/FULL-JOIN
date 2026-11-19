@@ -31,7 +31,7 @@ const SILVER = { dark: '#6F737D', light: '#DCDEE4' };
 const SILVER_COLORS: ReadonlySet<Color> = new Set<Color>([
   '실버', '그레이', '화이트', '차콜', '네이비', '블루', '스카이블루', '민트', '라벤더', '퍼플', '연청', '중청', '진청', '흑청',
 ]);
-const BRAND_FILL = '#CDB8F4';
+const BRAND_FILL = '#CEC0F0';
 const NEUTRAL_FILL = '#D9D3E3';
 // 멀티(4색 줄무늬)일 때만 쓰는 중립 색.
 const MULTI_TONES = {

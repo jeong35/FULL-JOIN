@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 9,
     backgroundColor: colors.white,
-    boxShadow: '0 1px 4px rgba(46,26,92,0.12)',
+    boxShadow: '0 1px 4px rgba(30,20,50,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },

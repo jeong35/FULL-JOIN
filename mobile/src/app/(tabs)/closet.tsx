@@ -24,7 +24,7 @@ type Filter = '전체' | Slot;
 
 const GRID_COLUMNS = 3;
 const GRID_COLUMN_GAP = 2;
-const TILE_COLORS = [colors.line, '#DFD5F0'] as const;
+const TILE_COLORS = [colors.line, '#E4E1EC'] as const;
 
 export default function ClosetScreen() {
   const wardrobeState = useWardrobeState();
@@ -34,6 +34,8 @@ export default function ClosetScreen() {
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
+  // '고른 N벌 삭제'를 누른 뒤 한 번 더 묻는 중인지.
+  const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const archive = useArchiveState();
@@ -78,11 +80,13 @@ export default function ClosetScreen() {
 
   function stopEditing() {
     setEditing(false);
+    setConfirming(false);
     setSelected(new Set());
   }
 
   function toggle(id: string) {
     track('wardrobe_delete_select', { item_id: id, selected: !selected.has(id) });
+    setConfirming(false);
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -93,6 +97,7 @@ export default function ClosetScreen() {
 
   async function deleteSelected() {
     if (selected.size === 0 || deleting) return;
+    setConfirming(false);
     setDeleting(true);
     setActionError(null);
     const requested = selected.size;
@@ -198,20 +203,38 @@ export default function ClosetScreen() {
 
       {editing && (
         <View style={styles.deleteBar}>
-          <Pressable
-            onPress={deleteSelected}
-            disabled={selected.size === 0 || deleting}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: selected.size === 0 || deleting, busy: deleting }}
-            style={[styles.deleteButton, (selected.size === 0 || deleting) && styles.deleteButtonDisabled]}>
-            {deleting ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.deleteButtonText}>
-                {selected.size === 0 ? '지울 옷을 골라 주세요' : `고른 ${selected.size}벌 삭제`}
-              </Text>
-            )}
-          </Pressable>
+          {confirming && !deleting ? (
+            // 지우기 전에 한 번 더 묻는다. 지운 옷은 되돌릴 수 없다(동료 피드백 11/14).
+            <>
+              <Text style={styles.confirmText}>{selected.size}벌을 옷장에서 지울까요? 지우면 되돌릴 수 없어요.</Text>
+              <View style={styles.confirmRow}>
+                <Pressable
+                  onPress={() => setConfirming(false)}
+                  accessibilityRole="button"
+                  style={[styles.deleteButton, styles.cancelButton]}>
+                  <Text style={styles.cancelButtonText}>취소</Text>
+                </Pressable>
+                <Pressable onPress={deleteSelected} accessibilityRole="button" style={[styles.deleteButton, styles.confirmButton]}>
+                  <Text style={styles.deleteButtonText}>지우기</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <Pressable
+              onPress={() => setConfirming(true)}
+              disabled={selected.size === 0 || deleting}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: selected.size === 0 || deleting, busy: deleting }}
+              style={[styles.deleteButton, (selected.size === 0 || deleting) && styles.deleteButtonDisabled]}>
+              {deleting ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.deleteButtonText}>
+                  {selected.size === 0 ? '지울 옷을 골라 주세요' : `고른 ${selected.size}벌 삭제`}
+                </Text>
+              )}
+            </Pressable>
+          )}
         </View>
       )}
     </TabScreen>
@@ -456,5 +479,31 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 15,
     color: colors.white,
+  },
+  confirmText: {
+    marginBottom: 10,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.text,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+  },
+  cancelButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  confirmButton: {
+    flex: 1,
   },
 });

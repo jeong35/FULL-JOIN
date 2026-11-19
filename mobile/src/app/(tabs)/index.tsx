@@ -38,7 +38,7 @@ type Folder = (typeof FOLDERS)[number];
 const PHOTO_GAP = 2;
 // '모든 저장' 사진 사이 간격. 피드(2px)보다 조금 넓게 둔다.
 const ARCHIVE_GAP = 4;
-const PHOTO_COLORS = [colors.line, '#DFD5F0'] as const;
+const PHOTO_COLORS = [colors.line, '#E4E1EC'] as const;
 // 사진 비율(가로/세로)을 받기 전 기본값과 허용 범위. 너무 길거나 넓은 사진은 잘라서 보여 준다.
 const DEFAULT_RATIO = 3 / 4;
 const MIN_RATIO = 9 / 16;
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
     borderRadius: BUBBLE_HEIGHT / 2,
     justifyContent: 'center',
     backgroundColor: colors.textPurple,
-    boxShadow: '0 2px 10px rgba(46,26,92,0.25)',
+    boxShadow: '0 2px 10px rgba(30,20,50,0.25)',
     pointerEvents: 'none',
   },
   dateBubbleText: {
@@ -876,6 +876,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderColor: 'rgba(255,255,255,0.85)',
-    boxShadow: '0 2px 10px rgba(46,26,92,0.12)',
+    boxShadow: '0 2px 10px rgba(30,20,50,0.12)',
   },
 });

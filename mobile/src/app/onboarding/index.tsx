@@ -133,7 +133,7 @@ function FeedPicture() {
             return (
               <View
                 key={row}
-                style={[pic.feedPhoto, { height: tall ? 128 : 92, backgroundColor: tall ? colors.line : '#DFD5F0' }]}>
+                style={[pic.feedPhoto, { height: tall ? 128 : 92, backgroundColor: tall ? colors.line : '#E4E1EC' }]}>
                 {saved && (
                   <GlassView radius={16} style={pic.saveButton}>
                     <BookmarkIcon color={colors.text} filled size={14} />

@@ -18,6 +18,9 @@ function userId(): string {
 // 첫 호출은 서버가 깨어나느라 몇 초 걸릴 수 있다.
 const TIMEOUT_MS = 20_000;
 
+// 서버 쪽 문제일 때: 사용자가 고른 값 때문이 아니라는 걸 알려 준다(동료 피드백 11/16).
+const SERVER_ERROR_MESSAGE = '지금 서버에 문제가 있어요. 입력하신 내용은 괜찮아요. 잠시 후 다시 시도해 주세요';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -59,7 +62,10 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
     throw new ApiError(
       response.status,
       error?.code ?? 'http_error',
-      error?.message ?? '서버에서 요청을 처리하지 못했어요',
+      // 서버가 스스로 낸 일반 오류(internal_error)와, 본문 없이 온 500번대는 같은 안내로 바꾼다.
+      error?.code === 'internal_error' || (error?.message === undefined && response.status >= 500)
+        ? SERVER_ERROR_MESSAGE
+        : (error?.message ?? '요청을 처리하지 못했어요. 다시 시도해 주세요'),
       error?.field,
     );
   }

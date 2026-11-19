@@ -63,6 +63,8 @@ export default function TasteScreen() {
   const [picked, setPicked] = useState<Style[]>(() => (isReplay ? (session?.styles ?? []) : []));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 세 개를 다 고른 뒤 다른 스타일을 누르면 켜진다.
+  const [limitNotice, setLimitNotice] = useState(false);
 
   useEffect(() => {
     if (session !== null) loadFeed();
@@ -77,22 +79,23 @@ export default function TasteScreen() {
   const cardWidth = (width - layout.screenPaddingX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
   function toggle(style: Style) {
-    setPicked((current) => {
-      if (current.includes(style)) {
-        const next = current.filter((s) => s !== style);
-        track('taste_deselect', { style, selected_count: next.length, replay: isReplay });
-        return next;
-      }
-      if (current.length >= MAX_PICKS) {
-        track('taste_limit_reached', { selected_count: current.length, style, replay: isReplay });
-        const next = [...current.slice(1), style];
-        track('taste_select', { style, selected_count: next.length, replay: isReplay });
-        return next;
-      }
-      const next = [...current, style];
-      track('taste_select', { style, selected_count: next.length, replay: isReplay });
-      return next;
-    });
+    if (picked.includes(style)) {
+      const next = picked.filter((s) => s !== style);
+      track('taste_deselect', { style, selected_count: next.length, replay: isReplay });
+      setLimitNotice(false);
+      setPicked(next);
+      return;
+    }
+    if (picked.length >= MAX_PICKS) {
+      // 이미 다 골랐으면 바꾸지 않고 안내만 한다(예전에는 처음 고른 것이 말없이 빠졌다 — 동료 피드백 11/14).
+      track('taste_limit_reached', { selected_count: picked.length, style, replay: isReplay });
+      setLimitNotice(true);
+      return;
+    }
+    const next = [...picked, style];
+    track('taste_select', { style, selected_count: next.length, replay: isReplay });
+    setLimitNotice(false);
+    setPicked(next);
   }
 
   async function done(styles: Style[]) {
@@ -175,6 +178,11 @@ export default function TasteScreen() {
 
       <View style={[styles.footer, { paddingBottom: Math.max(24, insets.bottom) }]}>
         {saveError !== null && <Text style={styles.saveError}>{saveError}</Text>}
+        {limitNotice && (
+          <Text style={styles.limitNotice} accessibilityLiveRegion="polite">
+            {MAX_PICKS}개까지 고를 수 있어요. 바꾸려면 고른 스타일을 한 번 더 눌러 빼 주세요.
+          </Text>
+        )}
         <PrimaryButton
           label={saving ? '저장하는 중…' : picked.length === 0 ? '스타일을 골라 주세요' : `다음 (${picked.length}/${MAX_PICKS})`}
           onPress={() => void done(picked)}
@@ -279,6 +287,14 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 12,
     color: colors.danger,
+  },
+  limitNotice: {
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textPurple,
   },
   later: {
     alignSelf: 'center',

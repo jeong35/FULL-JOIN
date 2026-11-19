@@ -325,7 +325,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
             <ResultCard
               item={item}
               wardrobe={wardrobe}
-              thumbColor={index % 2 === 0 ? colors.line : '#DFD5F0'}
+              thumbColor={index % 2 === 0 ? colors.line : '#E4E1EC'}
               choice={choices[item.item_id] ?? null}
               decision={decisions[item.item_id] ?? null}
               links={item.gap_status === null || item.gap_status === '구매' || choices[item.item_id] === '구매' ? linksFor(item) : []}
@@ -395,9 +395,8 @@ function describe(item: ShownItem, wardrobe: readonly WardrobeItem[], substitute
     case '활용':
       return `${prefix}옷장에 같은 색 있음`;
     case '구매':
-      return substituteKinds.length > 0
-        ? `${prefix}가진 ${withRo(substituteKinds.join('·'))} 대체 가능`
-        : `${prefix}옷장에 없음`;
+      if (substituteKinds.length > 0) return `${prefix}가진 ${withRo(substituteKinds.join('·'))} 대체 가능`;
+      return `${prefix}${missingReason(item, wardrobe)}`;
     case '비슷함': {
       const matched = wardrobe.filter((w) => item.wardrobe_item_ids.includes(w.id));
       const matchedColors = [...new Set(matched.map((w) => w.color))].join('·');
@@ -539,6 +538,15 @@ function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; 
 }
 
 // 조사: 받침이 없거나 ㄹ 받침이면 '로', 아니면 '으로' / 받침이 있으면 '을', 없으면 '를'.
+// '필요'인 이유를 한 줄로: 같은 종류가 아예 없는지, 종류는 있는데 색이 다른지(동료 피드백 11/17).
+// 판정은 서버가 한 그대로 두고, 이미 받아 둔 옷장으로 설명만 만든다.
+function missingReason(item: ShownItem, wardrobe: readonly WardrobeItem[]): string {
+  const sameKind = wardrobe.filter((w) => w.kind === item.kind);
+  if (sameKind.length === 0) return `옷장에 ${withIGa(item.kind)} 없어요`;
+  const ownedColors = [...new Set(sameKind.map((w) => w.color))].join('·');
+  return `${withEunNeun(item.kind)} 있지만 색이 달라요 (가진 색: ${ownedColors})`;
+}
+
 function finalConsonant(word: string): number | null {
   const code = word.charCodeAt(word.length - 1) - 0xac00;
   return code < 0 || code > 11171 ? null : code % 28;
@@ -547,6 +555,16 @@ function finalConsonant(word: string): number | null {
 function withRo(word: string): string {
   const final = finalConsonant(word);
   return final === null || final === 0 || final === 8 ? `${word}로` : `${word}으로`;
+}
+
+function withIGa(word: string): string {
+  const final = finalConsonant(word);
+  return final === null || final === 0 ? `${word}가` : `${word}이`;
+}
+
+function withEunNeun(word: string): string {
+  const final = finalConsonant(word);
+  return final === null || final === 0 ? `${word}는` : `${word}은`;
 }
 
 function withEulReul(word: string): string {
@@ -786,7 +804,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 6px 20px rgba(46,26,92,0.08)',
+    boxShadow: '0 6px 20px rgba(30,20,50,0.08)',
   },
   removeError: {
     position: 'absolute',
@@ -815,7 +833,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#DFD5F0',
+    backgroundColor: '#E4E1EC',
     alignSelf: 'center',
   },
   scroll: {
@@ -925,7 +943,7 @@ const styles = StyleSheet.create({
     marginLeft: 52,
     padding: 3,
     borderRadius: 13,
-    backgroundColor: 'rgba(46,26,92,0.05)',
+    backgroundColor: 'rgba(30,20,50,0.05)',
   },
   choiceGuide: {
     marginTop: 10,

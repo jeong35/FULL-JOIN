@@ -31,6 +31,12 @@ type Message = {
   products: Product[];
 };
 
+// 빈 대화 화면에 보여 주는 예시 질문. 누르면 그대로 보낸다(동료 피드백: 무엇을 물을 수 있는지 알기 어려움).
+const EXAMPLE_QUESTIONS = [
+  { question: '내 옷장에서 뭐 입어?', help: '이 코디와 비슷하게 입을 내 옷을 골라 줘요' },
+  { question: '비슷한 상품 찾아줘', help: '사진 속 옷과 비슷한 상품 검색 링크를 줘요' },
+] as const;
+
 export default function ChatScreen() {
   const archive = useArchiveState();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -68,8 +74,9 @@ export default function ChatScreen() {
   const selected = archive.data.find((image) => image.id === selectedId) ?? archive.data[0] ?? null;
   const visibleMessages = selected?.id === conversationImageId ? messages : [];
 
-  async function send() {
-    const text = input.trim();
+  // preset: 빈 대화 화면의 예시 질문 버튼을 눌렀을 때 그 문장을 바로 보낸다.
+  async function send(preset?: string) {
+    const text = (preset ?? input).trim();
     if (selected === null || text.length === 0 || sending) return;
     setInput('');
     setSendError(null);
@@ -114,6 +121,14 @@ export default function ChatScreen() {
     }
   }
 
+  function sendInput() {
+    void send();
+  }
+
+  function sendPreset(question: string) {
+    void send(question);
+  }
+
   // 폰 위쪽 상태 표시줄(시간·배터리)과 제목이 겹치지 않게 다른 탭처럼 안전 영역 안에 그린다.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -122,7 +137,10 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={76}>
         <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">챗봇</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} accessibilityRole="header">챗봇</Text>
+            <View style={styles.betaBadge}><Text style={styles.betaText}>베타</Text></View>
+          </View>
           <Text style={styles.subtitle}>저장한 사진을 골라 이어서 물어봐요</Text>
         </View>
 
@@ -172,7 +190,10 @@ export default function ChatScreen() {
               {visibleMessages.length === 0 && (
                 <View style={styles.emptyChat}>
                   <Text style={styles.emptyChatTitle}>이 사진에서 궁금한 걸 물어보세요</Text>
-                  <Text style={styles.emptyChatText}>“내 옷장에서 뭐 입어?” 또는 “비슷한 상품 찾아줘”처럼 물을 수 있어요.</Text>
+                  <Text style={styles.emptyChatText}>
+                    저장한 사진 속 옷과 내 옷장에 등록한 옷을 바탕으로 답해요.{'\n'}그 밖의 옷이나 사이즈는 아직 답하기 어려워요.
+                  </Text>
+                  <ExampleQuestions onPick={sendPreset} disabled={sending} />
                 </View>
               )}
               {visibleMessages.map((message) => <ChatBubble key={message.id} message={message} />)}
@@ -195,7 +216,7 @@ export default function ChatScreen() {
                   }
                   setInput(text);
                 }}
-                onSubmitEditing={send}
+                onSubmitEditing={sendInput}
                 placeholder="메시지 입력"
                 placeholderTextColor={colors.textSecondary}
                 returnKeyType="send"
@@ -204,7 +225,7 @@ export default function ChatScreen() {
                 accessibilityLabel="챗봇 메시지"
               />
               <Pressable
-                onPress={send}
+                onPress={sendInput}
                 disabled={sending || input.trim().length === 0}
                 accessibilityRole="button"
                 accessibilityLabel="보내기"
@@ -234,6 +255,25 @@ export default function ChatScreen() {
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function ExampleQuestions({ onPick, disabled }: { onPick: (question: string) => void; disabled: boolean }) {
+  return (
+    <View style={styles.examples}>
+      {EXAMPLE_QUESTIONS.map((example) => (
+        <Pressable
+          key={example.question}
+          onPress={() => onPick(example.question)}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel={example.question}
+          style={styles.example}>
+          <Text style={styles.exampleQuestion}>{example.question}</Text>
+          <Text style={styles.exampleHelp}>{example.help}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -295,7 +335,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   header: { paddingTop: 28, paddingBottom: 12, paddingHorizontal: layout.screenPaddingX },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontFamily: fonts.extraBold, fontSize: 24, letterSpacing: -0.4, color: colors.text },
+  betaBadge: { height: 22, paddingHorizontal: 8, borderRadius: 999, justifyContent: 'center', backgroundColor: colors.photoPlaceholder },
+  betaText: { fontFamily: fonts.bold, fontSize: 11, color: colors.textPurple },
   subtitle: { marginTop: 4, fontFamily: fonts.regular, fontSize: 13, color: colors.textSecondary },
   selectedCard: { marginHorizontal: layout.screenPaddingX, marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 18, backgroundColor: '#FBF9FE' },
   selectedThumb: { width: 38, height: 46, borderRadius: 10, backgroundColor: colors.line },
@@ -313,6 +356,10 @@ const styles = StyleSheet.create({
   emptyChat: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 24 },
   emptyChatTitle: { textAlign: 'center', fontFamily: fonts.bold, fontSize: 15, color: colors.text },
   emptyChatText: { textAlign: 'center', fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, color: colors.textSecondary },
+  examples: { alignSelf: 'stretch', gap: 8, marginTop: 12 },
+  example: { paddingVertical: 11, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.line, borderRadius: 16, backgroundColor: colors.white },
+  exampleQuestion: { fontFamily: fonts.bold, fontSize: 14, color: colors.textPurple },
+  exampleHelp: { marginTop: 2, fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   userRow: { alignItems: 'flex-end' },
   userBubble: { maxWidth: 270, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 20, borderBottomRightRadius: 6, backgroundColor: colors.purpleFill },
   bubbleText: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.onPurpleFill },
@@ -329,7 +376,7 @@ const styles = StyleSheet.create({
   productLinkText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
   error: { marginHorizontal: layout.screenPaddingX, marginBottom: 4, fontFamily: fonts.regular, fontSize: 12, color: '#A23B3B' },
   composer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  input: { flex: 1, height: 44, borderWidth: 1, borderColor: colors.line, borderRadius: 999, paddingHorizontal: 16, backgroundColor: '#FBF9FE', fontFamily: fonts.regular, fontSize: 15, color: colors.text },
+  input: { flex: 1, height: 44, borderWidth: 1, borderColor: colors.line, borderRadius: 999, paddingHorizontal: 16, backgroundColor: '#FBF9FE', fontFamily: fonts.regular, fontSize: 16, color: colors.text },
   sendButton: { width: 44, height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.purpleFill },
   sendButtonDisabled: { opacity: 0.5 },
   sendText: { marginTop: -3, fontFamily: fonts.bold, fontSize: 25, color: colors.onPurpleFill },
