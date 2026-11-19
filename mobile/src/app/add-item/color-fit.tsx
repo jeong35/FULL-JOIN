@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } fr
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ColorSwatch } from '@/components/ColorSwatch';
+import { GlassView } from '@/components/GlassView';
 import { CheckMark } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import {
@@ -19,6 +20,7 @@ import {
   fitsForKind,
   isKindOfSlot,
   isSlot,
+  kindLabel,
   type Color,
   type Kind,
   type Slot,
@@ -26,11 +28,13 @@ import {
 } from '@/data/catalog';
 import { errorMessage } from '@/data/api';
 import { track } from '@/data/events';
+import { KIND_ICONS } from '@/data/kindIcons';
 import { addWardrobeItem, useWardrobe } from '@/data/store';
-import { colors, fonts, layout } from '@/theme';
+import { colors, fonts, glass, layout } from '@/theme';
 
 // '옷 추가 ②' 색·핏. 모양은 design/screens/21-add-item-2-color-fit.html을 따른다.
 // '모르겠어요'는 11/11 버전에서 뺀다(DESIGN.md 8절).
+// 11/16: 핏별 그림이 있는 종류(바지·스커트)는 핏을 그림 칸으로 고른다 — 고른 색으로 칠해서 모양을 바로 비교한다.
 
 export default function AddItemColorFitScreen() {
   const params = useLocalSearchParams<{ slot?: string; kind?: string }>();
@@ -52,6 +56,7 @@ export default function AddItemColorFitScreen() {
 
 const COLOR_COLUMNS = 6;
 const COLOR_COLUMN_GAP = 10;
+const FIT_GAP = 10;
 
 function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
   const [color, setColor] = useState<Color | null>(null);
@@ -65,12 +70,16 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
   const colorOptions = colorsForKind(kind);
   const fitOptions = fitsForKind(slot, kind);
   const needsFit = fitOptions.length > 0;
+  const fitPictures = KIND_ICONS[kind].variants !== undefined;
   const canSave = color !== null && (!needsFit || fit !== null);
 
   const chipWidth =
     (width - layout.screenPaddingX * 2 - COLOR_COLUMN_GAP * (COLOR_COLUMNS - 1)) / COLOR_COLUMNS;
 
-  const summary = [slot, kind, color, fit].filter((part) => part !== null).join(' · ');
+  const fitTileWidth =
+    (width - layout.screenPaddingX * 2 - FIT_GAP * (fitOptions.length - 1)) / Math.max(fitOptions.length, 1);
+
+  const summary = [slot, kindLabel(kind), color, fit].filter((part) => part !== null).join(' · ');
 
   async function save() {
     if (saving || color === null || (needsFit && fit === null)) return;
@@ -108,7 +117,7 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
         <KindIcon kind={kind} color={color ?? undefined} fit={fit} size={34} />
         <Text style={styles.pickedLabel}>고른 것</Text>
         <Text style={styles.pickedValue}>
-          {slot} · {kind}
+          {slot} · {kindLabel(kind)}
         </Text>
       </InfoBar>
 
@@ -135,15 +144,34 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
         {needsFit && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, styles.fitTitle]}>핏</Text>
-            <SegmentedControl
-              options={fitOptions}
-              value={fit}
-              onChange={(next) => {
-                track('wardrobe_fit_select', { kind, fit: next });
-                setFit(next);
-              }}
-              fontSize={13}
-            />
+            {fitPictures ? (
+              <View style={styles.fitGrid}>
+                {fitOptions.map((option) => (
+                  <FitTile
+                    key={option}
+                    kind={kind}
+                    color={color}
+                    fit={option}
+                    width={fitTileWidth}
+                    selected={option === fit}
+                    onPress={() => {
+                      track('wardrobe_fit_select', { kind, fit: option });
+                      setFit(option);
+                    }}
+                  />
+                ))}
+              </View>
+            ) : (
+              <SegmentedControl
+                options={fitOptions}
+                value={fit}
+                onChange={(next) => {
+                  track('wardrobe_fit_select', { kind, fit: next });
+                  setFit(next);
+                }}
+                fontSize={13}
+              />
+            )}
           </View>
         )}
       </ScrollView>
@@ -153,6 +181,48 @@ function ColorFitForm({ slot, kind }: { slot: Slot; kind: Kind }) {
         <PrimaryButton label={saving ? '넣는 중…' : '옷장에 넣기'} onPress={save} disabled={!canSave || saving} />
       </View>
     </SafeAreaView>
+  );
+}
+
+// 핏 그림 칸: 부위·핏 선택은 둥근 네모(11/04 화면 모양 결정).
+function FitTile({
+  kind,
+  color,
+  fit,
+  width,
+  selected,
+  onPress,
+}: {
+  kind: Kind;
+  color: Color | null;
+  fit: VisualFit;
+  width: number;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const content = (
+    <>
+      <KindIcon kind={kind} color={color ?? undefined} fit={fit} size={52} />
+      <Text style={[styles.fitLabel, selected && styles.fitLabelSelected]} numberOfLines={1}>
+        {fit}
+      </Text>
+    </>
+  );
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={fit}
+      accessibilityState={{ selected }}
+      style={{ width }}>
+      {selected ? (
+        <View style={[styles.fitTile, styles.fitTileSelected]}>{content}</View>
+      ) : (
+        <GlassView radius={14} style={styles.fitTile}>
+          {content}
+        </GlassView>
+      )}
+    </Pressable>
   );
 }
 
@@ -247,6 +317,35 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     columnGap: COLOR_COLUMN_GAP,
     rowGap: 12,
+  },
+  fitGrid: {
+    flexDirection: 'row',
+    gap: FIT_GAP,
+  },
+  fitTile: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 9,
+    gap: 4,
+  },
+  // 테두리가 1 → 2로 굵어지는 만큼 안쪽 여백을 1 줄여 그림이 움직이지 않게.
+  fitTileSelected: {
+    paddingTop: 7,
+    paddingBottom: 8,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.purpleStrong,
+    backgroundColor: colors.white,
+    boxShadow: glass.selectedCardShadow,
+  },
+  fitLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.text,
+  },
+  fitLabelSelected: {
+    fontFamily: fonts.bold,
+    color: colors.textPurple,
   },
   chip: {
     alignItems: 'center',

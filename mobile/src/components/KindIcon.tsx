@@ -1,10 +1,10 @@
 // 옷 종류 그림. 옷장 타일·옷 추가 카드·결과 화면에서 같은 그림을 쓴다.
 // color를 주면 그 옷 색으로 칠하고(멀티는 4색 줄무늬, 기타·null은 옅은 회보라),
 // color를 안 주면(옷 추가 ① 처럼 아직 색을 모를 때) 연보라 브랜드 색으로 칠한다.
-// fit을 주면 바지는 스키니·일자·와이드·부츠컷, 스커트는 A라인·H라인·플레어 모양으로 바뀐다.
+// fit을 주면 바지는 스키니·일자·와이드·부츠컷, 조거팬츠는 일자·와이드, 스커트는 A라인·H라인·플레어 모양으로 바뀐다.
 // 그리는 느낌(11/9 v7): 심플한 실루엣 + 둥근 모서리 + 진한 먹색 테두리 + 꼭 필요한 안쪽 선 한 줄 + 차분한 색 + 옅은 그림자.
 // 가방 손잡이처럼 뚫린 곳은 옷 면(shapes) 안의 구멍으로 들어 있어서 evenodd로 칠한다.
-// 그림 데이터와 층 설명은 data/kindIcons.ts(design/kind-icons/gen_icons_v3.py에서 생성).
+// 그림 데이터와 층 설명은 data/kindIcons.ts(design/kind-icons/icons_v12.json → gen_ts.py로 생성).
 import { useId } from 'react';
 import Svg, { Circle, ClipPath, Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
 
@@ -110,16 +110,14 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
   const fill = isMulti ? `url(#${multiId})` : base;
   const tone = tonesFor(base, isMulti);
   const metal = color === undefined || (color != null && SILVER_COLORS.has(color)) ? SILVER : GOLD;
-  const t = icon.transform;
   const k = Math.max(1, CRISP_SIZE / size);
 
+  // 핏 그림은 층을 다 갖고 있어서 통째로 바꿔 그린다(기본 그림의 층이 섞이지 않게).
   const variant = fit ? icon.variants?.[fit] : undefined;
-  const shapes = variant?.shapes ?? icon.shapes;
-  const details = variant?.details ?? icon.details;
-  const shade = variant?.shade ?? icon.shade;
-  const inner = variant?.inner ?? icon.inner;
-  const tops = variant?.tops ?? icon.tops;
-  const chains = icon.chains ?? [];
+  const layers = variant ?? icon;
+  const { shapes, details, shade, inner, tops } = layers;
+  const t = layers.transform;
+  const chains = layers.chains ?? [];
 
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
@@ -145,7 +143,7 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
       </Defs>
       <G transform={t ? `translate(${t[0]} ${t[1]}) scale(${t[2]})` : undefined}>
         <G transform={SHADOW_OFFSET}>
-          {[...icon.straps, ...chains].map((d, i) => (
+          {[...layers.straps, ...chains].map((d, i) => (
             <Path key={`ws${i}`} d={d} fill="none" stroke={SHADOW} strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" />
           ))}
           {shapes.map((d, i) => (
@@ -158,7 +156,7 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
             <Path d={d} fill="none" stroke={metal.light} strokeWidth={1.2} strokeDasharray="1.2 0.8" strokeLinecap="round" />
           </G>
         ))}
-        {icon.straps.map((d, i) => (
+        {layers.straps.map((d, i) => (
           <G key={`s${i}`}>
             <Path d={d} fill="none" stroke={tone.outline} strokeWidth={3.8} strokeLinecap="round" strokeLinejoin="round" />
             <Path d={d} fill="none" stroke={fill} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
@@ -179,11 +177,27 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
           {shade.map((d, i) => (
             <Path key={`h${i}`} d={d} fill={`url(#${shadeId})`} />
           ))}
+          {/* 짜임 결(니트 꽈배기·시보리 골): 안쪽 선 색으로, 목 시보리·칼라 아래에 깔린다. */}
+          {(layers.weave ?? []).map((d, i) => (
+            <Path
+              key={`w${i}`}
+              d={d}
+              fill="none"
+              stroke={tone.detail}
+              strokeWidth={DETAIL_WIDTH * k}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
         </G>
+        {/* 목 시보리처럼 결 없이 옷 색만 칠하는 면 */}
+        {(layers.plain ?? []).map((d, i) => (
+          <Path key={`pl${i}`} d={d} fill={fill} />
+        ))}
         {inner.map((d, i) => (
           <Path key={`n${i}`} d={d} fill={tone.inner} />
         ))}
-        {(icon.lining ?? []).map((d, i) => (
+        {(layers.lining ?? []).map((d, i) => (
           <Path key={`l${i}`} d={d} fill={LINING} stroke={tone.top} strokeWidth={LINING_WIDTH * k} strokeLinejoin="round" />
         ))}
         {tops.map((d, i) => (
@@ -204,7 +218,7 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
         </G>
         {/* 소매 구분선: 팔과 몸판이 갈려 보이게 안쪽 선보다 진하고 굵게 */}
         <G clipPath={`url(#${clipId})`}>
-          {(icon.seams ?? []).map((d, i) => (
+          {(layers.seams ?? []).map((d, i) => (
             <Path
               key={`sm${i}`}
               d={d}
@@ -216,13 +230,13 @@ export function KindIcon({ kind, color, fit, size = 64 }: Props) {
             />
           ))}
         </G>
-        {(icon.metals ?? []).map((d, i) => (
+        {(layers.metals ?? []).map((d, i) => (
           <G key={`m${i}`}>
             <Path d={d} fill="none" stroke={metal.dark} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
             <Path d={d} fill="none" stroke={metal.light} strokeWidth={0.95} strokeLinecap="round" strokeLinejoin="round" />
           </G>
         ))}
-        {icon.dots.map(([cx, cy, r], i) => (
+        {layers.dots.map(([cx, cy, r], i) => (
           <Circle key={`c${i}`} cx={cx} cy={cy} r={r} fill={tone.detail} />
         ))}
       </G>
