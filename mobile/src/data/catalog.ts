@@ -1,16 +1,22 @@
 // design/DESIGN.md 7절 옷 등록 값. slot·kind·color·visual_fit 값은
-// src/fulljoin/schemas/style_image.schema.json(PR #1 반영본)의 enum과 같아야 한다(AGENTS.md 절대 규칙 1).
+// src/fulljoin/schemas/style_image.schema.json의 enum과 같아야 한다(AGENTS.md 절대 규칙 1).
+// 11/19: 옷 종류·속성 확장(codex/wardrobe-db-expansion의 src/fulljoin/catalog.ts)에 맞췄다.
+// 그 서버 변경이 main에 먼저 들어간 뒤에 이 앱 변경을 합친다.
 
-export const SLOTS = ['상의', '하의', '원피스', '아우터', '신발', '가방'] as const;
+export const SLOTS = ['상의', '하의', '원피스', '아우터', '신발', '가방', '잡화'] as const;
 export type Slot = (typeof SLOTS)[number];
 
 export const KINDS_BY_SLOT = {
-  상의: ['반소매티셔츠', '긴소매티셔츠', '민소매', '셔츠', '블라우스', '니트', '맨투맨', '후드', '카디건', '후드집업', '베스트'],
-  하의: ['데님팬츠', '슬랙스', '코튼팬츠', '조거팬츠', '숏팬츠', '레깅스', '미니스커트', '미디스커트', '롱스커트', '점프수트'],
+  상의: ['반소매티셔츠', '긴소매티셔츠', '민소매', '셔츠', '블라우스', '니트', '맨투맨', '후드', '트레이닝상의', '카디건', '후드집업', '베스트'],
+  하의: ['데님팬츠', '슬랙스', '코튼팬츠', '카고팬츠', '조거팬츠', '숏팬츠', '레깅스', '미니스커트', '미디스커트', '롱스커트', '점프수트'],
   원피스: ['미니원피스', '미디원피스', '롱원피스', '점프수트'],
-  아우터: ['카디건', '재킷', '레더재킷', '데님재킷', '점퍼', '후드집업', '야상', '플리스', '베스트', '트렌치코트', '코트', '숏패딩', '롱패딩', '경량패딩'],
+  아우터: [
+    '카디건', '재킷', '트위드자켓', '레더재킷', '데님재킷', '점퍼', '후드집업', '야상', '플리스', '베스트',
+    '퍼자켓', '퍼코트', '무스탕', '트렌치코트', '코트', '숏코트', '하프코트', '롱코트', '숏패딩', '롱패딩', '경량패딩',
+  ],
   신발: ['스니커즈', '로퍼', '플랫슈즈', '힐', '부츠', '샌들', '슬리퍼'],
   가방: ['숄더백', '크로스백', '토트백', '백팩', '에코백', '클러치'],
+  잡화: ['스타킹', '양말', '모자', '벨트'],
 } as const satisfies Record<Slot, readonly string[]>;
 
 export type Kind = (typeof KINDS_BY_SLOT)[Slot][number];
@@ -21,39 +27,46 @@ const KIND_LABELS: Partial<Record<Kind, string>> = {
   긴소매티셔츠: '긴소매티',
   민소매: '슬리브리스',
   야상: '사파리재킷',
+  트레이닝상의: '트레이닝 상의',
+  조거팬츠: '트레이닝 하의',
 };
 
 export function kindLabel(kind: Kind): string {
   return KIND_LABELS[kind] ?? kind;
 }
 
-// 옷 추가 ①에서 종류를 묶어 보여 주는 칸(11/16 시안). 각 부위의 KINDS_BY_SLOT 값을 빠짐없이 한 번씩 담는다.
-// 묶음이 하나뿐인 부위(원피스·신발·가방)는 묶음 제목을 안 보여 준다.
+// 옷 추가 ①에서 종류를 묶어 보여 주는 칸(11/15 시안). 각 부위의 KINDS_BY_SLOT 값을 한 번씩 담는다.
+// 단, 고르는 칸에서 숨기는 종류(HIDDEN_KINDS)는 뺀다. 묶음이 하나뿐인 부위(원피스·신발·가방·잡화)는 묶음 제목을 안 보여 준다.
 export type KindGroup = { title: string; kinds: readonly Kind[] };
 
 export const KIND_GROUPS: Record<Slot, readonly KindGroup[]> = {
   상의: [
     { title: '티셔츠 · 슬리브리스', kinds: ['반소매티셔츠', '긴소매티셔츠', '민소매'] },
     { title: '셔츠 · 블라우스', kinds: ['셔츠', '블라우스'] },
-    { title: '니트 · 맨투맨', kinds: ['니트', '맨투맨', '후드'] },
+    { title: '니트 · 맨투맨', kinds: ['니트', '맨투맨', '후드', '트레이닝상의'] },
     { title: '걸치는 옷', kinds: ['카디건', '후드집업', '베스트'] },
   ],
   하의: [
-    { title: '바지', kinds: ['데님팬츠', '슬랙스', '코튼팬츠', '조거팬츠', '숏팬츠', '레깅스'] },
+    { title: '바지', kinds: ['데님팬츠', '슬랙스', '코튼팬츠', '카고팬츠', '조거팬츠', '숏팬츠', '레깅스'] },
     { title: '스커트', kinds: ['미니스커트', '미디스커트', '롱스커트'] },
     { title: '기타', kinds: ['점프수트'] },
   ],
   원피스: [{ title: '원피스', kinds: KINDS_BY_SLOT.원피스 }],
   아우터: [
-    { title: '재킷', kinds: ['재킷', '레더재킷', '데님재킷'] },
-    { title: '점퍼', kinds: ['점퍼', '야상', '플리스'] },
-    { title: '코트', kinds: ['코트', '트렌치코트'] },
+    { title: '재킷', kinds: ['재킷', '트위드자켓', '레더재킷', '데님재킷'] },
+    { title: '점퍼', kinds: ['점퍼', '야상', '퍼자켓', '퍼코트', '무스탕'] },
+    { title: '코트', kinds: ['숏코트', '하프코트', '롱코트', '트렌치코트'] },
     { title: '패딩', kinds: ['숏패딩', '롱패딩', '경량패딩'] },
     { title: '걸치는 옷', kinds: ['카디건', '후드집업', '베스트'] },
   ],
   신발: [{ title: '신발', kinds: KINDS_BY_SLOT.신발 }],
   가방: [{ title: '가방', kinds: KINDS_BY_SLOT.가방 }],
+  잡화: [{ title: '잡화', kinds: ['스타킹', '양말'] }],
 };
+
+// 서버 목록에는 있지만 옷 추가에서 고르게 하지 않는 종류. 예전에 넣은 옷(플리스·코트)은 옷장에 그대로 보인다.
+// 플리스는 소재 '플리스'로, 코트는 숏·하프·롱코트로 나눠 고른다. 모자·벨트는 그림이 생기면 연다.
+export const HIDDEN_KINDS: ReadonlySet<Kind> = new Set<Kind>(['플리스', '코트', '모자', '벨트']);
 
 export function isSlot(value: unknown): value is Slot {
   return typeof value === 'string' && (SLOTS as readonly string[]).includes(value);
@@ -65,9 +78,10 @@ export function isKindOfSlot(slot: Slot, value: unknown): value is Kind {
 
 // ── 색 ──────────────────────────────────────────────
 
+// 11/15 시안 순서. 연핑크·모카·살구는 11/19에 더했다.
 export const BASE_COLORS = [
-  '블랙', '화이트', '아이보리', '그레이', '차콜', '베이지', '브라운', '카키', '네이비', '블루', '스카이블루',
-  '민트', '그린', '레드', '와인', '핑크', '라벤더', '퍼플', '옐로우', '오렌지', '실버', '골드', '멀티', '기타',
+  '블랙', '화이트', '아이보리', '연핑크', '그레이', '차콜', '베이지', '모카', '브라운', '카키', '네이비', '블루', '스카이블루',
+  '민트', '그린', '레드', '와인', '핑크', '라벤더', '퍼플', '옐로우', '살구', '오렌지', '실버', '골드', '멀티', '기타',
 ] as const;
 export const DENIM_COLORS = ['연청', '중청', '진청', '흑청'] as const;
 export type Color = (typeof BASE_COLORS)[number] | (typeof DENIM_COLORS)[number];
@@ -100,13 +114,16 @@ export const COLOR_HEX: Record<Exclude<Color, '멀티' | '기타'>, string> = {
   중청: '#6784AD',
   진청: '#35476B',
   흑청: '#2C2F37',
+  연핑크: '#F3DCDC',
+  모카: '#A08068',
+  살구: '#F0BE9E',
 };
 
 // 멀티 칩의 4색 칸(21-add-item-2-color-fit.html).
 export const MULTI_SWATCH = ['#B9524B', '#46689F', '#EBD27C', '#587E60'] as const;
 
 // 흰 바탕에서 칩 경계가 안 보이는 밝은 색.
-export const LIGHT_COLORS: ReadonlySet<Color> = new Set<Color>(['화이트', '아이보리']);
+export const LIGHT_COLORS: ReadonlySet<Color> = new Set<Color>(['화이트', '아이보리', '연핑크']);
 
 const DENIM_KINDS: ReadonlySet<Kind> = new Set<Kind>(['데님팬츠', '데님재킷']);
 
@@ -117,20 +134,61 @@ export function colorsForKind(kind: Kind): readonly Color[] {
 
 // ── 핏 ──────────────────────────────────────────────
 
-export const FITS = ['슬림', '레귤러', '오버사이즈', '스키니', '일자', '와이드', '부츠컷', 'A라인', 'H라인', '플레어'] as const;
+export const FITS = [
+  '슬림', '레귤러', '오버사이즈', '스키니', '일자', '와이드', '부츠컷', 'A라인', 'H라인', '플레어',
+  '벌룬', '조거', '버뮤다', '테니스', '캉캉', '플리츠',
+] as const;
 export type VisualFit = (typeof FITS)[number];
 
-const LONG_PANTS: ReadonlySet<Kind> = new Set<Kind>(['데님팬츠', '슬랙스', '코튼팬츠', '조거팬츠']);
-const SKIRTS: ReadonlySet<Kind> = new Set<Kind>(['미니스커트', '미디스커트', '롱스커트']);
-const NO_FIT_KINDS: ReadonlySet<Kind> = new Set<Kind>(['숏팬츠', '레깅스']);
+const LONG_PANTS: ReadonlySet<Kind> = new Set<Kind>(['데님팬츠', '슬랙스', '코튼팬츠', '카고팬츠']);
+const NO_FIT_KINDS: ReadonlySet<Kind> = new Set<Kind>(['레깅스']);
 
-// 종류별 핏 보기(7절). 빈 배열이면 핏 단계를 건너뛰고 visual_fit은 null.
+// 종류별 핏 보기(서버 catalog.ts와 같은 규칙). 빈 배열이면 핏 단계를 건너뛰고 visual_fit은 null.
 export function fitsForKind(slot: Slot, kind: Kind): readonly VisualFit[] {
-  if (slot === '신발' || slot === '가방' || NO_FIT_KINDS.has(kind)) return [];
-  if (LONG_PANTS.has(kind)) return ['스키니', '일자', '와이드', '부츠컷'];
-  if (SKIRTS.has(kind)) return ['A라인', 'H라인', '플레어'];
+  if (slot === '신발' || slot === '가방' || slot === '잡화' || NO_FIT_KINDS.has(kind)) return [];
+  if (LONG_PANTS.has(kind)) return ['스키니', '일자', '와이드', '부츠컷', '벌룬'];
+  if (kind === '조거팬츠') return ['조거', '일자', '와이드'];
+  if (kind === '숏팬츠') return ['슬림', '일자', '와이드', '버뮤다'];
+  if (kind === '미니스커트') return ['A라인', 'H라인', '플레어', '테니스', '캉캉'];
+  if (kind === '미디스커트' || kind === '롱스커트') return ['A라인', 'H라인', '플레어', '플리츠', '캉캉'];
   return ['슬림', '레귤러', '오버사이즈'];
 }
+
+// ── 소재 · 무늬 · 계절 · 자세한 모양(서버 wardrobe_items의 material · pattern · seasons · details) ──
+
+export const MATERIALS = ['면', '데님', '니트', '울', '캐시미어', '린넨', '기모', '코듀로이', '플리스', '나일론', '가죽', '스웨이드', '퍼', '기타'] as const;
+export type Material = (typeof MATERIALS)[number];
+
+export const PATTERNS = ['무지', '스트라이프', '체크', '도트', '호피', '플라워', '아가일', '트위드', '기타'] as const;
+export type Pattern = (typeof PATTERNS)[number];
+
+// 체크 · 스트라이프는 세부 모양을 하나 더 고른다(details['무늬 모양']).
+export const PATTERN_SHAPES = {
+  체크: ['깅엄', '타탄', '버팔로', '윈도페인', '글렌', '하운드투스'],
+  스트라이프: ['단가라', '굵은줄', '멀티줄', '세로줄', '핀스트라이프'],
+} as const;
+export type PatternShape = (typeof PATTERN_SHAPES)[keyof typeof PATTERN_SHAPES][number];
+
+export const SEASONS = ['봄', '여름', '가을', '겨울'] as const;
+
+// 서버 detailsSchema의 칸 이름. 값은 서버가 확인한다(옷 추가 ②의 보기는 data/wardrobeArt.ts 시안 그대로).
+export type WardrobeDetails = Partial<{
+  '목 모양': string;
+  기장: string;
+  카라: string;
+  칼라: string;
+  디테일: string[];
+  꾸밈: string[];
+  짜임: string;
+  팔: string;
+  털: string;
+  어깨: string;
+  소매: string;
+  모양: string;
+  길이: string;
+  두께: string;
+  '무늬 모양': PatternShape;
+}>;
 
 // 피드 사진 스타일 11개(스키마 style 값).
 export const STYLES = ['캐주얼', '미니멀', '러블리', '청순', '엘레강스', '시크', '스트릿', '레트로', '프레피', '스포티', '글램'] as const;

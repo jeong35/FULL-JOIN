@@ -5,7 +5,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
-import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
@@ -256,11 +256,13 @@ function WardrobeTile({
   checked: boolean;
   onToggle: () => void;
 }) {
-  const meta = item.visual_fit === null ? item.color : `${item.color} · ${item.visual_fit}`;
+  // 색(+ 무늬) · 핏. 무늬는 '더 자세히'에서 고른 옷만(11/19).
+  const colorText = item.pattern ? `${item.color} ${item.pattern}` : item.color;
+  const meta = item.visual_fit === null ? colorText : `${colorText} · ${item.visual_fit}`;
   const content = (
     <>
       <View style={[styles.tileImage, { backgroundColor: TILE_COLORS[index % 2] }]}>
-        <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={Math.min(width * 0.72, 96)} />
+        <ItemIcon item={item} size={Math.min(width * 0.72, 96)} />
         <View style={styles.tileSwatch}>
           <ColorSwatch color={item.color} width={14} height={14} questionSize={9} lightBorderColor="#C9BFDB" />
         </View>

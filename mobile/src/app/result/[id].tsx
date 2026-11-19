@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
 import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
@@ -686,7 +687,7 @@ function OutfitPieceView({ piece }: { piece: OutfitPiece }) {
         accessible
         accessibilityLabel={`${piece.substitute ? `사진 속 ${piece.item.kind !== undefined ? kindLabel(piece.item.kind) : '옷'} 대체, ` : ''}내 옷 ${wardrobeItem.color} ${wardrobeItem.visual_fit ?? ''} ${kindLabel(wardrobeItem.kind)}`}>
         <View style={styles.pieceThumb}>
-          <KindIcon kind={wardrobeItem.kind} color={wardrobeItem.color} fit={wardrobeItem.visual_fit} size={44} />
+          <ItemIcon item={wardrobeItem} size={44} />
           {piece.substitute && (
             <View style={styles.pieceBadge}>
               <Text style={styles.pieceBadgeText}>대체</Text>

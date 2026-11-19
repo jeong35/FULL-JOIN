@@ -124,3 +124,12 @@ python3 gen_ts.py /tmp/icons.json ../../mobile/src/data/kindIcons.ts
    점은 `(x, y)`는 부드럽게, `(x, y, "c")`는 꺾이게 이어지고, 좌우가 같은 옷은 오른쪽 반만 주면 `sym()`이 거울로 붙인다.
 2. 위 'v7 다시 만들기' 순서로 다시 만든다.
 3. 종류 목록(`mobile/src/data/catalog.ts`)이 바뀌면 `gen_ts.py`의 `order`도 같이 바꾼다.
+
+## v13 (11/19) — 새 종류 11개 더함
+
+옷 종류 확장(서버 `codex/wardrobe-db-expansion`)에 맞춰 트레이닝상의·카고팬츠·트위드자켓·퍼자켓·퍼코트·무스탕·숏코트·하프코트·롱코트·스타킹·양말 그림을 더했다.
+옷 추가 시안(11/15) 기본 그림을 비슷한 v12 종류의 크기에 맞춰 넣었다(`design/add-item/gen_add_item.py`가 `icons_v13.json`을 만든다).
+모자·벨트는 아직 그림이 없어 옷 추가에서 숨긴다.
+
+- 다시 만들기: 저장소 루트에서 `python3 design/add-item/gen_add_item.py` → `cd design/kind-icons && python3 gen_ts.py icons_v13.json ../../mobile/src/data/kindIcons.ts`
+- 목 모양·칼라·기장 등을 고른 옷의 그림은 `mobile/src/data/wardrobeArt.ts`(시안 그림 396개)에서 그린다. 11/19 A안: 아무 모양도 안 고른 옷은 이 v12/v13 그림 그대로.
