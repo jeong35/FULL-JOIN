@@ -1,0 +1,3 @@
+-- Production already recorded this version while the product analytics prototype
+-- was being evaluated. Fresh databases use 202611100001_user_events.sql as the
+-- canonical batched-event schema, so this history-alignment migration is a no-op.

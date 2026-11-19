@@ -1,0 +1,3 @@
+-- Production already recorded this service-role grant version. The canonical
+-- grant is included in 202611100001_user_events.sql, so fresh databases need no
+-- additional statement here.
