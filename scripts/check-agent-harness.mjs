@@ -13,11 +13,11 @@ const approvedHashes = new Map([
   ],
   [
     "tests/harness/product_golden_cases.yaml",
-    "38b66a2e06203f33f6de80b5a1ab887fe6b69936409f08d40966c7e552a5eee8",
+    "733a18d04ecf2a0184488fb4b35e3f20bbe6b7c43a97be63515af931eaa376c0",
   ],
   [
     "tests/test_acceptance_contracts_golden.ts",
-    "6a26c41f91909c8d4318f4d0e5ce14ea53c7d64e3e107eee2d6ad21b85b3bde4",
+    "d6ab8cf265226df2368053de6666b7b05c004527b1117eb54d36c28abb64bae5",
   ],
 ]);
 

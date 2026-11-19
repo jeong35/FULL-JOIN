@@ -51,7 +51,7 @@ export const KINDS = [
 
 export const VISUAL_FITS = [
   "슬림", "레귤러", "오버사이즈", "스키니", "일자", "와이드", "부츠컷", "A라인", "H라인", "플레어",
-  "벌룬", "조거", "테니스", "캉캉", "플리츠",
+  "벌룬", "조거", "버뮤다", "테니스", "캉캉", "플리츠",
 ] as const;
 
 export const MATERIALS = ["면", "데님", "니트", "울", "캐시미어", "린넨", "기모", "코듀로이", "플리스", "나일론", "가죽", "스웨이드", "퍼", "기타"] as const;
@@ -70,7 +70,7 @@ const detailsSchema = z.object({
   "털": z.enum(["짧은 털", "긴 털", "뽀글"]).optional(),
   "어깨": z.enum(["민소매", "끈", "끈 없음"]).optional(),
   "소매": z.enum(["끈", "민소매", "반팔", "긴팔"]).optional(),
-  "모양": z.enum(["블루종", "바람막이"]).optional(),
+  "모양": z.enum(["블루종", "바람막이", "캡", "비니", "베레모"]).optional(),
   "길이": z.enum(["발목", "숏", "앵클", "미들", "롱", "중목", "긴 양말"]).optional(),
   "두께": z.enum(["비침", "기모"]).optional(),
   "무늬 모양": z.enum(["깅엄", "타탄", "버팔로", "윈도페인", "글렌", "하운드투스", "단가라", "굵은줄", "멀티줄", "세로줄", "핀스트라이프"]).optional(),
@@ -79,15 +79,16 @@ const detailsSchema = z.object({
 const UPPER_FITS = ["슬림", "레귤러", "오버사이즈"] as const;
 const TROUSER_FITS = ["스키니", "일자", "와이드", "부츠컷", "벌룬"] as const;
 const JOGGER_FITS = ["조거", "일자", "와이드"] as const;
+const SHORTS_FITS = ["슬림", "일자", "와이드", "버뮤다"] as const;
 const MINI_SKIRT_FITS = ["A라인", "H라인", "플레어", "테니스", "캉캉"] as const;
 const LONG_SKIRT_FITS = ["A라인", "H라인", "플레어", "플리츠", "캉캉"] as const;
 const TROUSER_KINDS = ["데님팬츠", "슬랙스", "코튼팬츠", "카고팬츠"] as const;
 const NO_FIT_KINDS = [
-  "숏팬츠", "레깅스", ...SHOE_KINDS, ...BAG_KINDS, ...ACCESSORY_KINDS,
+  "레깅스", ...SHOE_KINDS, ...BAG_KINDS, ...ACCESSORY_KINDS,
 ] as const;
 const UPPER_FIT_KINDS = KINDS.filter(
   (kind) => !TROUSER_KINDS.includes(kind as (typeof TROUSER_KINDS)[number]) &&
-    kind !== "조거팬츠" &&
+    kind !== "조거팬츠" && kind !== "숏팬츠" &&
     !["미니스커트", "미디스커트", "롱스커트"].includes(kind) &&
     !NO_FIT_KINDS.includes(kind as (typeof NO_FIT_KINDS)[number]),
 );
@@ -133,19 +134,19 @@ export const wardrobeInputSchema = z.object({
     ? TROUSER_FITS
     : value.kind === "조거팬츠"
       ? JOGGER_FITS
-      : value.kind === "미니스커트"
+      : value.kind === "숏팬츠"
+        ? SHORTS_FITS
+        : value.kind === "미니스커트"
           ? MINI_SKIRT_FITS
           : value.kind === "미디스커트" || value.kind === "롱스커트"
             ? LONG_SKIRT_FITS
-      : NO_FIT_KINDS.includes(value.kind as never)
-        ? []
-        : UPPER_FIT_KINDS.includes(value.kind)
-          ? UPPER_FITS
-          : [];
+          : NO_FIT_KINDS.includes(value.kind as never)
+            ? []
+            : UPPER_FIT_KINDS.includes(value.kind)
+              ? UPPER_FITS
+              : [];
 
-  const validFit = allowedFits.length === 0
-    ? value.visual_fit === null
-    : value.visual_fit !== null && allowedFits.includes(value.visual_fit);
+  const validFit = value.visual_fit === null || allowedFits.includes(value.visual_fit);
   if (!validFit) {
     context.addIssue({ code: "custom", path: ["visual_fit"], message: "종류에 맞는 핏을 골라 주세요" });
   }

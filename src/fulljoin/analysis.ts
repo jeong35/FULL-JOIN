@@ -20,6 +20,7 @@ const kindsBySlot: Record<(typeof SLOTS)[number], readonly string[]> = {
 const upperFits = new Set(["슬림", "레귤러", "오버사이즈"]);
 const trouserFits = new Set(["스키니", "일자", "와이드", "부츠컷", "벌룬"]);
 const joggerFits = new Set(["조거", "일자", "와이드"]);
+const shortsFits = new Set(["슬림", "일자", "와이드", "버뮤다"]);
 const miniSkirtFits = new Set(["A라인", "H라인", "플레어", "테니스", "캉캉"]);
 const longSkirtFits = new Set(["A라인", "H라인", "플레어", "플리츠", "캉캉"]);
 const trouserKinds = new Set(["데님팬츠", "슬랙스", "코튼팬츠", "카고팬츠"]);
@@ -51,13 +52,15 @@ export const analysisItemSchema = z.object({
     ? trouserFits.has(item.visual_fit)
     : item.kind === "조거팬츠"
       ? joggerFits.has(item.visual_fit)
-      : item.kind === "미니스커트"
+      : item.kind === "숏팬츠"
+        ? shortsFits.has(item.visual_fit)
+        : item.kind === "미니스커트"
           ? miniSkirtFits.has(item.visual_fit)
           : item.kind === "미디스커트" || item.kind === "롱스커트"
             ? longSkirtFits.has(item.visual_fit)
-      : noFitKinds.has(item.kind)
-        ? false
-        : upperFits.has(item.visual_fit);
+          : noFitKinds.has(item.kind)
+            ? false
+            : upperFits.has(item.visual_fit);
   if (!validFit) {
     context.addIssue({ code: "custom", path: ["visual_fit"], message: "종류와 핏이 맞지 않아요" });
   }

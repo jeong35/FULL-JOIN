@@ -37,7 +37,7 @@ alter table public.wardrobe_items
     '라벤더','퍼플','옐로우','오렌지','실버','골드','멀티','기타','연핑크','모카','살구'])),
   add constraint wardrobe_items_visual_fit_check check (visual_fit is null or visual_fit = any (array[
     '슬림','레귤러','오버사이즈','스키니','일자','와이드','부츠컷','A라인','H라인','플레어',
-    '벌룬','조거','테니스','캉캉','플리츠']));
+    '벌룬','조거','버뮤다','테니스','캉캉','플리츠']));
 
 alter table public.style_image_items
   add constraint style_image_items_slot_check check (slot = any (array[
@@ -56,7 +56,7 @@ alter table public.style_image_items
     '라벤더','퍼플','옐로우','오렌지','실버','골드','멀티','기타','연핑크','모카','살구'])),
   add constraint style_image_items_visual_fit_check check (visual_fit is null or visual_fit = any (array[
     '슬림','레귤러','오버사이즈','스키니','일자','와이드','부츠컷','A라인','H라인','플레어',
-    '벌룬','조거','테니스','캉캉','플리츠']));
+    '벌룬','조거','버뮤다','테니스','캉캉','플리츠']));
 
 create or replace function public.wardrobe_fit_is_valid(item_kind text, item_fit text)
 returns boolean
@@ -64,13 +64,13 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select case
+  select item_fit is null or case
     when item_kind = any (array['데님팬츠','슬랙스','코튼팬츠','카고팬츠'])
       then item_fit = any (array['스키니','일자','와이드','부츠컷','벌룬'])
     when item_kind = '조거팬츠'
       then item_fit = any (array['조거','일자','와이드'])
     when item_kind = '숏팬츠'
-      then item_fit is null
+      then item_fit = any (array['슬림','일자','와이드','버뮤다'])
     when item_kind = '미니스커트'
       then item_fit = any (array['A라인','H라인','플레어','테니스','캉캉'])
     when item_kind = any (array['미디스커트','롱스커트'])
@@ -78,7 +78,7 @@ as $$
     when item_kind = any (array[
       '레깅스','스니커즈','로퍼','플랫슈즈','힐','부츠','샌들','슬리퍼',
       '숄더백','크로스백','토트백','백팩','에코백','클러치','스타킹','양말','모자','벨트'
-    ]) then item_fit is null
+    ]) then false
     else item_fit = any (array['슬림','레귤러','오버사이즈'])
   end
 $$;

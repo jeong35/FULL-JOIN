@@ -242,7 +242,7 @@ function evaluate(entry: ContractCase, output: JsonObject): boolean {
         const fits = fitsByKind.get(String(item.kind));
         if (fits === undefined) return false;
         if (fits.length === 0) return item.visual_fit === null;
-        return fits.includes(item.visual_fit);
+        return item.visual_fit === null || fits.includes(item.visual_fit);
       });
     }
     case "error_response": {

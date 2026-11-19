@@ -32,6 +32,7 @@ assert.equal(wardrobeInputSchema.safeParse({
   kind: "모자",
   color: "살구",
   visual_fit: null,
+  details: { "모양": "캡" },
 }).success, true);
 
 assert.equal(wardrobeInputSchema.safeParse({
@@ -40,14 +41,14 @@ assert.equal(wardrobeInputSchema.safeParse({
   kind: "트위드자켓",
   color: "연핑크",
   visual_fit: null,
-}).success, false);
+}).success, true);
 
 assert.equal(wardrobeInputSchema.safeParse({
   user_id: "demo-user",
   slot: "하의",
   kind: "숏팬츠",
   color: "블랙",
-  visual_fit: null,
+  visual_fit: "버뮤다",
 }).success, true);
 
 assert.equal(wardrobeInputSchema.safeParse({
@@ -56,6 +57,15 @@ assert.equal(wardrobeInputSchema.safeParse({
   kind: "숏팬츠",
   color: "블랙",
   visual_fit: "와이드",
+}).success, true);
+
+assert.equal(wardrobeInputSchema.safeParse({
+  user_id: "demo-user",
+  slot: "잡화",
+  kind: "모자",
+  color: "블랙",
+  visual_fit: null,
+  details: { "모양": "페도라" },
 }).success, false);
 
 assert.equal(wardrobeInputSchema.safeParse({

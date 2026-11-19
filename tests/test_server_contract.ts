@@ -48,7 +48,14 @@ test("wardrobe validation enforces kind-specific fit and slot", () => {
     kind: "슬랙스",
     color: "블랙",
     visual_fit: null,
-  }).success, false);
+  }).success, true);
+  assert.equal(wardrobeInputSchema.safeParse({
+    user_id: "demo-user",
+    slot: "하의",
+    kind: "숏팬츠",
+    color: "블랙",
+    visual_fit: "버뮤다",
+  }).success, true);
   assert.equal(wardrobeInputSchema.safeParse({
     user_id: "demo-user",
     slot: "신발",
