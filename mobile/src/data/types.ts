@@ -54,6 +54,12 @@ export type ArchiveImage = StyleImage & {
 
 export type GapStatus = '활용' | '비슷함' | '구매';
 
+export type MatchMetadata = {
+  wardrobe_item_id: string | null;
+  reason_code: 'no_candidate' | 'exact' | 'color_similar' | 'fit_difference' | 'kind_substitute' | 'attribute_difference';
+  reason: string;
+};
+
 // 하트 응답의 아이템 한 개. slot~brand_source는 서버가 아이템 정보를 같이 줄 때만 온다.
 export type HeartItem = {
   item_id: string;
@@ -69,6 +75,8 @@ export type HeartItem = {
   brand?: string | null;
   product_name?: string | null;
   brand_source?: '캡션' | '이미지_글자' | '쇼핑몰_상품정보' | '없음';
+  // 서버의 A안 판정 근거. similarity 숫자는 사용자 계약에 포함하지 않는다.
+  match_metadata?: MatchMetadata;
 };
 
 // 정확한 상품 또는 비슷한 상품 검색 결과.
@@ -99,7 +107,15 @@ export type ChatResult = {
   products: Product[];
   image_reanalysis_count: 0;
   external_instruction_applied: false;
-  answer_source?: 'openai' | 'fallback';
+  answer_source?: 'openai' | 'fallback' | 'grounded';
+  intents?: ('wardrobe_outfit' | 'product_search' | 'photo_item' | 'general_advice')[];
+  comparison?: {
+    item_id: string;
+    gap_status: GapStatus;
+    wardrobe_item_ids: string[];
+    substitute_wardrobe_item_ids: string[];
+    match_metadata: MatchMetadata;
+  }[];
 };
 
 // POST /style-images/{id}/heart. shop~product_url은 사진 출처(쇼핑몰 상품)로, 서버가 줄 때만 온다.
