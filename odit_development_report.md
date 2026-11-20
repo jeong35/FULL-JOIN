@@ -33,6 +33,8 @@
 | 항목 | 최신 확인 결과 |
 |---|---|
 | 작업 브랜치 | `codex/local-supabase-dashboard`, PR #21 HEAD `097d7b3`에서 분기 |
+| 커밋 / PR | `9b8e05e` 구현, `02b95bb` 문서 / GitHub PR #22 (base: `codex/llmops-chat03`) |
+| GitHub CI | Verify run 128: 기존 `check`와 신규 `local-supabase-integration` 모두 success |
 | 운영 영향 | 없음. local Docker만 사용했고 운영 DB·함수·main을 변경하지 않음 |
 | 로컬 Supabase | Docker Desktop + Supabase CLI 3.0.0으로 정상 기동 |
 | migration | 기존 14개 + LLMOps 1개, 총 15개를 빈 local DB에 순서대로 적용 성공 |
@@ -570,6 +572,8 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 - PR #20 `Verify` run 122: **success**
 - PR #21 `Verify` run 124: **success**
 - PR #21은 PR #20을 base로 하는 stacked PR이다.
+- PR #22 `Verify` run 128: 기존 `check`와 신규 `local-supabase-integration` 모두 **success**
+- PR #22는 PR #21 브랜치 `codex/llmops-chat03`을 base로 하며 main/운영에는 미반영이다.
 
 ---
 
