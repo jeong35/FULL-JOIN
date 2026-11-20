@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ODIT Admin — Local Analytics</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ODIT · LOCAL ADMIN</p>
+        <h1>제품과 AI 운영을<br />한 화면에서 봅니다.</h1>
+        <p class="subtitle">로컬 Supabase 전용 · Asia/Seoul · 원문·사진·개인정보 미표시</p>
+      </div>
+      <div class="local-badge"><span></span> Local only</div>
+    </header>
+
+    <main>
+      <section class="controls panel">
+        <div class="presets" aria-label="기간 빠른 선택">
+          <button data-days="1">오늘</button><button data-days="7" class="active">7일</button><button data-days="30">30일</button>
+        </div>
+        <label>시작일<input id="from" type="date" /></label>
+        <label>종료일<input id="to" type="date" /></label>
+        <button id="refresh" class="primary">새로고침</button>
+      </section>
+
+      <div id="notice" class="notice">로컬 지표를 준비하고 있습니다.</div>
+
+      <nav class="tabs" aria-label="대시보드 탭">
+        <button class="tab active" data-tab="product">Product Analytics</button>
+        <button class="tab" data-tab="llmops">LLMOps</button>
+      </nav>
+
+      <section id="product" class="tab-panel active">
+        <div id="product-cards" class="cards"></div>
+        <div class="grid two">
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">ACTIVATION</p><h2>신규 사용자 옷장 5벌</h2></div><span>목표 60%</span></div><div id="activation"></div></article>
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">RETENTION SIGNAL</p><h2>일별 활성 사용자</h2></div><span>사용자 중복 제거</span></div><div id="dau" class="bars"></div></article>
+        </div>
+        <div class="grid two">
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">CORE FLOW</p><h2>핵심 퍼널</h2></div><span>단계별 전환/이탈</span></div><div id="funnel" class="funnel"></div></article>
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">ENGAGEMENT</p><h2>핵심 행동</h2></div><span>선택 기간</span></div><div id="activity" class="metric-list"></div></article>
+        </div>
+        <div class="grid two">
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">DWELL TIME</p><h2>화면별 체류</h2></div><span>평균 · p95</span></div><div id="screens" class="table-wrap"></div></article>
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">FEATURES</p><h2>신규 기능 이용</h2></div><span>활성 사용자 대비</span></div><div id="features" class="table-wrap"></div></article>
+        </div>
+        <article class="panel section"><div class="section-head"><div><p class="eyebrow">MEASUREMENT GAPS</p><h2>현재 계산할 수 없는 지표</h2></div><span>임의 수치 없음</span></div><div id="unavailable" class="gaps"></div></article>
+      </section>
+
+      <section id="llmops" class="tab-panel">
+        <div id="llm-cards" class="cards"></div>
+        <div class="grid two">
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">FEATURE</p><h2>기능별 AI 운영</h2></div><span>호출 · 성공 · fallback</span></div><div id="llm-features" class="table-wrap"></div></article>
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">DAILY COST</p><h2>일별 비용과 지연</h2></div><span>USD · KST</span></div><div id="llm-daily" class="table-wrap"></div></article>
+        </div>
+        <div class="grid two">
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">MODEL</p><h2>모델별 토큰</h2></div><span>입력 · 출력</span></div><div id="llm-models" class="table-wrap"></div></article>
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">QUALITY</p><h2>오류와 근거 응답</h2></div><span>민감 원문 미수집</span></div><div id="llm-quality"></div></article>
+        </div>
+        <div class="grid two">
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">RELEASE</p><h2>프롬프트 · release SHA</h2></div><span>버전 비교</span></div><div id="llm-releases" class="table-wrap"></div></article>
+          <article class="panel section"><div class="section-head"><div><p class="eyebrow">FUTURE COST</p><h2>사진 기능 건당 비용</h2></div><span>표본 없으면 확인 불가</span></div><div id="future-cost" class="metric-list"></div></article>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
