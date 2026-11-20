@@ -24,7 +24,7 @@
 - **완료**: 구현, 관련 테스트, 필요한 프론트 연동과 운영 반영까지 현재 범위에서 끝난 상태다.
 - **부분 완료**: 일부 계층만 구현됐거나 로컬 작업본·테스트만 있고 main/운영/프론트 중 하나 이상이 남은 상태다.
 
-2026-11-20 후속 작업에서 최신 `origin/main@b53b6d6` 기반 브랜치에 MATCH-02/03과 CHAT-01을 안전하게 통합했다. 승인된 골든·eval 기준, 운영 DB, migration 이력, Edge Function 배포 상태는 변경하지 않았다. commit, push, main merge, migration repair, db reset, 배포도 수행하지 않았다.
+2026-11-20 후속 작업에서 최신 `origin/main@b53b6d6` 기반 브랜치에 MATCH-02/03과 CHAT-01을 안전하게 통합했다. 이 안정화 변경은 기능별 3개 커밋으로 `codex/stabilize-cosine-chat`에 push했고 GitHub PR #20을 생성했다. 이후 별도 `codex/llmops-chat03` 브랜치에서 CHAT-03, LLMOps, 인증 전환 준비를 진행했다. 승인된 골든·eval 기준과 운영 DB/Edge Function은 변경하지 않았으며 main merge·운영 배포·migration repair·db reset은 수행하지 않았다.
 
 ---
 
@@ -32,14 +32,14 @@
 
 1. **옷 종류 확장 P0는 main과 운영 서버에 반영됐다.** 현재 프론트와 서버는 확장된 `slot/kind/color/visual_fit`, `material`, `pattern`, `seasons`, `details` 계약을 사용하며 실제 운영 POST→GET→DELETE smoke test도 통과했다.
 2. **운영은 아직 규칙 기반이지만 신규 로컬 브랜치에는 코사인 A안이 안정화돼 있다.** AC9의 활용·비슷함·구매 버킷은 그대로 유지하고, 실제 버킷 내부 후보 순서에만 cosine을 사용한다. 운영/main에는 아직 반영하지 않았다.
-3. **신규 작업 브랜치는 `codex/stabilize-cosine-chat`, 기준은 `origin/main@b53b6d6`이다.** 오래된 worktree를 merge하지 않고 코사인 모듈·테스트·설계만 선택 포팅했다. 변경은 미커밋·미푸시·미병합·미배포다.
+3. **안정화 브랜치 `codex/stabilize-cosine-chat`은 `origin/main@b53b6d6` 기준이며 PR #20이 열려 있다.** 오래된 worktree를 merge하지 않고 필요한 구현만 선택 포팅했다. 후속 브랜치는 `codex/llmops-chat03`이며 main/운영에는 아직 반영하지 않았다.
 4. **기존 `match_metadata` 버킷 이탈 결함을 수정했다.** 공개 metadata는 AC9 결과의 첫 후보만 참조하며 점수는 노출하지 않는다. 승인되지 않은 `데님팬츠↔슬랙스` 관계도 포함하지 않았고 회귀 테스트로 고정했다.
 5. **사용자 행동 이벤트는 main/운영에 구현됐다.** 배치 `POST /events`, 30분 세션, 허용 이벤트, 비차단 전송이 동작한다. 코사인 학습용 비교 피드백은 별도 로컬 작업본만 있고 운영에는 없다.
 6. **서버 전체 검증이 통과한다.** `npm run check`에서 승인 골든 47/47, 서버 3/3, 코사인·통합 19/19과 chat grounding/근거 검사가 모두 성공했다.
 7. **모바일 검증도 통과한다.** `mobile/package-lock.json` 기준 `npm ci` 후 typecheck와 Expo lint가 성공했다. `verify.yml`에도 기존 서버 검증을 유지한 채 모바일 설치·검증 단계를 추가했다.
-8. **CHAT-01은 로컬 통합 완료, 프론트·운영은 미반영이다.** 보유 옷·상품 탐색·사진 질문은 동일 비교 결과로 grounded 답변하며 빈 옷장 상품 검색을 허용한다. 일반 상담 확장과 사진별 기록은 구현하지 않았다.
+8. **CHAT-01은 PR #20, CHAT-03은 후속 로컬 브랜치에 구현됐다.** 여섯 상담 유형을 자동 분류하고 보유 옷·저장 사진·상품 탐색은 grounded로, 일반 조언 부분만 LLM으로 처리한다. 복합 답변은 옷장 근거와 일반 조언을 구분한다. 사진별 영구 기록은 인증 정책 확정 뒤로 보류했다.
 9. **GitHub `origin/main`과 현재 작업 HEAD는 `b53b6d6`으로 같다.** 다만 로컬 이름 `main`은 `fa2129a`에 남아 37커밋 뒤처져 있다. 작업 시 `main`이라는 이름만 보고 분기하면 안 된다.
-10. **운영 마이그레이션 14개는 다시 읽기 전용 확인했고 모두 일치한다.** 신규 migration은 없다. release SHA health metadata 코드와 수동 배포 절차를 설계했지만 운영 secrets/함수는 변경하지 않았다. 접근 제어와 LLMOps 설계는 별도 문서에 기록했다.
+10. **운영 마이그레이션 14개는 다시 읽기 전용 확인했고 모두 일치한다.** 로컬에는 충돌 없는 `202611200003_llm_operation_metrics.sql` 하나가 pending이며 운영에 적용하지 않았다. release metadata, LLMOps 계측 코드, Supabase Auth 전환 계획은 로컬/PR 준비 상태이고 운영 함수는 변경하지 않았다.
 
 ---
 
@@ -151,7 +151,7 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | 사진 기반 옷장 등록 | 미구현 | 수동 칩 등록만 제공 |
 | 사진별 챗 기록 저장 | 미구현 | 클라이언트 메모리의 현재 대화만 유지 |
 | 출시용 인증/탈퇴 | 미구현 | 닉네임+PIN 데모 세션 |
-| LLMOps 토큰·비용·p95 | 설계 완료·구현 미완료 | `docs/LLMOPS_OBSERVABILITY.md`, DB/운영 적용 없음 |
+| LLMOps 토큰·비용·p95 | 부분 완료 | 로컬 계측 코드·migration·테스트 완료, DB/운영 적용과 dashboard 없음 |
 
 ---
 
@@ -164,8 +164,8 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | P0 옷 종류 확장 서버 통합 | **완료** | main `npm run check` 통과, wardrobe 확장 check 통과, 운영 POST/GET/DELETE smoke 통과 | 완료 | 완료 | 구형 레코드의 유실 세부값은 복구 불가임을 UX/문서에 명시 | schema, catalog, API, `202611160002`, `202611200001`, mobile catalog/add-item |
 | P1 코사인 코디 비교 | **부분 완료** | 최신 main 브랜치에서 cosine·통합 19/19, 전체 check 통과 | UI 미연동, 구버전은 optional 필드 무시 가능 | 미배포 | staging API 검증, 프론트 이유 표시, shadow 평가 | `garment_similarity.ts`, gap/outfit/API, docs/tests |
 | P2 취향·옷장 추천 고도화 | **미구현** | 없음 | 추천 탭 미연동 | 미배포 | 추천 정책·점수·콜드스타트 합의 후 구현 | `mobile/src/app/(tabs)/recommend.tsx`, feed/gap 모듈 예정 |
-| P3 챗봇 보충 | **부분 완료** | 최신 main 브랜치에서 기존 chat+grounding 회귀 통과 | 현재 프론트는 기존 필드 사용 가능 | 운영은 기본형만 | staging API 검증; 일반 상담·사진별 기록은 팀 합의 후 | `chat.ts`, API, grounding script |
-| P4 LLMOps·품질 평가 | **부분 완료** | CI, 골든, 이벤트, 11/17 eval baseline 존재 | 행동 이벤트 연동 | 이벤트 배포 | 라이브 eval 12건, LLM 성공률/토큰/비용/p95/fallback 계측, 변경 후 eval 재실행 | `evals/`, `docs/EVENTS.md`, event 코드, GitHub workflow |
+| P3 챗봇 보충 | **부분 완료** | CHAT-01 및 CHAT-03 회귀 통과 | optional 타입/인수인계 문서 준비, UI 미연동 | 운영은 기본형만 | staging API 검증; 사진별 기록은 Auth 이후 | `chat.ts`, API, `FRONTEND_MATCH_CHAT_HANDOFF.md` |
+| P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | migration/계측 미배포 | local/staging DB 통합, dashboard, live eval 12건 | `llm_observability.ts`, `202611200003`, eval/docs |
 
 RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으로 유지된다.
 
@@ -185,7 +185,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 |---|---|---|---|---|---|---|
 | CHAT-01 의도 분리·근거·일관성 | **부분 완료** | 기존 chat+신규 grounding 통과 | 기존 UI 하위 호환, 신규 진단 필드 미사용 | 운영은 기본형 | staging E2E와 live eval 계약 합의 | `chat.ts`, API, scripts |
 | CHAT-02 사진별 대화·문맥·복합 질문 | **미구현** | 없음 | 현재 화면 메모리만 | 미배포 | 대화 DB/접근 제어/삭제 정책, 사진 A→B→A 복원, 복합 intent 처리 | chat API/UI 및 신규 DB 필요 |
-| CHAT-03 질문 범위·구매 도움 | **부분 완료** | 기본 chat check | 예시 질문·범위 안내 일부 | 일부 배포 | 일반론/보유 근거 분리 강화, 검증된 사이즈 경로, 복합 상품 탐색 | chat 모듈/UI/shopping |
+| CHAT-03 질문 범위·구매 도움 | **부분 완료** | 신규 일반/빈 옷장/복합/범위 밖/소유권 회귀 통과 | optional `intents`·`answer_sections` 문서화, UI 미연동 | 미배포 | staging E2E, 평가 v2 승인, 검증된 사이즈 경로 | chat/API/mobile types/frontend handoff |
 
 #### WARD — 옷장 등록
 
@@ -221,7 +221,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버 check와 11/17 baseline 존재, live 12건 미실행 | 행동 이벤트 연결 | 이벤트 배포 | 동료평가 회귀 자동화, 최신 eval, LLM별 성공/오류/토큰/비용/p95, 핵심 end-to-end smoke 자동화 | `evals/`, events 코드/docs, workflow |
+| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버 check, LLMOps 단위 회귀와 11/17 baseline 존재; live 12건 미실행 | 행동 이벤트 연결 | 이벤트만 배포 | pending migration 검증, dashboard, CHAT-03 eval v2 승인, E2E smoke | `evals/`, events, LLMOps 코드/docs, workflow |
 
 ### 2.3 명시적 제외 항목 준수
 
@@ -372,23 +372,24 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 | 항목 | 확인 값 |
 |---|---|
-| 현재 worktree 브랜치 | `codex/stabilize-cosine-chat` |
-| 현재 HEAD | `b53b6d65055cf411f2fbad5b730a0c25341f211f` |
+| 현재 worktree 브랜치 | `codex/llmops-chat03` |
+| 현재 HEAD | `b660712` + 최종 보고서 갱신 커밋 예정 |
 | `origin/main` | `b53b6d65055cf411f2fbad5b730a0c25341f211f` |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| 분기 기준 / upstream | `origin/main@b53b6d6` |
+| 분기 기준 / upstream | `codex/stabilize-cosine-chat@ca9e890` (그 브랜치의 기준은 `origin/main@b53b6d6`) |
 
-현재 HEAD와 GitHub 추적 main은 같다. 그러나 로컬 `main` 포인터가 오래됐으므로 새 작업은 `origin/main` 또는 현재 `b53b6d6`을 기준으로 분기해야 한다.
+안정화 브랜치는 GitHub PR #20에 push됐다. 후속 LLMOps/CHAT-03은 리뷰를 분리하기 위해 그 PR 위에 stacked branch로 작성한다. 로컬 `main` 포인터는 계속 오래됐으므로 새 작업은 `origin/main`을 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-현재 보고서 worktree에는 다음 미커밋 변경이 있다.
+현재 보고서 worktree의 기능 변경은 세 커밋으로 정리됐다.
 
 - 기존 사용자 파일: untracked `presentation/AI캡스톤디자인-중간평가.pdf`
-- 이 보고서와 MATCH-02/03·CHAT-01 소스·테스트·문서·CI 변경
-- 신규 migration은 없음
+- `ec681ca` — CHAT-03 일반/복합/범위 밖 상담과 프론트 계약
+- `5c29572` — LLMOps 계측과 로컬 pending `202611200003`
+- `b660712` — Auth 격리 정책 테스트와 후속 명세
 
-발표 PDF는 기존 사용자 파일이므로 수정하지 않았다. 변경은 아직 commit/push되지 않았다.
+발표 PDF는 기존 사용자 파일이므로 수정하지 않았다. MATCH-02/03·CHAT-01·모바일 CI·release metadata는 `0fd7758`, `b0c0976`, `ca9e890` 세 커밋으로 push돼 PR #20에 있다. 후속 브랜치도 별도 push/PR로 관리하며 main/운영에는 병합하지 않는다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -409,10 +410,7 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 
 ### 4.3 원격 미병합 브랜치와 충돌 가능성
 
-`origin/main`에 병합되지 않은 원격 브랜치로 확인된 것은 다음 두 개다.
-
-- `origin/codex/wardrobe-db-expansion`
-- `origin/jeong35-patch-1`
+`origin/main` 외 여러 과거 기능 브랜치와 신규 `origin/codex/stabilize-cosine-chat`이 남아 있다. 오래된 브랜치를 통째로 merge하지 않고 필요한 변경만 최신 기준으로 포팅한다.
 
 충돌 위험:
 
@@ -423,7 +421,7 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 
 ### 4.4 Supabase 마이그레이션
 
-2026-11-20 읽기 전용 조회 기준으로 로컬과 원격 production 모두 아래 14개 버전이 applied이며 불일치나 pending이 없다.
+2026-11-20 읽기 전용 조회 기준으로 원격 production에는 아래 14개 버전이 applied되어 모두 일치한다. 로컬에는 신규 `202611200003` 하나가 pending이고 운영에는 적용하지 않았다.
 
 | 버전 | 파일 / 역할 |
 |---|---|
@@ -441,8 +439,9 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 | 202611160003 | `remote_user_events_grants_history.sql` — 원격 과거 이력 정렬용 no-op 기록 |
 | 202611200001 | `wardrobe_fit_frontend_alignment.sql` |
 | 202611200002 | `user_events_batch_alignment.sql` — 운영 분석 프로토타입을 canonical batch schema로 무삭제 변환 |
+| 202611200003 | `llm_operation_metrics.sql` — **로컬 pending**, 원문 없는 LLM/grounded 운영 지표 |
 
-과거에는 운영 이력과 저장소 이력이 불일치해 history migration 추가와 applied 상태 정리가 필요했으나, **현재 불일치는 해결된 상태**다. 이번 보고서 작업에서는 repair를 수행하지 않았다.
+과거 운영 이력 불일치는 해결됐다. 현재 차이는 의도적인 신규 pending migration 하나뿐이다. 이번 작업에서는 repair, push, reset, 운영 적용을 수행하지 않았다.
 
 ### 4.5 최근 DB와 Edge Function 배포
 
@@ -600,14 +599,17 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 
 사용자 행동 이벤트는 구현·배포됐다. 화면 진입/이탈, 옷장 등록, 피드, 저장, 비교 결과, 선택, 쇼핑 클릭, 챗 요청/응답, 힌트 등을 허용 목록으로 관리한다. 실패는 앱 사용을 막지 않는다.
 
-아직 없는 LLMOps:
+로컬 구현된 LLMOps:
 
-- 기능별 실제 LLM 호출 수와 성공률
-- 모델/프롬프트 버전별 오류 유형
-- 토큰 사용량과 실제 가격 기반 비용
-- 평균/p95 지연
-- fallback 횟수와 사유
-- 태깅/챗 품질을 행동 지표와 연결하는 release dashboard
+- 사진 태깅/챗과 향후 옷장 사진 태깅·이미지 보정까지 확장 가능한 `feature`
+- 모델·프롬프트·release SHA, 성공/실패와 제한된 오류 유형
+- input/cached/output token과 버전 고정 모델 가격 기반 예상 비용
+- 평균·p95 계산, fallback 횟수·사유
+- LLM을 부르지 않은 grounded chat operation과 grounded 비율
+- 사용자 행동 이벤트와 별도 `llm_operation_metrics` 테이블
+- 사진·프롬프트·대화·URL·사용자/사진 ID를 저장하지 않는 필드 allowlist
+
+아직 없는 것은 운영 migration 적용, 실제 운영 표본, dashboard/alert, 보존 기간 확정이다. Docker/Podman과 별도 staging 프로젝트가 없어 Supabase DB 통합 테스트는 수행하지 못했고 운영 DB는 변경하지 않았다.
 
 코사인 학습용 비교 피드백은 일반 `user_events`와 별개로 설계됐으나 로컬 작업본뿐이다. 현재 운영 데이터를 코사인 학습 라벨로 간주하면 안 된다.
 
@@ -623,17 +625,25 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 4. `대체`는 현재 수동 종류 쌍만 허용한다. `데님팬츠↔슬랙스` 추가 여부를 제품팀이 결정해야 한다.
 5. 유사도 점수는 사용자 API/UI에 노출하지 않는다. 운영 검증 시에도 내부 shadow 평가와 관측 지표로만 다루고, 공개 계약은 후보 ID와 한 줄 근거로 제한한다.
 
-### 6.2 제품 정책 합의
+### 6.2 확정된 제품 정책
 
-- `비슷함`, `대체`, `필요`의 사용자 문구와 선택 후 상태 변화
-- 사용자 비교 선택을 학습 데이터로 사용할 동의 문구, 철회, 보존 기간, 삭제 방식
-- 초기 팀 라벨 데이터의 크기와 검수자 간 불일치 처리
-- 추천 탭과 기존 취향 홈 피드의 역할 분리
-- 사진 기반 옷장 등록에서 원본 사진 저장 여부와 보존 기간
-- 샘플 옷장 사용 시 실제 옷장과의 격리
-- 사진별 챗 기록의 보존/삭제와 사용자가 볼 수 있는 기록 범위
-- 출시 인증 방식, 기존 데모 계정 이전, 계정 삭제 범위
-- 피드 사진과 상품 메타데이터의 이용 권리
+- 코사인 A안을 안정화한 뒤 B안을 별도 shadow 실험한다.
+- 유사도 점수는 공개하지 않고 한 줄 근거만 표시한다.
+- 비교 피드백은 명시적 동의 기반으로 수집한다.
+- 홈은 취향 탐색, 추천 탭은 옷장 활용 중심이며 특정 보유 의류 기반 추천을 제공한다.
+- 챗은 유형 선택 UI 없이 자동 분류하고 일반 패션 상담을 허용한다.
+- 실제 보유 근거와 일반 패션 조언을 명확히 구분한다.
+- 사진별 대화의 저장/삭제를 지원하되 Auth·삭제 정책 이후 구현한다.
+- 출시 인증은 Supabase Auth를 우선 검토한다.
+- 콘텐츠는 이용 허락을 받았거나 직접 제작한 것만 사용한다.
+
+미확정:
+
+- 새로운 대체 종류 관계
+- 사진 AI 구김 제거·형태 보정 방식
+- 사진 원본 보존·삭제 정책
+- 비교 피드백 동의 문구·보존 기간·철회 정책
+- 로그인 세부 방식과 데모 계정 이전 정책
 
 ### 6.3 프론트엔드 담당자에게 전달할 API 사항
 
@@ -644,11 +654,17 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 - 모자 `details["모양"]`과 확장 enum을 서버가 반환한다.
 - `POST /events`는 배치 이벤트 배열을 받으며 제품 흐름을 막으면 안 된다.
 
-향후 합의 후 전달:
+후속 브랜치에서 전달 준비됨:
 
-- 비교 응답의 optional `match_metadata` 한 줄 근거 계약. similarity 숫자는 프론트에 전달·표시하지 않음
+- optional `match_metadata` 한 줄 근거. similarity 숫자는 프론트에 전달·표시하지 않음
+- `wardrobe_item_id`는 같은 응답 후보 첫 ID이며 옷장 카드 연결에만 사용
+- 챗 `intents`, `answer_sections`, `comparison`, `answer_source`
+- 복합 답변의 `내 옷장 기준`/`일반 패션 조언` 분리
+- 요청·응답 예시와 연동 흐름은 `docs/FRONTEND_MATCH_CHAT_HANDOFF.md`
+
+정책 확정 뒤 전달:
+
 - 사용자 피드백 endpoint, consent/version, accepted/rejected/unsure/no-candidate 라벨
-- 챗 의도/근거 응답과 복합 질문 결과 표현
 - 사진별 conversation ID 및 history pagination/delete
 
 새 계약은 optional 필드로 시작해 구버전 앱과 하위 호환을 유지하는 것이 안전하다.
@@ -684,30 +700,43 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 2. 비교 화면과 같은 `classifyGap`과 승인 대체 종류표를 재사용한다.
 3. 보유 옷·상품·사진 질문은 LLM 대신 grounded 답변을 사용한다.
 4. 없는 청바지, 등록됐지만 비교 후보가 아닌 슬랙스, 빈 옷장, 미승인 대체 회귀를 추가했다.
-5. 일반 상담 확장과 사진별 기록은 의도적으로 구현하지 않았다.
+5. 안정화 변경은 PR #20에 포함됐다.
+
+#### CHAT-03 일반 패션 상담
+
+1. 보유 옷, 저장 사진, 상품 탐색, 일반 패션, 복합, 범위 밖 질문을 자동 분류한다.
+2. 구조화 데이터로 답할 수 있는 유형은 LLM을 호출하지 않는다.
+3. 일반 상담이 포함된 부분만 LLM을 사용하고 실제 옷장 근거와 별도 `answer_sections`로 구분한다.
+4. 모델 답변의 URL·가격·보유 옷 주장을 거절하고 안전한 fallback을 사용한다.
+5. 사진별 영구 기록은 Auth·보존·삭제 정책 이후로 보류한다.
 
 #### 품질/CI·운영 설계
 
 - 모바일 의존성을 lockfile로 설치해 typecheck/lint를 통과시키고 CI 단계로 추가했다.
 - 비-live eval을 재실행해 11/17 baseline과 동일함을 확인했다.
 - health의 optional Git SHA/released_at 계약과 수동 배포 검증 절차를 설계했다.
-- LLMOps와 접근 제어 위험을 별도 문서로 정리했다.
+- LLMOps 계측 코드·pending migration·단위 테스트를 구현했다.
+- Supabase Auth 전환/격리/삭제 계획과 순수 정책 회귀를 추가했지만 운영 인증에는 연결하지 않았다.
+- 프론트 API 인수인계와 후속 제품 명세를 별도 문서로 작성했다.
 
-남은 즉시 작업은 staging API 통합/smoke, GitHub workflow 실제 실행 확인, 프론트 reason 표시 합의다. 운영 배포와 DB 변경은 별도 승인 전 진행하지 않는다.
+남은 즉시 작업은 PR별 GitHub CI 확인, Docker 또는 별도 staging 확보 후 pending migration/API 통합 smoke, 프론트 optional 필드 연동이다. 운영 배포와 DB 변경은 별도 승인 전 진행하지 않는다.
 
 ### 7.2 팀 논의 후 개발할 작업
 
 - 코사인 가중치·임계값 확정과 B안 shadow 조건
 - 새로운 대체 종류 관계
-- 사용자 비교 피드백 동의/보존/철회 정책
+- 사용자 비교 피드백의 구체적 동의 문구/보존/철회 정책
 - 추천 점수: 취향 대 재현 가능성 비율
 - 사진 원본 저장과 삭제 정책
 - 인증 및 기존 데모 데이터 이전
-- 출시 콘텐츠 권리와 사이즈 정보 출처
+- 사진 AI 보정·원본 보존 정책
+- 데모 계정 이전과 계정 삭제 보존 범위
+- 검증된 사이즈 정보 출처
 
 ### 7.3 프론트 연동이 필요한 작업
 
-- `match_metadata.reason` 한 줄 표시 여부와 후보 ID 사용 방식(유사도 숫자 비표시)
+- `match_metadata.reason` 한 줄 표시와 후보 ID 기반 옷장 카드 연결(유사도 숫자 비표시)
+- 챗 `answer_sections`를 이용한 옷장 근거/일반 조언 분리
 - 비교 결과 피드백과 명시적 학습 동의
 - 홈 검색·필터·선택 취향 설명
 - 추천 탭과 특정 옷 기반 추천
@@ -783,6 +812,6 @@ LLMOps·최신 eval
 
 ## 9. 최종 상태 판정
 
-현재 운영 오딧은 **확장된 옷장 스키마와 기존 규칙 기반 비교를 사용하는 MVP**다. 신규 로컬 브랜치에는 AC9를 보존하는 코사인 A안과 CHAT-01 grounded 답변이 통합·검증됐지만 아직 commit/push/main merge/배포되지 않았다. 비교 학습 데이터, 추천, 일반 상담 확장, 사진별 대화는 구현하지 않았다.
+현재 운영 오딧은 **확장된 옷장 스키마와 기존 규칙 기반 비교를 사용하는 MVP**다. 코사인 A안·MATCH-03·CHAT-01·모바일 CI·release metadata는 `codex/stabilize-cosine-chat` PR #20에 push됐지만 main/운영에는 미반영이다. 후속 `codex/llmops-chat03`에는 CHAT-03과 LLMOps·Auth 준비가 구현됐고 운영에는 미반영이다. 비교 학습 데이터, 추천, 사진별 영구 대화는 아직 구현하지 않았다.
 
-다음 단계는 이 브랜치의 API diff와 프론트 optional 필드 호환성을 리뷰하고 staging에서 실제 저장→비교→챗 smoke와 승인된 live eval 계약을 정리하는 것이다. 팀이 동의 정책을 확정하기 전 사용자 비교 피드백을 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
+다음 단계는 두 PR의 CI와 리뷰를 완료하고, 격리된 Supabase 환경에서 `202611200003`과 저장→비교→챗→계측 smoke를 수행하는 것이다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약을 팀이 승인한 뒤 갱신한다. 구체적인 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
