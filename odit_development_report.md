@@ -32,7 +32,7 @@
 
 1. **옷 종류 확장 P0는 main과 운영 서버에 반영됐다.** 현재 프론트와 서버는 확장된 `slot/kind/color/visual_fit`, `material`, `pattern`, `seasons`, `details` 계약을 사용하며 실제 운영 POST→GET→DELETE smoke test도 통과했다.
 2. **운영은 아직 규칙 기반이지만 신규 로컬 브랜치에는 코사인 A안이 안정화돼 있다.** AC9의 활용·비슷함·구매 버킷은 그대로 유지하고, 실제 버킷 내부 후보 순서에만 cosine을 사용한다. 운영/main에는 아직 반영하지 않았다.
-3. **안정화 브랜치 `codex/stabilize-cosine-chat`은 `origin/main@b53b6d6` 기준이며 PR #20이 열려 있다.** 오래된 worktree를 merge하지 않고 필요한 구현만 선택 포팅했다. 후속 브랜치는 `codex/llmops-chat03`이며 main/운영에는 아직 반영하지 않았다.
+3. **안정화 PR #20과 stacked 후속 PR #21이 열려 있고 두 GitHub Verify가 성공했다.** 오래된 worktree를 merge하지 않고 필요한 구현만 선택 포팅했다. 둘 다 main/운영에는 아직 반영하지 않았다.
 4. **기존 `match_metadata` 버킷 이탈 결함을 수정했다.** 공개 metadata는 AC9 결과의 첫 후보만 참조하며 점수는 노출하지 않는다. 승인되지 않은 `데님팬츠↔슬랙스` 관계도 포함하지 않았고 회귀 테스트로 고정했다.
 5. **사용자 행동 이벤트는 main/운영에 구현됐다.** 배치 `POST /events`, 30분 세션, 허용 이벤트, 비차단 전송이 동작한다. 코사인 학습용 비교 피드백은 별도 로컬 작업본만 있고 운영에는 없다.
 6. **서버 전체 검증이 통과한다.** `npm run check`에서 승인 골든 47/47, 서버 3/3, 코사인·통합 19/19과 chat grounding/근거 검사가 모두 성공했다.
@@ -373,23 +373,24 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 항목 | 확인 값 |
 |---|---|
 | 현재 worktree 브랜치 | `codex/llmops-chat03` |
-| 현재 HEAD | `b660712` + 최종 보고서 갱신 커밋 예정 |
+| 현재 코드/보고서 HEAD | `1cc6500` (이후 PR/CI 상태 문서 커밋 추가) |
 | `origin/main` | `b53b6d65055cf411f2fbad5b730a0c25341f211f` |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
 | 분기 기준 / upstream | `codex/stabilize-cosine-chat@ca9e890` (그 브랜치의 기준은 `origin/main@b53b6d6`) |
 
-안정화 브랜치는 GitHub PR #20에 push됐다. 후속 LLMOps/CHAT-03은 리뷰를 분리하기 위해 그 PR 위에 stacked branch로 작성한다. 로컬 `main` 포인터는 계속 오래됐으므로 새 작업은 `origin/main`을 직접 확인해 분기해야 한다.
+안정화 브랜치는 GitHub PR #20에 push됐다. 후속 LLMOps/CHAT-03은 리뷰를 분리해 stacked PR #21(base: `codex/stabilize-cosine-chat`)로 push됐다. 로컬 `main` 포인터는 계속 오래됐으므로 새 작업은 `origin/main`을 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-현재 보고서 worktree의 기능 변경은 세 커밋으로 정리됐다.
+현재 보고서 worktree의 후속 기능 변경은 네 커밋으로 정리됐다.
 
 - 기존 사용자 파일: untracked `presentation/AI캡스톤디자인-중간평가.pdf`
 - `ec681ca` — CHAT-03 일반/복합/범위 밖 상담과 프론트 계약
 - `5c29572` — LLMOps 계측과 로컬 pending `202611200003`
 - `b660712` — Auth 격리 정책 테스트와 후속 명세
+- `1cc6500` — 아키텍처와 개발 보고서 갱신
 
-발표 PDF는 기존 사용자 파일이므로 수정하지 않았다. MATCH-02/03·CHAT-01·모바일 CI·release metadata는 `0fd7758`, `b0c0976`, `ca9e890` 세 커밋으로 push돼 PR #20에 있다. 후속 브랜치도 별도 push/PR로 관리하며 main/운영에는 병합하지 않는다.
+발표 PDF는 기존 사용자 파일이므로 수정하지 않았다. MATCH-02/03·CHAT-01·모바일 CI·release metadata는 `0fd7758`, `b0c0976`, `ca9e890` 세 커밋으로 PR #20에 있다. 후속 네 커밋은 PR #21에 있다. main/운영에는 병합하지 않았다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -407,6 +408,14 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 - 해당 브랜치는 오래된 main 기반의 별도 analytics 실험이 포함돼 있어 현재 main에 통째로 merge하지 않는다.
 
 stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보존 1개다. 임의 삭제하지 않는다.
+
+안전한 정리 방법:
+
+1. PR 병합 전에는 다른 worktree, stash, 로컬 `main`을 삭제·reset하지 않는다.
+2. PR #20/#21 병합 후 `git fetch origin`으로 SHA를 다시 확인한다.
+3. 어느 worktree도 `main`을 checkout하지 않았고 로컬 main에 독자 커밋이 없는 것을 확인한 뒤에만 `git branch -f main origin/main`으로 포인터를 맞춘다. 이번 작업에서는 실행하지 않았다.
+4. 오래된 cosine worktree는 미커밋 파일을 별도 리뷰/백업한 뒤 필요 구현이 모두 PR에 포함됐다는 사람 확인 후 보관 또는 archive한다.
+5. stash 3개는 작성자 확인 전 drop하지 않는다.
 
 ### 4.3 원격 미병합 브랜치와 충돌 가능성
 
@@ -514,6 +523,12 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 - 운영 배포 자동화가 없어 수동 CLI 배포에 의존한다.
 - release metadata 코드는 추가됐지만 운영 환경변수·배포가 없어 현재 production health에는 아직 SHA가 없다.
 
+2026-11-20 실제 GitHub 결과:
+
+- PR #20 `Verify` run 122: **success**
+- PR #21 `Verify` run 124: **success**
+- PR #21은 PR #20을 base로 하는 stacked PR이다.
+
 ---
 
 ## 5. 테스트 및 품질 검증
@@ -610,6 +625,8 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 - 사진·프롬프트·대화·URL·사용자/사진 ID를 저장하지 않는 필드 allowlist
 
 아직 없는 것은 운영 migration 적용, 실제 운영 표본, dashboard/alert, 보존 기간 확정이다. Docker/Podman과 별도 staging 프로젝트가 없어 Supabase DB 통합 테스트는 수행하지 못했고 운영 DB는 변경하지 않았다.
+
+사진 기반 옷장 등록은 원격 branch와 현재 모바일 코드에서 구현 흔적을 확인하지 못했다. 프론트 담당자가 아직 push하지 않은 작업일 수 있으므로 이 브랜치에서는 화면·업로드 API를 추측해 구현하지 않았다.
 
 코사인 학습용 비교 피드백은 일반 `user_events`와 별개로 설계됐으나 로컬 작업본뿐이다. 현재 운영 데이터를 코사인 학습 라벨로 간주하면 안 된다.
 
