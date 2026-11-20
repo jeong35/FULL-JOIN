@@ -108,7 +108,19 @@ export type ChatResult = {
   image_reanalysis_count: 0;
   external_instruction_applied: false;
   answer_source?: 'openai' | 'fallback' | 'grounded';
-  intents?: ('wardrobe_outfit' | 'product_search' | 'photo_item' | 'general_advice')[];
+  intents?: (
+    | 'wardrobe_outfit'
+    | 'saved_photo_outfit'
+    | 'product_search'
+    | 'general_advice'
+    | 'mixed'
+    | 'out_of_scope'
+  )[];
+  answer_sections?: {
+    source: 'wardrobe' | 'saved_photo' | 'product_search' | 'general_advice' | 'system';
+    label: string;
+    text: string;
+  }[];
   comparison?: {
     item_id: string;
     gap_status: GapStatus;
