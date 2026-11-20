@@ -80,3 +80,22 @@ input_tokens × 0.40 / 1,000,000
 ```
 
 이미지 크기, 실제 context, judge 출력 길이가 확정되지 않아 총액은 추측하지 않는다. 참고로 앱 코드의 출력 상한만 모두 사용한다고 가정하면 tagging 5건은 최대 10,000 output tokens($0.016), 일반 chat 2건은 최대 1,000 output tokens($0.0016)이다. 입력·이미지·judge 비용은 별도다. 실행 직전 deprecated snapshot 사용 가능 여부와 가격을 공식 문서에서 다시 확인해야 한다.
+
+## CHAT-03 후속 실행
+
+`codex/llmops-chat03`의 미커밋 작업 상태에서 승인 데이터를 변경하지 않고 비-live eval을 다시 실행했다.
+
+```bash
+node evals/run_evals.ts \
+  --change "CHAT-03 intent separation and LLMOps instrumentation" \
+  --golden "47/47 passed" \
+  --results-dir /private/tmp/odit-evals-chat03-20261120
+```
+
+- 전체 28, 실행 16, 통과 9, 미실행 12, 오류 0
+- tagging 84/93 = 90.3%
+- format 12/12 = 100%
+- gap 11/11 = 100%
+- 11월 17일 baseline과 동일
+
+기존 live chat runner는 모든 챗 응답에 `answer_source=openai`를 요구한다. CHAT-03은 grounded가 더 안전한 유형에 모델 호출을 하지 않으므로 승인 기준을 임의 수정하지 않고 `docs/EVAL_CHAT03_PROPOSAL.md`에 v2 계약을 제안했다. 팀 승인 전 live chat 7건은 계속 미실행으로 보고한다.
