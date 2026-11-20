@@ -79,3 +79,37 @@
 ## Evals
 
 비-live 28개 중 실행 16, 통과 9, 미실행 12로 11월 17일 baseline과 동일하다. 태깅 84/93, 형식 12/12, gap 11/11이다. 상세 조건과 live 미실행 사유는 `docs/EVAL_EXECUTION_2026-11-20.md`에 기록했다.
+
+## CHAT-03 후속 회귀
+
+`npm run test:chat03` 5/5 통과:
+
+1. 일반 패션 질문은 사용자 선택 없이 자동 분류되고 LLM 대상이 된다.
+2. 빈 옷장의 유사 상품 탐색은 grounded 링크를 제공한다.
+3. 복합 상담은 실제 옷장 ID와 일반 조언 섹션을 분리한다.
+4. 등록하지 않은 의류를 보유했다고 주장하지 않는다.
+5. 서비스 범위 밖 질문은 LLM을 호출하지 않는다.
+
+## LLMOps 후속 회귀
+
+`npm run test:llmops` 6/6 통과:
+
+1. Responses API usage만 파싱하고 원문 output은 지표에 포함하지 않는다.
+2. cached/uncached input을 분리해 버전 고정 단가로 비용을 계산한다.
+3. grounded 응답은 모델·토큰·비용 없이 기록한다.
+4. fallback은 제한된 오류 유형과 사유만 기록한다.
+5. 설정 오류는 실제 외부 모델 호출로 세지 않는다.
+6. 호출·성공·실패·fallback·grounded 비율·평균/p95를 집계한다.
+
+## Auth 전환 정책 회귀
+
+`npm run test:auth-policy` 4/4 통과:
+
+1. 검증된 JWT subject가 서버 사용자 ID가 된다.
+2. 검증된 subject가 없으면 401이다.
+3. A JWT와 B request user ID 조합은 403이다.
+4. A는 B 소유 리소스를 변경할 수 없다.
+
+이 테스트는 향후 Auth 경계의 순수 정책 테스트다. 현재 운영 API는 아직 이 모듈에 연결되지 않았으므로 운영 격리 완료 증거로 해석하지 않는다.
+
+Supabase 통합 테스트는 Docker/Podman 및 별도 staging 프로젝트가 없어 실행하지 못했다. production migration은 읽기 전용으로 조회했으며 신규 `202611200003`만 local pending이다.
