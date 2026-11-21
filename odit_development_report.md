@@ -26,6 +26,49 @@
 
 2026-11-20 후속 작업에서 최신 `origin/main@b53b6d6` 기반 브랜치에 MATCH-02/03과 CHAT-01을 안전하게 통합했다. 이 안정화 변경은 기능별 3개 커밋으로 `codex/stabilize-cosine-chat`에 push했고 GitHub PR #20을 생성했다. 이후 별도 `codex/llmops-chat03` 브랜치에서 CHAT-03, LLMOps, 인증 전환 준비를 진행했다. 승인된 골든·eval 기준과 운영 DB/Edge Function은 변경하지 않았으며 main merge·운영 배포·migration repair·db reset은 수행하지 않았다.
 
+### 2026-11-20 로컬 Supabase·통합 테스트·관리자 대시보드 후속 현황
+
+이 절은 아래의 과거 “로컬 DB 통합 테스트 미실행/dashboard 없음” 기록보다 최신이며 해당 상태를 대체한다.
+
+| 항목 | 최신 확인 결과 |
+|---|---|
+| 작업 브랜치 | `codex/local-supabase-dashboard`, PR #21 HEAD `097d7b3`에서 분기 |
+| 커밋 / PR | `9b8e05e` 구현, `02b95bb` 문서 / GitHub PR #22 (base: `codex/llmops-chat03`) |
+| GitHub CI | Verify run 128: 기존 `check`와 신규 `local-supabase-integration` 모두 success |
+| 운영 영향 | 없음. local Docker만 사용했고 운영 DB·함수·main을 변경하지 않음 |
+| 로컬 Supabase | Docker Desktop + Supabase CLI 3.0.0으로 정상 기동 |
+| migration | 기존 14개 + LLMOps 1개, 총 15개를 빈 local DB에 순서대로 적용 성공 |
+| seed | `supabase/seed.sql` 합성 사용자·이벤트·지표만 사용, 운영 데이터 복제 없음 |
+| Edge Function | `http://127.0.0.1:54321/functions/v1/api/health` 200 |
+| 실제 DB/API 통합 | 옷장 CRUD, 저장→비교→근거, cosine 후보 ID, 챗 3종, 이벤트 batch, LLMOps 저장 통과 |
+| 외부 LLM | 실행하지 않음. grounded와 API key 미설정 configuration fallback 검증, 비용 0달러 |
+| Auth 정책 | 순수 정책 테스트 4/4 통과, 실제 API의 타 user_id 조회는 재현되어 격리 실패로 판정 |
+| 관리자 대시보드 | Product Analytics/LLMOps 2탭, KST 기간 조회, local-only로 구현 |
+| GitHub Actions | 기존 서버·모바일 job을 유지하고 별도 local Supabase integration job 추가 |
+
+신규 주요 파일:
+
+- `docs/LOCAL_DEVELOPMENT.md`: 로컬 환경 시작·reset·통합 테스트·대시보드 절차
+- `supabase/seed.sql`: 개인정보 없는 합성 개발 데이터
+- `scripts/test-local-integration.mjs`: 실제 DB/Edge Function 통합 흐름
+- `src/fulljoin/admin_metrics.ts`, `tests/test_admin_metrics.ts`: 순수 집계와 회귀 테스트
+- `admin-dashboard/`: localhost 전용 경량 Node 서버와 웹 UI
+- `docs/ADMIN_DASHBOARD.md`: 지표별 분자·분모·기간·중복 제거·확인 불가 조건
+
+대시보드 보안 경계:
+
+- `127.0.0.1`에만 bind하며 Supabase URL도 `localhost`/`127.0.0.1`만 허용한다.
+- service-role 키는 Node 프로세스 내부에서만 쓰고 browser bundle/API 응답에 포함하지 않는다.
+- 사용자별 row, user_id 목록, 사진, 채팅/프롬프트 원문을 반환하지 않는다.
+- `eval-`, `test-`, `smoke-`와 명시적 테스트 플래그 이벤트는 Product Analytics에서 제외한다.
+- 운영 공개와 관리자 인증은 미구현이며, 인증 완성 전에는 배포하지 않는다.
+
+현재 이벤트로 확인 불가하여 임의 수치를 만들지 않는 지표:
+
+- 추천 탭·특정 보유 아이템 추천 이용률: 추천 view/impression/click 이벤트 필요
+- 사진 기반 옷장 등록 전환: photo start/analysis done/add done 이벤트 필요
+- 사진 등록·이미지 보정 건당 LLM 비용: 해당 feature 운영 표본이 생기기 전까지 확인 불가
+
 ---
 
 ## 0. 핵심 요약
@@ -151,7 +194,7 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | 사진 기반 옷장 등록 | 미구현 | 수동 칩 등록만 제공 |
 | 사진별 챗 기록 저장 | 미구현 | 클라이언트 메모리의 현재 대화만 유지 |
 | 출시용 인증/탈퇴 | 미구현 | 닉네임+PIN 데모 세션 |
-| LLMOps 토큰·비용·p95 | 부분 완료 | 로컬 계측 코드·migration·테스트 완료, DB/운영 적용과 dashboard 없음 |
+| LLMOps 토큰·비용·p95 | 부분 완료 | 로컬 계측 DB 통합·대시보드·테스트 완료, 운영 적용·실제 운영 표본·alert 없음 |
 
 ---
 
@@ -165,7 +208,7 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | P1 코사인 코디 비교 | **부분 완료** | 최신 main 브랜치에서 cosine·통합 19/19, 전체 check 통과 | UI 미연동, 구버전은 optional 필드 무시 가능 | 미배포 | staging API 검증, 프론트 이유 표시, shadow 평가 | `garment_similarity.ts`, gap/outfit/API, docs/tests |
 | P2 취향·옷장 추천 고도화 | **미구현** | 없음 | 추천 탭 미연동 | 미배포 | 추천 정책·점수·콜드스타트 합의 후 구현 | `mobile/src/app/(tabs)/recommend.tsx`, feed/gap 모듈 예정 |
 | P3 챗봇 보충 | **부분 완료** | CHAT-01 및 CHAT-03 회귀 통과 | optional 타입/인수인계 문서 준비, UI 미연동 | 운영은 기본형만 | staging API 검증; 사진별 기록은 Auth 이후 | `chat.ts`, API, `FRONTEND_MATCH_CHAT_HANDOFF.md` |
-| P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | migration/계측 미배포 | local/staging DB 통합, dashboard, live eval 12건 | `llm_observability.ts`, `202611200003`, eval/docs |
+| P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위·local DB/API 통합·대시보드 집계 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | 운영 migration/계측 미배포 | 실제 운영 표본, alert, live eval 12건 | `llm_observability.ts`, `admin_metrics.ts`, `202611200003`, dashboard/eval/docs |
 
 RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으로 유지된다.
 
@@ -221,7 +264,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버 check, LLMOps 단위 회귀와 11/17 baseline 존재; live 12건 미실행 | 행동 이벤트 연결 | 이벤트만 배포 | pending migration 검증, dashboard, CHAT-03 eval v2 승인, E2E smoke | `evals/`, events, LLMOps 코드/docs, workflow |
+| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버, LLMOps 단위+local 통합, dashboard 집계, 11/17 baseline; live 12건 미실행 | 행동 이벤트 연결 | 이벤트만 운영 배포 | 운영 migration, 실제 표본/alert, CHAT-03 eval v2 승인 | `evals/`, events, LLMOps/admin 코드·docs, workflow |
 
 ### 2.3 명시적 제외 항목 준수
 
@@ -372,23 +415,25 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 | 항목 | 확인 값 |
 |---|---|
-| 현재 worktree 브랜치 | `codex/llmops-chat03` |
-| 현재 코드/보고서 HEAD | `1cc6500` (이후 PR/CI 상태 문서 커밋 추가) |
+| 현재 worktree 브랜치 | `codex/local-supabase-dashboard` |
+| 분기 시점 HEAD | `097d7b33aad0a6440ebdd7863cecbeef8952f34c` (PR #21 최신 HEAD) |
 | `origin/main` | `b53b6d65055cf411f2fbad5b730a0c25341f211f` |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| 분기 기준 / upstream | `codex/stabilize-cosine-chat@ca9e890` (그 브랜치의 기준은 `origin/main@b53b6d6`) |
+| 분기 기준 / upstream | `origin/codex/llmops-chat03@097d7b3` → stacked PR #21 → PR #20 → `origin/main@b53b6d6` |
 
 안정화 브랜치는 GitHub PR #20에 push됐다. 후속 LLMOps/CHAT-03은 리뷰를 분리해 stacked PR #21(base: `codex/stabilize-cosine-chat`)로 push됐다. 로컬 `main` 포인터는 계속 오래됐으므로 새 작업은 `origin/main`을 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-현재 보고서 worktree의 후속 기능 변경은 네 커밋으로 정리됐다.
+기존 PR #21의 후속 기능은 네 커밋으로 정리됐고, 이 worktree에는 local Supabase·통합 테스트·대시보드 변경이 별도 범위로 추가됐다.
 
 - 기존 사용자 파일: untracked `presentation/AI캡스톤디자인-중간평가.pdf`
 - `ec681ca` — CHAT-03 일반/복합/범위 밖 상담과 프론트 계약
 - `5c29572` — LLMOps 계측과 로컬 pending `202611200003`
 - `b660712` — Auth 격리 정책 테스트와 후속 명세
 - `1cc6500` — 아키텍처와 개발 보고서 갱신
+- `097d7b3` — PR/CI 상태 문서화(이번 브랜치 분기점)
+- 이번 대시보드 작업 — `admin-dashboard/`, local seed/integration, docs/workflow/report. 기존 발표 PDF는 제외
 
 발표 PDF는 기존 사용자 파일이므로 수정하지 않았다. MATCH-02/03·CHAT-01·모바일 CI·release metadata는 `0fd7758`, `b0c0976`, `ca9e890` 세 커밋으로 PR #20에 있다. 후속 네 커밋은 PR #21에 있다. main/운영에는 병합하지 않았다.
 
@@ -511,14 +556,13 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 
 ### 4.8 CI/CD 상태
 
-신규 브랜치의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18, root `npm ci`와 `npm run check`를 실행한 뒤 `npm ci --prefix mobile`, mobile typecheck/lint를 실행한다. 기존 서버 검증을 제거하지 않았다. timeout은 10분이다. `.github/CODEOWNERS`는 승인된 테스트/골든 영역을 보호한다.
+신규 브랜치의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18, root `npm ci`와 `npm run check`를 실행한 뒤 `npm ci --prefix mobile`, mobile typecheck/lint를 실행한다. 기존 서버 검증을 제거하지 않았다. 별도 `local-supabase-integration` job은 GitHub runner Docker에서 local stack을 기동하고 15개 migration+seed와 실제 API 통합 테스트를 수행한 뒤 정리한다. 원격 Supabase ref/secret은 쓰지 않는다. `.github/CODEOWNERS`는 승인된 테스트/골든 영역을 보호한다.
 
 확인된 한계:
 
 - 현재 환경에는 `gh` CLI가 없어 GitHub의 최신 workflow 실행 성공/실패 상태는 직접 확인하지 못했다.
 - 변경된 workflow의 실제 GitHub 실행은 push 전이라 아직 확인하지 못했다.
-- Supabase local reset/migration 적용 테스트가 없다.
-- Edge Function 통합 테스트와 staging 배포가 없다.
+- local Supabase reset/migration/API 통합 테스트는 추가됐다. 별도 remote staging 배포는 없다.
 - live LLM eval은 CI에서 실행하지 않는다.
 - 운영 배포 자동화가 없어 수동 CLI 배포에 의존한다.
 - release metadata 코드는 추가됐지만 운영 환경변수·배포가 없어 현재 production health에는 아직 SHA가 없다.
@@ -528,6 +572,8 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 - PR #20 `Verify` run 122: **success**
 - PR #21 `Verify` run 124: **success**
 - PR #21은 PR #20을 base로 하는 stacked PR이다.
+- PR #22 `Verify` run 128: 기존 `check`와 신규 `local-supabase-integration` 모두 **success**
+- PR #22는 PR #21 브랜치 `codex/llmops-chat03`을 base로 하며 main/운영에는 미반영이다.
 
 ---
 
@@ -545,6 +591,9 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 | `npm run check:match-explanations` | 신규 작업 브랜치 | **성공** | exact/color/fit/substitute/no-candidate 문구 |
 | `npm run typecheck` | `mobile/` | **성공** | lockfile 설치 후 strict typecheck |
 | `npm run lint` | `mobile/` | **성공** | Expo lint 무경고 |
+| `supabase db reset --local` | local Docker | **성공** | 15개 migration + synthetic seed 재현 |
+| `npm run test:integration:local` | local DB/Edge Function | **성공** | wardrobe/heart/cosine/chat/events/LLMOps 실제 저장; 보안 gap 별도 확인 |
+| `npm run test:admin-metrics` | 현재 worktree | **3/3 성공** | KST, distinct 사용자, funnel, 테스트 제외, LLMOps 비용·p95·fallback |
 
 ### 5.2 골든 케이스 해석
 
@@ -624,7 +673,7 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 - 사용자 행동 이벤트와 별도 `llm_operation_metrics` 테이블
 - 사진·프롬프트·대화·URL·사용자/사진 ID를 저장하지 않는 필드 allowlist
 
-아직 없는 것은 운영 migration 적용, 실제 운영 표본, dashboard/alert, 보존 기간 확정이다. Docker/Podman과 별도 staging 프로젝트가 없어 Supabase DB 통합 테스트는 수행하지 못했고 운영 DB는 변경하지 않았다.
+아직 없는 것은 운영 migration 적용, 실제 운영 표본, alert, 보존 기간 확정이다. Docker local Supabase에서 DB/API 통합 테스트와 local-only dashboard는 완료했고 운영 DB는 변경하지 않았다. 별도 remote staging 프로젝트 테스트는 아직 없다.
 
 사진 기반 옷장 등록은 원격 branch와 현재 모바일 코드에서 구현 흔적을 확인하지 못했다. 프론트 담당자가 아직 push하지 않은 작업일 수 있으므로 이 브랜치에서는 화면·업로드 API를 추측해 구현하지 않았다.
 

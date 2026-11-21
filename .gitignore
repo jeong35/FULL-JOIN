@@ -12,6 +12,7 @@ node_modules/
 
 # Supabase CLI local link/cache state
 supabase/.temp/
+supabase/.branches/
 
 # OS / editor
 .DS_Store
