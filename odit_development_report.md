@@ -26,7 +26,7 @@
 
 ## 최신 상태
 
-- GitHub PR #20, #21, #22를 순서대로 병합했고 `origin/main`은 `73c435a63ae5aa95a2087753520680866a638153`이다.
+- GitHub PR #20, #21, #22를 순서대로 병합했고 기능 병합·검증 기준 main SHA는 `73c435a63ae5aa95a2087753520680866a638153`이다. 이 문서 갱신 커밋은 그 뒤의 docs-only main 이력이며 최신 SHA는 `origin/main` ref를 원천으로 삼는다.
 - main에는 코사인 A안, CHAT-01/03, LLMOps migration/계측, local Supabase 통합 테스트와 local-only 관리자 대시보드가 포함됐다.
 - 운영 DB migration, Edge Function, 운영 대시보드는 배포하지 않았다. production은 계속 기존 `b53b6d6` 기준 증거만 있다.
 - 실제 API의 `verify_jwt=false`/신뢰하는 `user_id` 취약점은 남아 있으며 다음 최우선 보안 PR에서 해결한다.
@@ -38,7 +38,7 @@
 - 완료: #20 `88701fa`, #21 `5fd2ab5`, #22 `73c435a` 순서로 merge. 후속 PR은 각각 main으로 base를 바꾸고 최신 main merge commit으로 새 CI를 실행했다.
 - 테스트: #21 Verify run 133 성공. #22 Verify run 136의 서버·모바일 `check`와 local Supabase integration 모두 성공. 최종 main 파일 트리에서 `npm run check`, `npm run check:mobile`, 15개 migration reset·seed와 `npm run test:integration:local` 재통과.
 - 기술 결정: 승인된 AC9 버킷은 유지하고 cosine은 버킷 내부 정렬에만 사용한다. 관리 대시보드는 인증 전까지 localhost 전용이다. 실제 사용자 격리 결함은 이번 병합 범위에서 변경하지 않았다.
-- Git/배포: main `73c435a`. 운영 DB·Edge Function·대시보드 배포 없음. 자동 운영 배포 workflow 없음.
+- Git/배포: 기능 병합점 `73c435a`. 운영 DB·Edge Function·대시보드 배포 없음. 자동 운영 배포 workflow 없음.
 
 ### 2026-11-20 — 로컬 통합·대시보드 구축
 
@@ -58,7 +58,7 @@
 6. **서버 전체 검증이 통과한다.** `npm run check`에서 승인 골든 47/47, 서버 3/3, 코사인·통합 19/19과 chat grounding/근거 검사가 모두 성공했다.
 7. **모바일 검증도 통과한다.** `mobile/package-lock.json` 기준 `npm ci` 후 typecheck와 Expo lint가 성공했다. `verify.yml`에도 기존 서버 검증을 유지한 채 모바일 설치·검증 단계를 추가했다.
 8. **CHAT-01/03은 main에 반영됐다.** 여섯 상담 유형을 자동 분류하고 보유 옷·저장 사진·상품 탐색은 grounded로, 일반 조언 부분만 LLM으로 처리한다. 사진별 영구 기록은 인증 정책 확정 뒤로 보류했다.
-9. **`origin/main`은 `73c435a`다.** 현재 작업 트리는 최종 main과 파일 내용이 같지만 로컬 이름 `main`은 여전히 오래돼 있으므로 새 작업은 `origin/main`에서 분기한다.
+9. **기능 병합·검증 기준 main SHA는 `73c435a`다.** 보고서 전용 후속 커밋을 포함한 최신 값은 `origin/main`을 확인한다. 로컬 이름 `main`은 여전히 오래돼 있으므로 새 작업은 `origin/main`에서 분기한다.
 10. **운영 마이그레이션은 14개 그대로다.** `202611200003_llm_operation_metrics.sql`은 main에 포함됐고 local 적용은 검증됐지만 운영에는 적용하지 않았다.
 
 ---
@@ -390,7 +390,7 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 |---|---|
 | 현재 worktree 브랜치 | `codex/local-supabase-dashboard` |
 | 보고서 갱신 전 현재 브랜치 HEAD | `73c435a63ae5aa95a2087753520680866a638153` (PR #22 merge commit) |
-| 검증한 `origin/main` | `73c435a63ae5aa95a2087753520680866a638153` |
+| 기능 병합·검증 기준 `origin/main` | `73c435a63ae5aa95a2087753520680866a638153` |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
 | PR 상태 | #20, #21, #22 모두 main 병합 완료 |
 
