@@ -1,3 +1,5 @@
+import { explainGarmentMatch, rankWardrobeCandidates } from "./garment_similarity.ts";
+
 export type GapStatus = "활용" | "비슷함" | "구매";
 
 export type ItemForGapAnalysis = {
@@ -14,11 +16,21 @@ export type WardrobeItemForGapAnalysis = {
   kind: string;
   color: string;
   visual_fit: string | null;
+  material?: readonly string[];
+  pattern?: string | null;
+  seasons?: readonly string[];
+  details?: Readonly<Record<string, string | readonly string[] | undefined>>;
 };
 
 export type GapAnalysisResult = {
   gap_status: GapStatus;
   wardrobe_item_ids: string[];
+};
+
+export type GapMatchMetadata = {
+  wardrobe_item_id: string | null;
+  reason_code: "no_candidate" | "exact" | "color_similar" | "fit_difference" | "kind_substitute" | "attribute_difference";
+  reason: string;
 };
 
 const CROSS_SLOT_KINDS = new Set(["카디건", "후드집업", "베스트", "점프수트"]);
@@ -81,7 +93,7 @@ export function classifyGap(
     if (exactColorItems.length > 0) {
       return {
         gap_status: "활용",
-        wardrobe_item_ids: exactColorItems.map((wardrobeItem) => wardrobeItem.id),
+        wardrobe_item_ids: orderBySimilarity(item, exactColorItems),
       };
     }
 
@@ -92,15 +104,50 @@ export function classifyGap(
     if (sameFamilyItems.length > 0) {
       return {
         gap_status: "비슷함",
-        wardrobe_item_ids: sameFamilyItems.map((wardrobeItem) => wardrobeItem.id),
+        wardrobe_item_ids: orderBySimilarity(item, sameFamilyItems),
       };
     }
   } else if (comparableItems.length > 0) {
     return {
       gap_status: "비슷함",
-      wardrobe_item_ids: comparableItems.map((wardrobeItem) => wardrobeItem.id),
+      wardrobe_item_ids: orderBySimilarity(item, comparableItems),
     };
   }
 
   return { gap_status: "구매", wardrobe_item_ids: [] };
+}
+
+// AC9가 만든 후보 버킷의 구성은 바꾸지 않고 그 버킷 안에서만 정렬한다.
+// 점수를 계산할 정보가 부족한 후보는 뒤에서 id 오름차순으로 두어 결정성을 유지한다.
+function orderBySimilarity(
+  item: ItemForGapAnalysis,
+  candidates: readonly WardrobeItemForGapAnalysis[],
+): string[] {
+  const scoreById = new Map(
+    rankWardrobeCandidates(item, candidates)
+      .map((candidate) => [candidate.wardrobe_item_id, candidate.similarity] as const),
+  );
+  return [...candidates]
+    .sort((left, right) =>
+      (scoreById.get(right.id) ?? -1) - (scoreById.get(left.id) ?? -1) ||
+      left.id.localeCompare(right.id))
+    .map((candidate) => candidate.id);
+}
+
+// 공개 메타데이터는 AC9 결과의 첫 후보만 참조한다. 유사도 수치는 제품 UI에 노출하지 않는다.
+export function gapMatchMetadata(
+  item: ItemForGapAnalysis,
+  wardrobe: readonly WardrobeItemForGapAnalysis[],
+  gap: GapAnalysisResult,
+): GapMatchMetadata {
+  const wardrobeItemId = gap.wardrobe_item_ids[0] ?? null;
+  const candidate = wardrobeItemId === null
+    ? null
+    : wardrobe.find((wardrobeItem) => wardrobeItem.id === wardrobeItemId) ?? null;
+  const explanation = explainGarmentMatch(item, candidate, gap.gap_status);
+  return {
+    wardrobe_item_id: candidate?.id ?? null,
+    reason_code: explanation.code,
+    reason: explanation.summary,
+  };
 }
