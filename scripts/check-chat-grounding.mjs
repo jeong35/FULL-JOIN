@@ -14,7 +14,11 @@ const items = [{
 }];
 const cottonPants = [{ id: "W-COTTON", slot: "하의", kind: "코튼팬츠", color: "블랙", visual_fit: "일자" }];
 
-assert.deepEqual(classifyChatIntents("내 옷으로 코디하고 비슷한 상품도 찾아줘"), ["product_search", "wardrobe_outfit"]);
+assert.deepEqual(classifyChatIntents("내 옷으로 코디하고 비슷한 상품도 찾아줘"), [
+  "wardrobe_outfit",
+  "product_search",
+  "mixed",
+]);
 
 const mixed = buildChatResponse("STYLE-1", "내 옷으로 코디하고 비슷한 상품도 찾아줘", items, cottonPants);
 assert.deepEqual(mixed.claimed_owned_item_ids, ["W-COTTON"]);

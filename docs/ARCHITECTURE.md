@@ -1,6 +1,6 @@
 # 아키텍처 설계서 — FULL JOIN
 
-> 2026-11-18 기준. 파일명과 동작은 코드에서 확인해 적었다. 상품 RAG(4절)는 설계만 있고 구현 전이다.
+> 2026-11-20 기준. 파일명과 동작은 코드에서 확인해 적었다. 상품 RAG(4절)는 설계만 있고 구현 전이다.
 
 ## 1. 한눈에 보는 데이터 흐름
 
@@ -17,15 +17,16 @@
 | `src/fulljoin/gap_analysis.ts`, `garment_similarity.ts` | AC9 규칙으로 판정 버킷을 만든 뒤 같은 버킷 안에서 구조화 속성 cosine으로 후보 순서 결정. 점수는 판정에 사용하지 않음 | 강의 5 + MATCH-02/03 |
 | `src/fulljoin/outfit.ts` | 코디 조합(최대 3개), 가까운 종류의 대체 옷 찾기 | MVP 구현 |
 | `src/fulljoin/shopping.ts` | 아이템 분류로 만든 비슷한 상품 검색 링크 | MVP 구현 |
-| `src/fulljoin/chat.ts` | 질문 의도 분리, 비교 화면과 같은 후보 계산, 보유 옷·상품·사진 질문의 grounded 답변(필수 MVP 평가 제외) | MVP + CHAT-01 |
+| `src/fulljoin/chat.ts` | 여섯 질문 유형 자동 분류, 비교 화면과 같은 후보 계산, 실제 옷장/저장 사진/일반 조언 응답 구분(필수 MVP 평가 제외) | MVP + CHAT-01/03 |
+| `src/fulljoin/llm_observability.ts` | usage·비용·지연·fallback·grounded 비율을 원문 없이 정규화 | OPS-01 |
 | `src/fulljoin/feed.ts`, `archive.ts`, `heart.ts`, `decision.ts`, `review.ts`, `product_metadata.ts`, `events.ts`, `catalog.ts` | 홈 피드 순서(취향 → 이웃 → 나머지) / 저장함의 연도·계절·스타일 필터 / 저장 응답 조립 / 비슷함 선택 응답 / 검수·공개 입력 검증 / 상품 페이지 정보 추출 / 사용 기록 입력 검증 / 보기 목록(enum)과 옷장 입력 검증 | MVP 구현 |
 | `supabase/functions/api/index.ts` | 서버(Edge Function 하나). OpenAI 호출은 여기서만 | MVP 구현 |
-| `supabase/migrations/` | DB 표(사진·아이템·옷장·저장·검수·사용 기록) | MVP 구현 |
+| `supabase/migrations/` | DB 표(사진·아이템·옷장·저장·검수·사용 기록), 로컬 pending LLM 운영 지표 | MVP + OPS-01 |
 | `mobile/` | Expo 앱(웹 배포 odit.expo.app) | MVP 구현 |
 | `scripts/tag_feed_photos.py` 등 | 사진 일괄 태깅·등록·검수·공개 | MVP 구현 |
 | (계획) `src/fulljoin/retrieval.ts`, 색인 스크립트 | 상품 RAG 검색 — **미구현, 평가 이후 구현** | 강의 6 |
 
-- 오케스트레이션 방식과 이유: 프레임워크 없이 서버 코드가 순서를 고정한다. 단계 순서가 항상 같아서 모델이 다음 단계를 고를 필요가 없고, 순서를 고정해야 같은 입력에 같은 결과가 나온다. 태깅은 사진당 모델 1회다. 챗봇은 보유 옷·상품 탐색·사진 아이템 질문이면 모델을 호출하지 않고 구조화 데이터로 답하며, 그 밖의 기존 일반 질문만 최대 1회 호출한다.
+- 오케스트레이션 방식과 이유: 프레임워크 없이 서버 코드가 순서를 고정한다. 단계 순서가 항상 같아서 모델이 다음 단계를 고를 필요가 없고, 순서를 고정해야 같은 입력에 같은 결과가 나온다. 태깅은 사진당 모델 1회다. 챗봇은 보유 옷·상품 탐색·저장 사진·범위 밖 질문이면 모델을 호출하지 않고 구조화 데이터로 답하며, 일반 패션 조언이 필요한 단일/복합 질문만 최대 1회 호출한다.
 
 ## 3. 도구 목록
 
@@ -52,7 +53,7 @@
 
 ## 5. 오케스트레이션 — 멈춤 조건과 호출 상한
 
-- 챗봇 한 번에 모델 호출 수: grounded intent는 0회, 기존 일반 질문은 최대 1회(재시도 없음) / 시간 제한: 25초 / 출력 상한: 500토큰
+- 챗봇 한 번에 모델 호출 수: grounded intent는 0회, 일반 패션 조언 포함 시 최대 1회(재시도 없음) / 시간 제한: 25초 / 출력 상한: 500토큰
 - 대화 기록: 최근 8개까지(코드 값)
 - 태깅: 사진당 1회, 시간 제한 75초, 출력 상한 2,000토큰(코드 값). 같은 사진을 동시에 분석하려 하면 409 `analysis_in_progress`.
 - 이 값들의 이유: 한 질문에 한 번만 호출해 비용과 대기 시간의 상한을 고정했다. 25초를 넘기면 고정 규칙 답변으로 넘어가 빈 화면이 생기지 않게 했다. 답은 2~4문장이라 500토큰이면 충분하다. 숫자 자체는 실험으로 고른 값이 아니라 구현할 때 정한 값이다.
@@ -61,8 +62,8 @@
 
 | 상황 | 지금 동작 |
 |---|---|
-| 보유 옷·상품·사진 질문 | OpenAI를 호출하지 않고 `buildChatResponse` 결과를 반환. 후보 ID는 현재 옷장 조회 결과로 재검증 |
-| 일반 질문의 OpenAI 호출 실패 | 고정 규칙 답변(`buildChatResponse`)으로 대체. 챗봇은 필수 MVP 완료 판정에서 제외 |
+| 보유 옷·상품·저장 사진·범위 밖 질문 | OpenAI를 호출하지 않고 `buildChatResponse` 결과를 반환. 후보 ID는 현재 옷장 조회 결과로 재검증 |
+| 일반 패션 질문의 OpenAI 호출 실패 | 옷장/사진 근거는 유지하고 일반 조언 섹션만 안전한 안내로 대체. 챗봇은 필수 MVP 완료 판정에서 제외 |
 | 옷장이 비어 있음 | 판정하지 않고 "옷장을 등록하면 가진 옷과 맞춰 드려요" (AC12) |
 | 사진에서 옷을 못 찾음 | 422 `no_clothing_items` "사진에서 옷을 찾지 못했어요". 저장하지 않으므로 피드에 올라가지 않는다 (AC10) |
 | 태깅 응답이 스키마에 안 맞음 | OpenAI 구조화 출력(strict)으로 받고 서버가 zod로 한 번 더 검사한다. 안 맞으면 저장하지 않고 502 `analysis_failed` |
@@ -84,5 +85,8 @@
 
 ## 8. 관측
 
-- 남기는 기록: 사용 기록 `user_events`(`docs/EVENTS.md`), 태깅할 때의 모델 이름·프롬프트 버전·시각(사진마다 DB에 저장), 사람 검수 기록, 서버 오류 로그(`console.error`)
-- 모델 호출 로그(evals 입력): 태깅은 저장된 AI 결과와 사람 검수 정답을 evals 입력으로 쓴다(`evals/fixtures/tagging.jsonl`). 챗봇 호출은 따로 저장하지 않는다(OpenAI `store: false`, 응답의 `answer_source`로 openai/fallback만 구분). 챗봇 답변 기록은 evals 러너의 `--live-chat` 실행 결과로 남길 예정이다.
+- 사용자 행동은 `user_events`(`docs/EVENTS.md`)에 기록한다.
+- 모델 운영 지표는 별도 `llm_operation_metrics`에 기능·모델·프롬프트·release·상태·토큰·비용·지연·fallback만 저장한다. migration `202611200003`은 아직 local pending이다.
+- grounded 챗도 `llm_called=false`로 기록해 불필요한 모델 호출 감소를 측정한다.
+- 사진, 캡션, 전체 프롬프트, 답변/대화 원문, 사용자 ID, 사진 ID, URL은 운영 지표에 저장하지 않는다.
+- OpenAI 챗 요청은 `store: false`다. 실제 답변 품질 표본은 승인된 eval runner 또는 별도 동의·접근 제어가 있는 저장소에서 다룬다.
