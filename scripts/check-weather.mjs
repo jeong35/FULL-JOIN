@@ -114,4 +114,34 @@ assert.equal(weather.issued_at, "2026-11-20T14:00:00+09:00");
 assert.equal(weather.source, "기상청");
 assert.deepEqual(buildWeather({ now: afternoon, days: 3, short: shortGrid(), mid, issuedBase: { date: "20261120", time: "1400" } }).days, []);
 
+// 실제 응답(2026-11-22 06시 발표, 공공데이터포털에서 받은 그대로). 숫자는 문자열이 아니라 숫자로 온다.
+const realTa = kmaItemsFrom(JSON.stringify({ response: { header: { resultCode: "00", resultMsg: "NORMAL_SERVICE" }, body: { dataType: "JSON", items: { item: [{
+  regId: "11B20601",
+  taMin4: 3, taMin4Low: 1, taMin4High: 1, taMax4: 14, taMax4Low: 1, taMax4High: 1,
+  taMin5: 7, taMin5Low: 1, taMin5High: 1, taMax5: 15, taMax5Low: 1, taMax5High: 1,
+  taMin6: 6, taMin6Low: 2, taMin6High: 2, taMax6: 9, taMax6Low: 1, taMax6High: 1,
+  taMin7: -1, taMin7Low: 1, taMin7High: 0, taMax7: 11, taMax7Low: 2, taMax7High: 3,
+  taMin8: 4, taMin8Low: 0, taMin8High: 2, taMax8: 15, taMax8Low: 0, taMax8High: 2,
+  taMin9: 7, taMin9Low: 0, taMin9High: 3, taMax9: 14, taMax9Low: 0, taMax9High: 2,
+  taMin10: 5, taMin10Low: 0, taMin10High: 3, taMax10: 13, taMax10Low: 0, taMax10High: 2,
+}] }, pageNo: 1, numOfRows: 10, totalCount: 1 } } }));
+const realLand = kmaItemsFrom(JSON.stringify({ response: { header: { resultCode: "00", resultMsg: "NORMAL_SERVICE" }, body: { dataType: "JSON", items: { item: [{
+  regId: "11B00000",
+  rnSt4Am: 10, rnSt4Pm: 10, rnSt5Am: 20, rnSt5Pm: 60, rnSt6Am: 30, rnSt6Pm: 30, rnSt7Am: 10, rnSt7Pm: 10, rnSt8: 10, rnSt9: 10, rnSt10: 10,
+  wf4Am: "맑음", wf4Pm: "맑음", wf5Am: "구름많음", wf5Pm: "흐리고 비", wf6Am: "흐림", wf6Pm: "흐림", wf7Am: "맑음", wf7Pm: "맑음", wf8: "맑음", wf9: "맑음", wf10: "맑음",
+}] }, pageNo: 1, numOfRows: 10, totalCount: 1 } } }));
+assert.ok(realTa.ok && realLand.ok);
+assert.deepEqual(
+  midDays("202611220600", realLand.items, realTa.items).map(({ date, min, max, sky, pop }) => [date, min, max, sky, pop]),
+  [
+    ["2026-11-26", 3, 14, "맑음", 10],
+    ["2026-11-27", 7, 15, "비", 60], // 오전 구름많음, 오후 흐리고 비 → 비
+    ["2026-11-28", 6, 9, "흐림", 30],
+    ["2026-11-29", -1, 11, "맑음", 10],
+    ["2026-11-30", 4, 15, "맑음", 10],
+    ["2026-12-01", 7, 14, "맑음", 10],
+    ["2026-12-02", 5, 13, "맑음", 10],
+  ],
+);
+
 console.log("Weather checks passed.");
