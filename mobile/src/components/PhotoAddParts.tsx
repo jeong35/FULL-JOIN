@@ -19,7 +19,7 @@ import Svg, { Path } from 'react-native-svg';
 import { ColorSwatch } from '@/components/ColorSwatch';
 import { KindIcon } from '@/components/KindIcon';
 import { SegmentedControl } from '@/components/ui';
-import { colorsForKind, KIND_GROUPS, kindLabel, SLOTS, type Color, type Kind, type Slot } from '@/data/catalog';
+import { BASE_COLORS, colorsForKind, KIND_GROUPS, kindLabel, SLOTS, type Color, type Kind, type Slot } from '@/data/catalog';
 import type { Box, PhotoSource } from '@/data/photoAdd';
 import { colors, fonts, layout } from '@/theme';
 
@@ -285,12 +285,13 @@ export function KindPicker({
   );
 }
 
-export function ColorPicker({ kind, value, onPick }: { kind: Kind; value: Color | null; onPick: (color: Color) => void }) {
+// 종류를 아직 안 골랐으면 기본 색 칩만(데님 색은 데님 종류일 때 앞에 나온다).
+export function ColorPicker({ kind, value, onPick }: { kind: Kind | null; value: Color | null; onPick: (color: Color) => void }) {
   const { width } = useWindowDimensions();
   const cell = Math.floor((width - layout.screenPaddingX * 2 - 8 * 5) / 6);
   return (
     <View style={styles.colorGrid}>
-      {colorsForKind(kind).map((c) => {
+      {(kind === null ? BASE_COLORS : colorsForKind(kind)).map((c) => {
         const on = c === value;
         return (
           <Pressable

@@ -3,7 +3,7 @@
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import { Platform } from 'react-native';
 
-import type { Style } from './catalog';
+import { colorsForKind, fitsForKind, isKindOfSlot, isSlot, type Color, type Kind, type Slot, type Style, type VisualFit } from './catalog';
 import { getSession } from './session';
 import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
@@ -192,6 +192,25 @@ export async function cutoutPhoto(dataUrl: string): Promise<CutoutResult> {
     throw new ApiError(response.status, data?.error?.code ?? 'cutout_failed', data?.error?.message ?? '배경을 지우지 못했어요');
   }
   return { image: data.image, color: typeof data.color === 'string' ? data.color : null };
+}
+
+// 옷 사진 AI 태깅(11/22). 서버 POST /wardrobe/tag가 배포되면 true로 바꾼다.
+// 사진(배경 지운 옷 한 벌)을 보내면 부위 · 종류 · 색 · 핏을 미리 채워 주고, 사람은 틀린 칸만 고친다.
+export const SERVER_HAS_PHOTO_TAGGING = false;
+
+export type PhotoTag = { slot: Slot; kind: Kind; color: Color | null; visual_fit: VisualFit | null };
+
+type ServerPhotoTag = { slot?: unknown; kind?: unknown; color?: unknown; visual_fit?: unknown } | null;
+
+// 서버가 준 값도 앱의 닫힌 목록(부위별 종류, 종류별 색 · 핏)에 맞는지 다시 확인한다. 틀리면 그 칸은 비운다.
+export async function tagWardrobePhoto(dataUrl: string): Promise<PhotoTag | null> {
+  const data = await request<{ wardrobe_tag: ServerPhotoTag }>('POST', '/wardrobe/tag', { user_id: userId(), image: dataUrl }, 30_000);
+  const tag = data.wardrobe_tag;
+  if (tag === null || !isSlot(tag.slot) || !isKindOfSlot(tag.slot, tag.kind)) return null;
+  const { slot, kind } = tag;
+  const color = colorsForKind(kind).find((c) => c === tag.color) ?? null;
+  const visual_fit = fitsForKind(slot, kind).find((f) => f === tag.visual_fit) ?? null;
+  return { slot, kind, color, visual_fit };
 }
 
 // ── 피드·저장 ───────────────────────────────────────
