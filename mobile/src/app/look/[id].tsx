@@ -5,10 +5,10 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
 import { MatchBadge, pieceNote } from '@/components/LookParts';
 import { BackButton } from '@/components/ui';
-import type { Slot } from '@/data/catalog';
+import { kindLabel, type Slot } from '@/data/catalog';
 import { dayOfMonth, todayKey, weekday } from '@/data/dates';
 import { lookTips, matchOf, sortPieces, type OwnedPiece } from '@/data/recommend';
 import { loadArchive, loadWardrobe } from '@/data/store';
@@ -24,6 +24,7 @@ const SPOTS: Record<Slot, readonly { left: number; top: number; size: number; ro
   하의: [{ left: 96, top: 200, size: 176, rotate: 0 }],
   신발: [{ left: 14, top: 350, size: 112, rotate: -8 }],
   가방: [{ left: 236, top: 300, size: 106, rotate: 6 }],
+  잡화: [{ left: 262, top: 16, size: 84, rotate: 8 }],
 };
 
 export default function LookDetailScreen() {
@@ -75,10 +76,10 @@ export default function LookDetailScreen() {
             {sortPieces(look.pieces).map((piece) => (
               <View key={piece.wardrobeItem.id} style={styles.row}>
                 <View style={styles.rowIcon}>
-                  <KindIcon kind={piece.wardrobeItem.kind} color={piece.wardrobeItem.color} fit={piece.wardrobeItem.visual_fit} size={38} />
+                  <ItemIcon item={piece.wardrobeItem} size={38} />
                 </View>
                 <View style={styles.flex}>
-                  <Text style={styles.rowKind}>{piece.wardrobeItem.kind}</Text>
+                  <Text style={styles.rowKind}>{kindLabel(piece.wardrobeItem.kind)}</Text>
                   <Text style={styles.sub} numberOfLines={1}>{pieceNote(piece)}</Text>
                 </View>
                 <MatchBadge match={matchOf(piece)} style={styles.rowBadge} />
@@ -130,7 +131,7 @@ function FlatLay({ pieces, onCompare }: { pieces: readonly OwnedPiece[]; onCompa
           <View key={piece.wardrobeItem.id} style={[styles.spot, { left: spot.left, top: spot.top, transform: [{ rotate: `${spot.rotate}deg` }] }]}>
             <MatchBadge match={matchOf(piece)} style={styles.spotBadge} />
             <View style={styles.shadow}>
-              <KindIcon kind={piece.wardrobeItem.kind} color={piece.wardrobeItem.color} fit={piece.wardrobeItem.visual_fit} size={spot.size} />
+              <ItemIcon item={piece.wardrobeItem} size={spot.size} />
             </View>
           </View>
         );

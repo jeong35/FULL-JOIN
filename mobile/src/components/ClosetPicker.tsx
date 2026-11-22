@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
 import { SLOTS, type Slot } from '@/data/catalog';
 import { itemName } from '@/data/combos';
 import type { WardrobeItem } from '@/data/types';
@@ -51,7 +51,7 @@ export function ClosetPicker({ visible, title, wardrobe, selected, day, onToggle
                   const picked = pickedIn(item);
                   return (
                     <Pressable key={item} onPress={() => setSlot(item)} accessibilityRole="button" accessibilityLabel={`${item} 고르기, ${picked}벌 골랐어요`} style={styles.row}>
-                      <View style={styles.tile}>{first !== undefined && <KindIcon kind={first.kind} color={first.color} fit={first.visual_fit} size={36} />}</View>
+                      <View style={styles.tile}>{first !== undefined && <ItemIcon item={first} size={36} />}</View>
                       <View style={styles.flex}>
                         <Text style={styles.slotName}>{item}</Text>
                         <Text style={styles.slotMeta}>옷장 {total}벌</Text>
@@ -86,7 +86,7 @@ export function ClosetPicker({ visible, title, wardrobe, selected, day, onToggle
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: on }}
                       style={[styles.row, on && styles.rowOn]}>
-                      <View style={styles.tile}><KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={36} /></View>
+                      <View style={styles.tile}><ItemIcon item={item} size={36} /></View>
                       <View style={styles.flex}>
                         <Text style={styles.name}>{itemName(item)}</Text>
                         {gap !== null && <Text style={styles.warn}>이 날씨엔 {gap === '추움' ? '추울' : '더울'} 수 있어요</Text>}

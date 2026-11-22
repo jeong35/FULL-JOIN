@@ -2,7 +2,7 @@
 // 필요한 옷이 0개면 '오늘의 룩', 1개면 '하나만 더하면 완성'으로 나눈다.
 // 날씨가 있으면 기온별 옷차림 표(weather.ts)에 맞는 룩을 먼저, 약속이 있으면 그 무드(스타일)의 사진을 먼저 둔다.
 // 옷장에 없는 옷은 룩에 넣지 않는다(AGENTS.md 절대 규칙 5) — 룩의 옷은 모두 buildOutfits가 고른 내 옷이다.
-import type { Slot, Style } from './catalog';
+import { kindLabel, type Slot, type Style } from './catalog';
 import { buildOutfits, type OutfitPiece } from './outfits';
 import type { Plan } from './plans';
 import { heartStyleImage, type HeartState } from './store';
@@ -43,7 +43,7 @@ export const MAX_LOOKS = 3;
 // 추천 탭을 열 때 옷장 대조를 새로 받는 최근 저장 사진 수(서버 부담을 줄이려고 제한한다).
 export const RECENT_PHOTOS = 8;
 
-const SLOT_ORDER: readonly Slot[] = ['아우터', '상의', '원피스', '하의', '신발', '가방'];
+const SLOT_ORDER: readonly Slot[] = ['아우터', '상의', '원피스', '하의', '신발', '가방', '잡화'];
 
 function weatherFits(pieces: readonly OwnedPiece[], day: DayWeather | undefined): boolean {
   if (day === undefined) return true;
@@ -149,11 +149,11 @@ export function lookTips(pieces: readonly OwnedPiece[], day: DayWeather | undefi
   const morning = `아침 ${day.min}°`;
   const noon = `낮 ${day.max}°`;
   if (outer !== undefined) {
-    const lines: LookTip[] = [{ label: morning, text: `나갈 땐 ${outer.kind}까지 입어요` }];
+    const lines: LookTip[] = [{ label: morning, text: `나갈 땐 ${kindLabel(outer.kind)}까지 입어요` }];
     if (day.max - day.min >= 8 && top !== undefined) {
-      lines.push({ label: noon, text: `${outer.kind}${objectParticle(outer.kind)} 벗어도 ${top.kind} 한 장이면 충분해요` });
+      lines.push({ label: noon, text: `${kindLabel(outer.kind)}${objectParticle(kindLabel(outer.kind))} 벗어도 ${kindLabel(top.kind)} 한 장이면 충분해요` });
     } else {
-      lines.push({ label: noon, text: `${outer.kind}${objectParticle(outer.kind)} 입은 채로 괜찮아요` });
+      lines.push({ label: noon, text: `${kindLabel(outer.kind)}${objectParticle(kindLabel(outer.kind))} 입은 채로 괜찮아요` });
     }
     return lines;
   }

@@ -2,6 +2,7 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { kindLabel } from '@/data/catalog';
 import { matchOf, type Match, type OwnedPiece } from '@/data/recommend';
 import type { Sky } from '@/data/weather';
 import { colors, fonts } from '@/theme';
@@ -50,10 +51,11 @@ export function withRo(word: string): string {
 export function pieceNote(piece: OwnedPiece): string {
   const mine = piece.wardrobeItem;
   const photo = piece.item;
-  if (piece.substitute) return `사진은 ${photo.kind ?? '다른 옷'} · 내 ${mine.color} ${withRo(mine.kind)} 대신`;
+  if (piece.substitute) return `사진은 ${photo.kind !== undefined ? kindLabel(photo.kind) : '다른 옷'} · 내 ${mine.color} ${withRo(kindLabel(mine.kind))} 대신`;
   if (piece.similar) {
-    const desc = [photo.color, photo.kind !== mine.kind ? photo.kind : null].filter(Boolean).join(' ') || (photo.kind ?? '');
-    return `사진은 ${desc} · 내 ${mine.color} ${withRo(mine.kind)}`;
+    const photoKind = photo.kind !== undefined ? kindLabel(photo.kind) : null;
+    const desc = [photo.color, photo.kind !== mine.kind ? photoKind : null].filter(Boolean).join(' ') || (photoKind ?? '');
+    return `사진은 ${desc} · 내 ${mine.color} ${withRo(kindLabel(mine.kind))}`;
   }
   return [mine.color, mine.visual_fit].filter(Boolean).join(' · ');
 }

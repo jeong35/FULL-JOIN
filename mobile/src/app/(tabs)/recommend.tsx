@@ -10,6 +10,8 @@ import Svg, { Path } from 'react-native-svg';
 
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
+import { kindLabel } from '@/data/catalog';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
 import { TabScreen } from '@/components/TabScreen';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
@@ -161,12 +163,12 @@ export default function RecommendScreen() {
                     key={item.id}
                     onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date: selected } })}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.kind} 조합 보기`}
+                    accessibilityLabel={`${kindLabel(item.kind)} 조합 보기`}
                     style={styles.clothesItem}>
                     <View style={styles.clothesTile}>
-                      <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={60} />
+                      <ItemIcon item={item} size={60} />
                     </View>
-                    <Text style={styles.clothesName} numberOfLines={1}>{item.kind}</Text>
+                    <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -435,10 +437,10 @@ function LookGrid({ look }: { look: Look }) {
     const mine = piece.wardrobeItem;
     return (
       <View key={mine.id} style={[styles.tile, style]}>
-        <KindIcon kind={mine.kind} color={mine.color} fit={mine.visual_fit} size={size} />
+        <ItemIcon item={mine} size={size} />
         <MatchBadge match={matchOf(piece)} style={styles.tileBadge} />
         <View style={styles.tileName}>
-          <Text style={styles.tileKind}>{mine.kind}</Text>
+          <Text style={styles.tileKind}>{kindLabel(mine.kind)}</Text>
           <Text style={styles.tileColor}>{mine.color}</Text>
         </View>
       </View>
@@ -483,7 +485,7 @@ function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; i
           <Image source={{ uri: almost.image.thumbnail_url }} style={styles.thumb} contentFit="cover" accessibilityLabel="저장한 사진" />
           <View style={styles.flex}>
             <Text style={styles.sub} numberOfLines={1}>저장한 사진 · {almost.image.style.join('·') || almost.image.season}</Text>
-            <Text style={styles.lookTitle}>{missing.kind ?? '옷 하나'}만 있으면 완성</Text>
+            <Text style={styles.lookTitle}>{missing.kind !== undefined ? kindLabel(missing.kind) : '옷 하나'}만 있으면 완성</Text>
           </View>
           <View style={styles.ownPill}><Text style={styles.ownPillText}>내 옷 {almost.owned.length}벌 있어요</Text></View>
         </View>
@@ -497,13 +499,12 @@ function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; i
                 <View style={[styles.almostLabel, need && styles.almostLabelNeed]}>
                   <Text style={[styles.almostLabelText, need && styles.almostLabelTextNeed]}>{need ? '필요해요' : '있어요'}</Text>
                 </View>
-                <KindIcon
-                  kind={kind}
-                  color={need ? piece.item.color ?? null : piece.wardrobeItem.color}
-                  fit={need ? piece.item.visual_fit ?? null : piece.wardrobeItem.visual_fit}
-                  size={56}
-                />
-                <Text style={[styles.almostName, need && styles.almostNameNeed]} numberOfLines={1}>{kind}</Text>
+                {need ? (
+                  <KindIcon kind={kind} color={piece.item.color ?? null} fit={piece.item.visual_fit ?? null} size={56} />
+                ) : (
+                  <ItemIcon item={piece.wardrobeItem} size={56} />
+                )}
+                <Text style={[styles.almostName, need && styles.almostNameNeed]} numberOfLines={1}>{kindLabel(kind)}</Text>
               </View>
             );
           })}
@@ -512,7 +513,7 @@ function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; i
           onPress={() => links[0] !== undefined && void WebBrowser.openBrowserAsync(links[0].url)}
           accessibilityRole="link"
           style={styles.shopButton}>
-          <Text style={styles.chooseText}>{links[0]?.platform ?? '쇼핑몰'}에서 비슷한 {missing.kind ?? '옷'} 찾기</Text>
+          <Text style={styles.chooseText}>{links[0]?.platform ?? '쇼핑몰'}에서 비슷한 {missing.kind !== undefined ? kindLabel(missing.kind) : '옷'} 찾기</Text>
           <ArrowRight />
         </Pressable>
         <View style={styles.shopRow}>

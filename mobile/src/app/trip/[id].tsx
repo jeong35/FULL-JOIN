@@ -9,7 +9,8 @@ import Svg, { Path } from 'react-native-svg';
 
 import { ClosetPicker, EditToggle } from '@/components/ClosetPicker';
 import { HintBubble } from '@/components/HintBubble';
-import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
+import { kindLabel } from '@/data/catalog';
 import { WeatherIcon } from '@/components/LookParts';
 import { BackButton } from '@/components/ui';
 import { dayOfMonth, parseKey, weekday } from '@/data/dates';
@@ -164,10 +165,10 @@ function TripView({ trip, onBack }: { trip: Trip; onBack: () => void }) {
                 </View>
                 {plan.reuse.map((line) => (
                   <View key={line.item.id} style={styles.reuse}>
-                    <View style={styles.reuseIcon}><KindIcon kind={line.item.kind} color={line.item.color} fit={line.item.visual_fit} size={40} /></View>
+                    <View style={styles.reuseIcon}><ItemIcon item={line.item} size={40} /></View>
                     <View style={styles.flex}>
                       <View style={styles.reuseHead}>
-                        <Text style={styles.reuseKind}>{line.item.kind}</Text>
+                        <Text style={styles.reuseKind}>{kindLabel(line.item.kind)}</Text>
                         <Text style={styles.reuseCount}>{line.item.slot === '아우터' && line.days.length === days.length ? `${days.length}일 내내` : `${line.days.length}번`}</Text>
                       </View>
                       <Text style={styles.sub} numberOfLines={1}>{line.note}</Text>
@@ -208,10 +209,11 @@ function PackCard({ plan, editing, onToggleEditing, custom, onRemove, onAdd, onR
   onReset: () => void;
 }) {
   const [showCombos, setShowCombos] = useState(false);
-  const clothes = plan.capsule.filter((item) => item.slot !== '신발' && item.slot !== '가방').length;
+  const clothes = plan.capsule.filter((item) => item.slot !== '신발' && item.slot !== '가방' && item.slot !== '잡화').length;
+  const extras = plan.capsule.filter((item) => item.slot === '잡화').length;
   const shoes = plan.capsule.filter((item) => item.slot === '신발').length;
   const bags = plan.capsule.filter((item) => item.slot === '가방').length;
-  const parts = [`옷 ${clothes}벌`, shoes > 0 ? `신발 ${shoes}` : '', bags > 0 ? `가방 ${bags}` : ''].filter(Boolean);
+  const parts = [`옷 ${clothes}벌`, shoes > 0 ? `신발 ${shoes}` : '', bags > 0 ? `가방 ${bags}` : '', extras > 0 ? `잡화 ${extras}` : ''].filter(Boolean);
   return (
     <View style={styles.card}>
       <View style={styles.packHead}>
@@ -239,7 +241,7 @@ function PackCard({ plan, editing, onToggleEditing, custom, onRemove, onAdd, onR
             <View key={combo.id} style={styles.comboRow}>
               <Text style={styles.comboNum}>{index + 1}</Text>
               {combo.items.map((item) => (
-                <View key={item.id} style={styles.comboTile}><KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={30} /></View>
+                <View key={item.id} style={styles.comboTile}><ItemIcon item={item} size={30} /></View>
               ))}
             </View>
           ))}
@@ -252,15 +254,15 @@ function PackCard({ plan, editing, onToggleEditing, custom, onRemove, onAdd, onR
           return (
             <View key={item.id} style={styles.gridItem}>
               <View style={styles.gridTile}>
-                <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={46} />
+                <ItemIcon item={item} size={46} />
                 <View style={[styles.times, uses === 0 && styles.timesZero]}><Text style={styles.timesText}>×{uses}</Text></View>
                 {editing && (
-                  <Pressable onPress={() => onRemove(item.id)} accessibilityRole="button" accessibilityLabel={`${item.kind} 짐에서 빼기`} hitSlop={6} style={styles.remove}>
+                  <Pressable onPress={() => onRemove(item.id)} accessibilityRole="button" accessibilityLabel={`${kindLabel(item.kind)} 짐에서 빼기`} hitSlop={6} style={styles.remove}>
                     <XIcon />
                   </Pressable>
                 )}
               </View>
-              <Text style={styles.gridName} numberOfLines={1}>{item.kind}</Text>
+              <Text style={styles.gridName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
             </View>
           );
         })}
@@ -308,11 +310,11 @@ function DayCard({ outfit }: { outfit: DayOutfit }) {
       <View style={styles.tiles}>
         {outfit.items.map((item) => (
           <View key={item.id} style={styles.tile}>
-            <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={46} />
+            <ItemIcon item={item} size={46} />
           </View>
         ))}
       </View>
-      <Text style={styles.names}>{outfit.items.map((item) => item.kind).join(' · ')}</Text>
+      <Text style={styles.names}>{outfit.items.map((item) => kindLabel(item.kind)).join(' · ')}</Text>
       <View style={styles.tip}><Text style={styles.tipText}>{outfit.tip}</Text></View>
     </View>
   );
@@ -336,7 +338,7 @@ function PackingChecklist({ trip, items }: { trip: Trip; items: readonly Wardrob
             accessibilityState={{ checked: done }}
             style={styles.checkRow}>
             <View style={[styles.checkBox, done && styles.checkBoxOn]}>{done && <CheckIcon />}</View>
-            <Text style={[styles.checkKind, done && styles.checkDone]}>{item.kind}</Text>
+            <Text style={[styles.checkKind, done && styles.checkDone]}>{kindLabel(item.kind)}</Text>
             <Text style={[styles.checkColor, done && styles.checkDone]}>{item.color}</Text>
           </Pressable>
         );

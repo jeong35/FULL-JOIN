@@ -10,7 +10,8 @@ import Svg, { Path } from 'react-native-svg';
 
 import { ClosetPicker, EditToggle } from '@/components/ClosetPicker';
 import { HintBubble } from '@/components/HintBubble';
-import { KindIcon } from '@/components/KindIcon';
+import { ItemIcon } from '@/components/WardrobeIcon';
+import { kindLabel } from '@/data/catalog';
 import { BackButton } from '@/components/ui';
 import { combosFromSet, itemName, setGap, sortItems, suggestSet, type Combo } from '@/data/combos';
 import { dayOfMonth, todayKey, weekday } from '@/data/dates';
@@ -105,21 +106,21 @@ export default function ComboScreen() {
                 <EditToggle editing={editing} onPress={toggleEditing} />
               </View>
             </View>
-            {edited === null && <Text style={styles.sub}>{view.day !== undefined ? '날씨에 맞춰 ' : ''}{andParticle(anchor.kind)} 입기 좋은 옷을 골라 뒀어요</Text>}
+            {edited === null && <Text style={styles.sub}>{view.day !== undefined ? '날씨에 맞춰 ' : ''}{andParticle(kindLabel(anchor.kind))} 입기 좋은 옷을 골라 뒀어요</Text>}
             <View style={styles.picked}>
               {selected.map((item) => {
                 const warm = view.day === undefined ? null : tempGap(item.kind, view.day);
                 return (
                   <View key={item.id} style={styles.pickedItem}>
                     <View style={[styles.pickedTile, item.id === anchor.id && styles.pickedAnchor]}>
-                      <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={48} />
+                      <ItemIcon item={item} size={48} />
                       {editing && (
-                        <Pressable onPress={() => toggle(item.id)} accessibilityRole="button" accessibilityLabel={`${item.kind} 빼기`} hitSlop={6} style={styles.remove}>
+                        <Pressable onPress={() => toggle(item.id)} accessibilityRole="button" accessibilityLabel={`${kindLabel(item.kind)} 빼기`} hitSlop={6} style={styles.remove}>
                           <XIcon />
                         </Pressable>
                       )}
                     </View>
-                    <Text style={styles.pickedName} numberOfLines={1}>{item.kind}</Text>
+                    <Text style={styles.pickedName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
                     {warm !== null && <Text style={styles.pickedWarn}>{warm === '추움' ? '추울 수도' : '더울 수도'}</Text>}
                   </View>
                 );
@@ -214,7 +215,7 @@ function ComboCard({ combo, index, anchorId, chosen, onChoose }: {
       <View style={styles.tiles}>
         {combo.items.map((item: WardrobeItem) => (
           <View key={item.id} style={[styles.tile, item.id === anchorId && styles.tileAnchor]}>
-            <KindIcon kind={item.kind} color={item.color} fit={item.visual_fit} size={50} />
+            <ItemIcon item={item} size={50} />
           </View>
         ))}
       </View>

@@ -4,7 +4,7 @@
 //    비 오는 날이 있으면 부츠·스니커즈와 백팩을 먼저 챙긴다.
 // 2) 날마다 코디: 고른 짐 안에서 그날 기온·비에 맞고 색이 어울리는(combos.ts harmony) 조합을, 같은 상의가 이어지지 않게 고른다.
 // 같은 입력에 같은 결과: 점수가 같으면 옷 id 순서로 정한다.
-import type { Kind, Slot } from './catalog';
+import { kindLabel, type Kind, type Slot } from './catalog';
 import { combosFromSet, harmony, isOnePiece, setGap, type Combo } from './combos';
 import { parseKey } from './dates';
 import type { TripType, Packing } from './trips';
@@ -37,8 +37,8 @@ export function climateWeather(region: Pick<Region, 'lat'>, date: string): TripW
 }
 
 // ── 여행 종류별로 먼저 고를 옷·피할 옷 ─────────────────
-const DRESSY: readonly Kind[] = ['셔츠', '블라우스', '니트', '슬랙스', '미디스커트', '재킷', '트렌치코트', '코트', '로퍼', '플랫슈즈', '힐', '토트백', '숄더백'];
-const ACTIVE: readonly Kind[] = ['반소매티셔츠', '긴소매티셔츠', '맨투맨', '후드', '후드집업', '플리스', '점퍼', '야상', '경량패딩', '데님팬츠', '코튼팬츠', '조거팬츠', '레깅스', '스니커즈', '백팩', '크로스백'];
+const DRESSY: readonly Kind[] = ['셔츠', '블라우스', '니트', '슬랙스', '미디스커트', '재킷', '트위드자켓', '트렌치코트', '코트', '숏코트', '하프코트', '롱코트', '로퍼', '플랫슈즈', '힐', '토트백', '숄더백'];
+const ACTIVE: readonly Kind[] = ['반소매티셔츠', '긴소매티셔츠', '맨투맨', '후드', '트레이닝상의', '후드집업', '플리스', '점퍼', '야상', '경량패딩', '숏패딩', '데님팬츠', '코튼팬츠', '카고팬츠', '조거팬츠', '레깅스', '스니커즈', '백팩', '크로스백', '모자'];
 const PREFER: Record<TripType, { like: readonly Kind[]; avoid: readonly Kind[] }> = {
   휴양: { like: ['반소매티셔츠', '민소매', '블라우스', '미디원피스', '롱원피스', '숏팬츠', '샌들', '에코백', '숄더백'], avoid: ['힐', '클러치'] },
   '도시 구경': { like: ['니트', '맨투맨', '데님팬츠', '스니커즈', '로퍼', '크로스백', '숄더백'], avoid: ['힐', '슬리퍼', '클러치'] },
@@ -65,7 +65,7 @@ const neutral = (item: WardrobeItem) => (NEUTRAL_COLORS.has(item.color) ? 1 : 0)
 const WET: readonly Sky[] = ['비', '비/눈', '눈', '소나기'];
 export const isWet = (weather: TripWeather) => WET.includes(weather.sky) || weather.pop >= 60;
 const RAIN_SHOES: readonly Kind[] = ['부츠', '스니커즈'];
-const ORDER: readonly Slot[] = ['아우터', '상의', '원피스', '하의', '신발', '가방'];
+const ORDER: readonly Slot[] = ['아우터', '상의', '원피스', '하의', '신발', '가방', '잡화'];
 const slotIndex = (item: WardrobeItem) => (isOnePiece(item) ? 2 : ORDER.indexOf(item.slot));
 const isTop = (item: WardrobeItem) => item.slot === '상의';
 const isBottom = (item: WardrobeItem) => item.slot === '하의' && item.kind !== '점프수트';
@@ -287,7 +287,7 @@ export function planTrip(input: {
       } else if (isBottom(item) || isTop(item)) {
         note = worn.map((outfit) => {
           const partner = outfit.items.find((piece) => (isBottom(item) ? isTop(piece) : isBottom(piece)));
-          return `${outfit.day.index + 1}일차 ${partner ? andParticle(partner.kind) : ''}`.trim();
+          return `${outfit.day.index + 1}일차 ${partner ? andParticle(kindLabel(partner.kind)) : ''}`.trim();
         }).join(' · ');
       } else {
         note = worn.map((outfit) => `${outfit.day.index + 1}일차${outfit.day.schedule ? ` ${outfit.day.schedule.split(/[,·→]/)[0]?.trim() ?? ''}` : ''}`).join(' · ');
@@ -305,11 +305,11 @@ function dayTip(w: TripWeather, items: readonly WardrobeItem[]): string {
   const bag = items.find((item) => item.slot === '가방');
   if (isWet(w)) {
     const gear = shoe !== undefined && RAIN_SHOES.includes(shoe.kind)
-      ? (bag?.kind === '백팩' ? `${andParticle(shoe.kind)} 백팩으로` : withRo(shoe.kind))
+      ? (bag?.kind === '백팩' ? `${andParticle(kindLabel(shoe.kind))} 백팩으로` : withRo(kindLabel(shoe.kind)))
       : bag?.kind === '백팩' ? '백팩으로' : '';
     return gear !== '' ? `비 소식이 있어 ${gear} 골랐어요. 우산도 챙겨요` : '비 소식이 있어요. 우산과 젖어도 되는 신발을 챙겨요';
   }
-  if (outer !== undefined && top !== undefined && w.max - w.min >= 8) return `아침엔 ${outer.kind}까지 입고, 낮엔 벗어도 ${top.kind} 한 장이면 돼요`;
-  if (outer !== undefined) return `쌀쌀해요. ${outer.kind} 입은 채로 다니기 좋아요`;
+  if (outer !== undefined && top !== undefined && w.max - w.min >= 8) return `아침엔 ${kindLabel(outer.kind)}까지 입고, 낮엔 벗어도 ${kindLabel(top.kind)} 한 장이면 돼요`;
+  if (outer !== undefined) return `쌀쌀해요. ${kindLabel(outer.kind)} 입은 채로 다니기 좋아요`;
   return '겉옷 없이 가볍게 다니기 좋아요';
 }

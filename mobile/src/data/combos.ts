@@ -4,7 +4,7 @@
 // 2) 기온: 고른 날의 기온별 옷차림 표(weather.ts KIND_TEMP)에 맞는 옷만 같이 쓴다.
 // 3) 색: 포인트 색(뉴트럴이 아닌 색)은 한 가지까지. 같은 계열(예: 스카이블루+블루)은 한 가지로 본다.
 // 같은 입력에 같은 결과: 점수가 같으면 옷 id 순서로 정한다.
-import type { Color } from './catalog';
+import { kindLabel, type Color } from './catalog';
 import type { WardrobeItem } from './types';
 import { fitsTemp, needsOuter, type DayWeather } from './weather';
 
@@ -29,7 +29,7 @@ const isTop = (item: WardrobeItem) => item.slot === '상의';
 const isBottom = (item: WardrobeItem) => item.slot === '하의' && item.kind !== '점프수트';
 
 export function itemName(item: WardrobeItem): string {
-  return item.color === '기타' ? item.kind : `${item.color} ${item.kind}`;
+  return item.color === '기타' ? kindLabel(item.kind) : `${item.color} ${kindLabel(item.kind)}`;
 }
 
 export type Combo = {
@@ -39,7 +39,10 @@ export type Combo = {
   score: number;
 };
 
-const ORDER = ['아우터', '상의', '원피스', '하의', '신발', '가방'] as const;
+const ORDER: readonly string[] = ['아우터', '상의', '원피스', '하의', '신발', '가방', '잡화'];
+// 몸에 입는 옷이 아니라 곁들이는 것(색 규칙에서 '포인트를 받아 주는' 쪽).
+const ACCESSORY: readonly string[] = ['신발', '가방', '잡화'];
+const isAccessory = (item: WardrobeItem) => ACCESSORY.includes(item.slot);
 const slotIndex = (item: WardrobeItem) => (isOnePiece(item) ? 2 : ORDER.indexOf(item.slot));
 const byId = (a: WardrobeItem, b: WardrobeItem) => a.id.localeCompare(b.id);
 
@@ -51,7 +54,7 @@ export function harmony(items: readonly WardrobeItem[]): { score: number; tags: 
     const families = new Set(accents.map((color) => FAMILY[color] ?? color));
     if (families.size > 1) return null;
   }
-  const main = items.filter((item) => item.slot !== '신발' && item.slot !== '가방');
+  const main = items.filter((item) => !isAccessory(item));
   const mainColors = [...new Set(main.map((item) => item.color))];
   const tags: string[] = [];
   let score = 0;
@@ -65,7 +68,7 @@ export function harmony(items: readonly WardrobeItem[]): { score: number; tags: 
     tags.push('포인트 컬러 하나');
     score += 1;
     // 신발·가방이 포인트 색을 한 번 더 받아 주면 더 정돈돼 보인다.
-    const echo = items.some((item) => (item.slot === '신발' || item.slot === '가방') && accents.includes(item.color));
+    const echo = items.some((item) => isAccessory(item) && accents.includes(item.color));
     const inMain = main.some((item) => accents.includes(item.color));
     if (echo && inMain) score += 1;
   } else {
