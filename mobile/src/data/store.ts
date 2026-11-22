@@ -176,6 +176,15 @@ export function useSaved(): Readonly<Record<string, number>> {
   return useStore((s) => s.saved);
 }
 
+// 추천 탭: 저장한 사진 여러 장의 옷장 대조 결과를 한 번에 본다.
+export function useHearts(): Readonly<Record<string, HeartState>> {
+  return useStore((s) => s.hearts);
+}
+
+export function useArchive(): readonly ArchiveImage[] {
+  return useStore((s) => s.archive.data);
+}
+
 export function useHeart(id: string | undefined): HeartState | undefined {
   return useStore((s) => (id === undefined ? undefined : s.hearts[id]));
 }

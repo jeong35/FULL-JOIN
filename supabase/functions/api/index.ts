@@ -40,6 +40,21 @@ import { buildPhotoOutfits, findSubstitutes } from "../../../src/fulljoin/outfit
 import { extractProductMetadata, type ProductMetadata } from "../../../src/fulljoin/product_metadata.ts";
 import { styleImagePublishInputSchema, styleImageReviewInputSchema } from "../../../src/fulljoin/review.ts";
 import { similarSearchProducts, type SearchableItem } from "../../../src/fulljoin/shopping.ts";
+import {
+  buildWeather,
+  earlyShortBase,
+  kmaItemsFrom,
+  latestShortBase,
+  midDays,
+  midTmFcCandidates,
+  nearestMidRegion,
+  shortGrid,
+  toGrid,
+  weatherQuerySchema,
+  type DayWeather,
+  type ShortBase,
+  type WeatherResponse,
+} from "../../../src/fulljoin/weather.ts";
 import { ANALYSIS_JSON_SCHEMA, ANALYSIS_SYSTEM_PROMPT } from "./generated_analysis_contract.ts";
 
 const corsHeaders = {
@@ -1074,6 +1089,91 @@ async function handleItemDecision(
   return json(itemDecisionResponse(item as DecisionItem, gap, input.data.decision, true));
 }
 
+// ── 추천 탭 날씨(기상청) ─────────────────────────────
+// 공공데이터포털의 기상청 단기예보·중기예보 조회서비스를 서비스 키(Supabase Secrets KMA_SERVICE_KEY)로 부른다.
+// 같은 격자·발표 시각은 30분 동안 함수 메모리에 두고 다시 쓴다(일일 호출 한도 보호).
+const KMA_BASE_URL = "https://apis.data.go.kr/1360000";
+const WEATHER_CACHE_MS = 30 * 60 * 1000;
+const WEATHER_CACHE_MAX = 200;
+const weatherCache = new Map<string, { at: number; body: WeatherResponse }>();
+
+class KmaError extends Error {}
+
+async function kmaItems(path: string, params: Record<string, string>, serviceKey: string): Promise<unknown[]> {
+  const url = new URL(`${KMA_BASE_URL}/${path}`);
+  // 포털이 주는 키는 인코딩된 것(%2B…)과 아닌 것이 있다. 어느 쪽을 넣어도 한 번만 인코딩되게 한다.
+  url.searchParams.set("serviceKey", serviceKey.includes("%") ? decodeURIComponent(serviceKey) : serviceKey);
+  url.searchParams.set("pageNo", "1");
+  url.searchParams.set("dataType", "JSON");
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const result = kmaItemsFrom(await response.text());
+  if (!result.ok) throw new KmaError(`${path}: ${result.code}`);
+  return result.items;
+}
+
+const shortItems = (base: ShortBase, grid: { nx: number; ny: number }, key: string) =>
+  kmaItems("VilageFcstInfoService_2.0/getVilageFcst", {
+    numOfRows: "2000",
+    base_date: base.date,
+    base_time: base.time,
+    nx: String(grid.nx),
+    ny: String(grid.ny),
+  }, key);
+
+// 중기예보는 실패해도 단기예보(오늘~4일 뒤)만으로 답한다. 최신 발표가 아직 없으면 한 번 앞 발표를 쓴다.
+async function midWeather(now: Date, landRegId: string, taRegId: string, key: string): Promise<DayWeather[]> {
+  for (const tmFc of midTmFcCandidates(now)) {
+    try {
+      const [land, ta] = await Promise.all([
+        kmaItems("MidFcstInfoService/getMidLandFcst", { numOfRows: "10", regId: landRegId, tmFc }, key),
+        kmaItems("MidFcstInfoService/getMidTa", { numOfRows: "10", regId: taRegId, tmFc }, key),
+      ]);
+      const days = midDays(tmFc, land, ta);
+      if (days.length > 0) return days;
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  return [];
+}
+
+async function handleWeather(url: URL): Promise<Response> {
+  const input = weatherQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+  if (!input.success) {
+    const field = input.error.issues[0]?.path[0];
+    return apiError(400, "invalid_query", "한국 안의 위도·경도와 1~10일을 넣어 주세요", typeof field === "string" ? field : undefined);
+  }
+  const serviceKey = Deno.env.get("KMA_SERVICE_KEY");
+  if (!serviceKey) return apiError(503, "weather_not_configured", "날씨 서비스 키를 설정해 주세요");
+
+  const now = new Date();
+  const { lat, lon, days } = input.data;
+  const grid = toGrid(lat, lon);
+  const region = nearestMidRegion(lat, lon);
+  const latest = latestShortBase(now);
+  const early = earlyShortBase(now);
+  const cacheKey = `${grid.nx},${grid.ny},${region.taRegId},${days},${latest.date}${latest.time}`;
+  const cached = weatherCache.get(cacheKey);
+  if (cached !== undefined && now.getTime() - cached.at < WEATHER_CACHE_MS) return json(cached.body);
+
+  try {
+    const [earlyItems, latestItems, mid] = await Promise.all([
+      early === null ? Promise.resolve([]) : shortItems(early, grid, serviceKey).catch(() => []),
+      shortItems(latest, grid, serviceKey),
+      midWeather(now, region.landRegId, region.taRegId, serviceKey),
+    ]);
+    const body = buildWeather({ now, days, short: shortGrid(earlyItems, latestItems), mid, issuedBase: latest });
+    if (body.days.length === 0) return apiError(502, "weather_unavailable", "기상청 날씨를 받지 못했어요. 잠시 후 다시 시도해 주세요");
+    if (weatherCache.size >= WEATHER_CACHE_MAX) weatherCache.clear();
+    weatherCache.set(cacheKey, { at: now.getTime(), body });
+    return json(body);
+  } catch (error) {
+    console.error(error);
+    return apiError(502, "weather_unavailable", "기상청 날씨를 받지 못했어요. 잠시 후 다시 시도해 주세요");
+  }
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -1104,6 +1204,7 @@ export default {
         return await handleWardrobeItem(request, decodeURIComponent(wardrobeItemMatch[1]), db);
       }
       if (path === "/feed" && request.method === "GET") return await handleFeed(url, db);
+      if (path === "/weather" && request.method === "GET") return await handleWeather(url);
       if (path === "/archive") return await handleArchive(request, url, db);
       if (path === "/chat") return await handleChat(request, db);
       if (path === "/events") return await handleEvents(request, db);
