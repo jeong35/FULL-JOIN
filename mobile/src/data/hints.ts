@@ -10,7 +10,8 @@ export type HintId =
   | 'save_compare' // 피드에서 사진 저장: '모든 저장'에서 비교하기
   | 'archive_open' // '모든 저장'에 사진 있음: 사진 눌러 비교 결과 보기
   | 'result_chat' // 비교 결과를 끝까지 봄: 챗봇에 물어보기
-  | 'set_edit'; // 여행 짐·조합 만들기 처음: '수정'으로 옷을 빼고 더할 수 있다고 알려 주기(두 화면이 같이 씀)
+  | 'set_edit' // 여행 짐·조합 만들기 처음: '수정'으로 옷을 빼고 더할 수 있다고 알려 주기(두 화면이 같이 씀)
+  | 'closet_swipe'; // 사진 넣은 옷이 생김: 옷장 칸을 옆으로 밀면 내 옷 사진이 나온다고 알려 주기
 
 const STORAGE_KEY = 'odit-hints-v1';
 type DoneStore = Record<string, HintId[]>;
