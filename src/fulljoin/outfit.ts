@@ -4,6 +4,11 @@
 // 대체는 코디에서만 쓰고 판정(AC9 gap_status)은 바꾸지 않는다 — 종류가 다르면 다른 옷이다(10/13).
 // 옷장에 실제로 등록된 id만 쓰고(AGENTS.md 절대 규칙 5), 한 코디에 같은 옷을 두 번 넣지 않는다.
 import { isComparableColor, isSameColorFamily } from "./gap_analysis.ts";
+import {
+  DEFAULT_GARMENT_SIMILARITY_CONFIG,
+  scoreGarmentSimilarity,
+  type GarmentSimilarityConfig,
+} from "./garment_similarity.ts";
 
 export const MAX_OUTFITS = 3;
 
@@ -18,10 +23,20 @@ export const SUBSTITUTE_KIND_PAIRS = [
   ["맨투맨", "후드"],
   ["슬랙스", "코튼팬츠"],
   ["데님팬츠", "코튼팬츠"],
+  ["카고팬츠", "코튼팬츠"],
   ["미디스커트", "롱스커트"],
   ["미니원피스", "미디원피스"],
   ["미디원피스", "롱원피스"],
   ["트렌치코트", "코트"],
+  ["트위드자켓", "재킷"],
+  ["퍼자켓", "무스탕"],
+  ["퍼코트", "코트"],
+  ["숏코트", "코트"],
+  ["하프코트", "코트"],
+  ["롱코트", "코트"],
+  ["숏코트", "트렌치코트"],
+  ["하프코트", "트렌치코트"],
+  ["롱코트", "트렌치코트"],
   ["점퍼", "야상"],
   ["숏패딩", "롱패딩"],
   ["샌들", "슬리퍼"],
@@ -40,9 +55,41 @@ export function substituteKindsFor(kind: string): string[] {
   return [...(SUBSTITUTE_KINDS.get(kind) ?? [])];
 }
 
-export type SubstituteSourceItem = { kind: string; color: string | null };
-export type SubstituteWardrobeItem = { id: string; kind: string; color: string };
+export type SubstituteSourceItem = {
+  kind: string;
+  color: string | null;
+  slot?: string;
+  visual_fit?: string | null;
+};
+export type SubstituteWardrobeItem = {
+  id: string;
+  kind: string;
+  color: string;
+  slot?: string;
+  visual_fit?: string | null;
+};
 export type Substitute = { wardrobe_item_id: string; same_color: boolean };
+
+const SUBSTITUTE_SIMILARITY_CONFIG: GarmentSimilarityConfig = {
+  ...DEFAULT_GARMENT_SIMILARITY_CONFIG,
+  minimum_comparable_weight: 0.4,
+  require_same_kind: false,
+};
+
+function substituteSimilarity(item: SubstituteSourceItem, candidate: SubstituteWardrobeItem): number {
+  if (item.slot === undefined || candidate.slot === undefined) return -1;
+  return scoreGarmentSimilarity({
+    slot: item.slot,
+    kind: item.kind,
+    color: item.color,
+    visual_fit: item.visual_fit ?? null,
+  }, {
+    slot: candidate.slot,
+    kind: candidate.kind,
+    color: candidate.color,
+    visual_fit: candidate.visual_fit ?? null,
+  }, SUBSTITUTE_SIMILARITY_CONFIG).similarity ?? -1;
+}
 
 // 사진 속 옷을 대체할 내 옷. 가까운 종류이면서 같은 색이나 같은 계열 색이어야 한다.
 // 색을 판단할 수 없으면(null·멀티·기타) 근거가 없으니 대체하지 않는다. 같은 색을 먼저 둔다.
@@ -55,12 +102,17 @@ export function findSubstitutes(
   if (kinds === undefined || !isComparableColor(itemColor)) return [];
   return wardrobe
     .filter((candidate) => kinds.has(candidate.kind))
-    .flatMap((candidate): Substitute[] => {
-      if (candidate.color === itemColor) return [{ wardrobe_item_id: candidate.id, same_color: true }];
-      if (isSameColorFamily(itemColor, candidate.color)) return [{ wardrobe_item_id: candidate.id, same_color: false }];
+    .flatMap((candidate): Array<Substitute & { similarity: number }> => {
+      const similarity = substituteSimilarity(item, candidate);
+      if (candidate.color === itemColor) return [{ wardrobe_item_id: candidate.id, same_color: true, similarity }];
+      if (isSameColorFamily(itemColor, candidate.color)) return [{ wardrobe_item_id: candidate.id, same_color: false, similarity }];
       return [];
     })
-    .sort((a, b) => Number(b.same_color) - Number(a.same_color) || a.wardrobe_item_id.localeCompare(b.wardrobe_item_id));
+    .sort((left, right) =>
+      Number(right.same_color) - Number(left.same_color) ||
+      right.similarity - left.similarity ||
+      left.wardrobe_item_id.localeCompare(right.wardrobe_item_id))
+    .map(({ wardrobe_item_id, same_color }) => ({ wardrobe_item_id, same_color }));
 }
 
 export type OutfitSourceItem = {

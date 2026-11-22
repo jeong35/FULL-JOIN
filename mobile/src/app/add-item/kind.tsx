@@ -7,11 +7,12 @@ import { GlassView } from '@/components/GlassView';
 import { CheckMark } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
 import { DetailHeader, PrimaryButton, ProgressSteps, SegmentedControl } from '@/components/ui';
-import { isSlot, KINDS_BY_SLOT, SLOTS, type Kind, type Slot } from '@/data/catalog';
+import { isSlot, KIND_GROUPS, kindLabel, SLOTS, type Kind, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // '옷 추가 ①' 부위·종류. 모양은 design/screens/20-add-item-1-kind.html을 따른다.
+// 11/16: 종류를 묶음(티셔츠 · 슬리브리스, 바지, 스커트 …)으로 나눠 보여 준다(옷 추가 시안, 지그재그 기준).
 
 const GRID_GAP = 10;
 const GRID_COLUMNS = 3;
@@ -26,7 +27,7 @@ export default function AddItemKindScreen() {
 
   const cardWidth =
     (width - layout.screenPaddingX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
-  const kinds: readonly Kind[] = KINDS_BY_SLOT[slot];
+  const groups = KIND_GROUPS[slot];
 
   // 옷 추가를 시작한 횟수. 옷장 탭·준비 끝 화면·비교 결과의 '옷 추가' 어디서 와도 여기서 한 번 남긴다.
   useEffect(() => {
@@ -51,24 +52,29 @@ export default function AddItemKindScreen() {
       <DetailHeader title="옷 추가" onBack={() => router.back()} />
       <ProgressSteps current={[0, 1]} />
 
-      <SegmentedControl options={SLOTS} value={slot} onChange={selectSlot} style={styles.segment} />
+      <SegmentedControl options={SLOTS} value={slot} onChange={selectSlot} style={styles.segment} evenGaps />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionTitle}>종류를 골라 주세요</Text>
-        <View style={styles.grid}>
-          {kinds.map((k) => (
-            <KindCard
-              key={`${slot}-${k}`}
-              name={k}
-              width={cardWidth}
-              selected={k === kind}
-              onPress={() => {
-                track('wardrobe_kind_select', { slot, kind: k });
-                setKind(k);
-              }}
-            />
-          ))}
-        </View>
+        {groups.map((group) => (
+          <View key={`${slot}-${group.title}`}>
+            {groups.length > 1 && <Text style={styles.groupTitle}>{group.title}</Text>}
+            <View style={styles.grid}>
+              {group.kinds.map((k) => (
+                <KindCard
+                  key={`${slot}-${k}`}
+                  name={k}
+                  width={cardWidth}
+                  selected={k === kind}
+                  onPress={() => {
+                    track('wardrobe_kind_select', { slot, kind: k });
+                    setKind(k);
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
       </ScrollView>
 
       {/* 시안의 아래 여백 24는 홈 인디케이터 자리까지 포함한 값이라, 둘 중 큰 쪽을 쓴다. */}
@@ -93,7 +99,7 @@ function KindCard({ name, width, selected, onPress }: KindCardProps) {
         <KindIcon kind={name} size={64} />
       </View>
       <Text style={[styles.cardName, selected && styles.cardNameSelected]} numberOfLines={1}>
-        {name}
+        {kindLabel(name)}
       </Text>
     </>
   );
@@ -102,7 +108,7 @@ function KindCard({ name, width, selected, onPress }: KindCardProps) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={name}
+      accessibilityLabel={kindLabel(name)}
       accessibilityState={{ selected }}
       style={{ width }}>
       {selected ? (
@@ -144,7 +150,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
   },
+  groupTitle: {
+    marginTop: 6,
+    marginBottom: 8,
+    marginHorizontal: 20,
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
   grid: {
+    marginBottom: 12,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: GRID_GAP,

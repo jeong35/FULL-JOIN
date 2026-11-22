@@ -66,7 +66,7 @@ export type OutfitSuggestion = {
 
 type Candidate = { wardrobeItem: WardrobeItem; similar: boolean; substitute: boolean };
 
-const SLOT_ORDER = ['아우터', '상의', '원피스', '하의', '신발', '가방'] as const;
+const SLOT_ORDER = ['아우터', '상의', '원피스', '하의', '신발', '가방', '잡화'] as const;
 
 function slotRank(item: HeartItem): number {
   const index = item.slot === undefined ? -1 : SLOT_ORDER.indexOf(item.slot);

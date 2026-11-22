@@ -19,7 +19,37 @@ jobs:
         with:
           node-version: 22.18.0
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
       - name: Install locked dependencies
         run: npm ci
       - name: Run agent and test harness checks
         run: npm run check
+      - name: Install locked mobile dependencies
+        run: npm ci --prefix mobile
+      - name: Run mobile type and lint checks
+        run: npm run check:mobile
+
+  local-supabase-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Start isolated local Supabase
+        run: npx supabase start
+      - name: Rebuild migrations and synthetic seed
+        run: npx supabase db reset --local
+      - name: Run DB and Edge Function integration flows
+        run: npm run test:integration:local
+      - name: Stop local Supabase
+        if: always()
+        run: npx supabase stop --no-backup

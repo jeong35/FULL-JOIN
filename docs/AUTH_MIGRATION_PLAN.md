@@ -1,0 +1,79 @@
+# Supabase Auth 전환 및 사용자 격리 계획
+
+## 현재 상태와 위험
+
+운영 API는 `verify_jwt=false`이며 body/query의 `user_id`를 service-role DB client가 그대로 신뢰한다. 따라서 현재 구조는 사용자 A가 사용자 B의 식별자를 알면 옷장·취향·저장 사진·챗 요청에 접근할 수 있는 IDOR 가능성이 있다. 이번 브랜치는 운영 인증 동작을 바꾸지 않는다.
+
+## 목표 식별 흐름
+
+1. 모바일이 Supabase Auth로 로그인하고 access token을 `Authorization: Bearer <JWT>`로 보낸다.
+2. Edge Function gateway에서 `verify_jwt=true`로 서명을 검증한다.
+3. 서버는 검증된 JWT의 `sub` 또는 `supabase.auth.getUser(token)` 결과를 사용자 ID로 사용한다.
+4. body/query의 `user_id`는 제거한다. 전환 기간에 남겨 둘 경우 JWT 사용자와 다르면 `403 user_id_mismatch`로 거절한다.
+5. 사용자 데이터는 `auth.uid() = user_id` RLS를 적용한다. service role은 관리 작업과 서버 전용 원자적 RPC로 제한한다.
+
+`verify_jwt=true` 전환과 기존 데모 사용자 이전은 동시에 운영 영향이 있으므로 별도 승인·staging 검증 후 실행한다.
+
+## 리소스별 권한
+
+| 리소스 | 읽기/쓰기 원칙 | 삭제 |
+|---|---|---|
+| `wardrobe_items` | 본인 `user_id`만 CRUD | 본인 행만 삭제 |
+| `style_preferences` | 본인 행만 조회·교체 | 계정 삭제 시 제거 |
+| `hearts`/아카이브 | 본인 저장 관계만 CRUD, 공개된 사진 metadata만 조인 | 하트 취소 또는 계정 삭제 |
+| `user_events` | 서버가 JWT 사용자 ID를 주입, 익명 이벤트 정책은 별도 결정 | 보존 정책에 따라 익명화/삭제 |
+| 향후 챗 기록 | 본인 + 해당 사진 conversation만 CRUD | conversation 단위 및 계정 전체 삭제 |
+| 향후 옷장 사진 | 사용자별 prefix 또는 bucket 정책 | DB 삭제와 Storage object 삭제를 함께 수행 |
+| 관리용 분석·게시 | 일반 사용자 접근 금지, 별도 admin 경계 | 운영자 승인 절차 |
+| `llm_operation_metrics` | 원문 사용자 ID 없이 service role만 insert/select | 운영 보존 기간에 따라 일괄 삭제 |
+
+## 격리 테스트 계획
+
+현재 데모 구조에서는 아래 테스트가 통과한다고 주장할 수 없다. Auth staging에서 다음을 자동화해야 한다.
+
+1. 인증 없음 → `401`
+2. 만료·변조 JWT → `401`
+3. A JWT + B `user_id` → `403`
+4. A JWT로 B의 wardrobe ID 조회/삭제 → `404` 또는 `403`
+5. A JWT로 B의 heart/archive/chat history 접근 → `404` 또는 `403`
+6. anon/authenticated role로 `llm_operation_metrics` 직접 조회/삽입 → 거절
+7. 일반 사용자의 analyze/review/publish 호출 → `401` 또는 `403`
+8. service-role key와 admin token이 앱 bundle·응답·로그에 없음
+9. 계정 삭제 후 DB 행과 Storage object에 접근할 수 없음
+
+테스트 fixture는 A/B 각각 별도 Auth 사용자를 만들고, 종료 시 해당 staging 사용자와 데이터만 정리한다. 운영 DB를 테스트 대상으로 사용하지 않는다.
+
+## 데모 계정 이전 선택지 — 미확정
+
+### A. 사용자 확인 후 연결
+
+- 신규 Auth 계정 로그인 후 기존 데모 닉네임/PIN을 한 번 확인한다.
+- 서버가 소유권 확인이 성공한 데모 user ID의 데이터를 Auth UUID로 원자적으로 이전한다.
+- 이전 토큰은 한 번만 사용하고 감사 기록을 남긴다.
+
+### B. 데모 데이터 미이전
+
+- 정식 계정은 빈 상태로 시작한다.
+- 기존 데이터는 고지된 기간 후 삭제한다.
+
+닉네임/PIN만으로 강한 소유권을 증명하기 어려우므로 어느 방식을 선택할지 팀 합의가 필요하다. 자동 이전이나 임의 삭제는 하지 않는다.
+
+## 계정 삭제 순서
+
+1. 재인증 또는 최근 인증 여부 확인
+2. 삭제 대상 DB 행과 Storage key 목록을 서버에서 확정
+3. 옷장, 취향, 하트, 이벤트/챗 정책 대상 행 삭제
+4. 사용자 Storage object 삭제
+5. Auth user 삭제
+6. 실패 단계와 재시도 가능한 deletion job ID만 기록하고 원문 데이터는 로그에 남기지 않음
+
+FK `on delete cascade`만으로 Storage 파일은 지워지지 않으므로 privileged deletion job이 필요하다. 이벤트·운영 지표의 보존/익명화 기간과 법적 요구는 제품 정책으로 확정해야 한다.
+
+## 아직 결정할 사항
+
+- 이메일 magic link, OAuth, 전화번호 등 로그인 방식과 UI
+- 데모 데이터 이전 방식과 이전 종료일
+- 익명 행동 이벤트의 허용 범위
+- 계정 삭제 유예·복구 기간
+- 사진 원본과 챗 기록의 보존 기간
+- 세션 만료와 재인증 기준

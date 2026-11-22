@@ -1,7 +1,7 @@
 // 서버(Supabase Edge Function 'api') 호출. 경로와 응답 모양은 docs/API_MVP.md(PR #1)를 따른다.
 // 이 주소는 누구나 부를 수 있는 공개 주소라 앱에 넣어도 된다.
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
-import type { Color, Kind, Slot, Style, VisualFit } from './catalog';
+import type { Style } from './catalog';
 import { getSession } from './session';
 import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
@@ -106,10 +106,31 @@ export async function updateStylePreferences(styles: readonly Style[]): Promise<
 
 // ── 옷장 ────────────────────────────────────────────
 
+// 옷장 확장(소재·무늬·계절·자세한 모양, 새 종류·색·핏)이 서버에 배포됐는지.
+// 11/20: 서버(main 3e2799b·7ff6d72)와 DB 마이그레이션(202611160002·202611200001) 배포 뒤 true로 바꿨다.
+// false로 두면 새 칸을 서버에 보내지 않고(앱을 새로 열면 사라짐), 새 종류·색·핏은 넣지 않는다.
+export const SERVER_HAS_WARDROBE_DETAILS = true;
+
+const OLD_SERVER_NEW_VALUES: ReadonlySet<string> = new Set([
+  '잡화', '트레이닝상의', '카고팬츠', '트위드자켓', '퍼자켓', '퍼코트', '무스탕', '숏코트', '하프코트', '롱코트',
+  '스타킹', '양말', '모자', '벨트', '연핑크', '모카', '살구', '벌룬', '조거', '버뮤다', '테니스', '캉캉', '플리츠',
+]);
+
+export type NewWardrobeItem = Omit<WardrobeItem, 'id'>;
+
+/** 옛 서버가 받지 못하는 옷이면 true(새 종류·색·핏, 숏팬츠 핏). */
+export function needsWardrobeUpdate(input: NewWardrobeItem): boolean {
+  if (SERVER_HAS_WARDROBE_DETAILS) return false;
+  if ([input.slot, input.kind, input.color, input.visual_fit ?? ''].some((v) => OLD_SERVER_NEW_VALUES.has(v))) return true;
+  return input.kind === '숏팬츠' && input.visual_fit !== null;
+}
+
+export const WARDROBE_UPDATE_MESSAGE = '이 옷은 곧 넣을 수 있어요. 지금 옷장 업데이트를 준비하고 있어요.';
+
 type ServerWardrobeItem = WardrobeItem & { user_id: string; created_at?: string };
 
-function toWardrobeItem({ id, slot, kind, color, visual_fit }: ServerWardrobeItem): WardrobeItem {
-  return { id, slot, kind, color, visual_fit };
+function toWardrobeItem({ id, slot, kind, color, visual_fit, material, pattern, seasons, details }: ServerWardrobeItem): WardrobeItem {
+  return { id, slot, kind, color, visual_fit, material, pattern, seasons, details };
 }
 
 export async function fetchWardrobe(): Promise<WardrobeItem[]> {
@@ -120,17 +141,19 @@ export async function fetchWardrobe(): Promise<WardrobeItem[]> {
   return data.wardrobe_items.map(toWardrobeItem);
 }
 
-export async function createWardrobeItem(input: {
-  slot: Slot;
-  kind: Kind;
-  color: Color;
-  visual_fit: VisualFit | null;
-}): Promise<WardrobeItem> {
+export async function createWardrobeItem(input: NewWardrobeItem): Promise<WardrobeItem> {
+  if (needsWardrobeUpdate(input)) throw new Error(WARDROBE_UPDATE_MESSAGE);
+  const { slot, kind, color, visual_fit, material, pattern, seasons, details } = input;
+  const body = SERVER_HAS_WARDROBE_DETAILS
+    ? { slot, kind, color, visual_fit, material: material ?? [], pattern: pattern ?? null, seasons: seasons ?? [], details: details ?? {} }
+    : { slot, kind, color, visual_fit };
   const data = await request<{ wardrobe_item: ServerWardrobeItem }>('POST', '/wardrobe', {
     user_id: userId(),
-    ...input,
+    ...body,
   });
-  return toWardrobeItem(data.wardrobe_item);
+  const saved = toWardrobeItem(data.wardrobe_item);
+  // 서버 배포 전: 고른 모양은 이번에 앱을 켜 둔 동안만 옷장 그림에 보인다.
+  return SERVER_HAS_WARDROBE_DETAILS ? saved : { ...saved, material, pattern, seasons, details };
 }
 
 export function deleteWardrobeItem(id: string): Promise<{ wardrobe_item_id: string; deleted: true }> {

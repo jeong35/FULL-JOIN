@@ -122,7 +122,6 @@ export default function LoginScreen() {
           {tried && pinError !== null && <Text style={styles.error}>{pinError}</Text>}
 
           <View style={styles.notes}>
-            <Text style={styles.note}>· 지금은 20대 여성 코디 사진을 중심으로 보여 드려요.</Text>
             <Text style={styles.note}>· 처음이면 새 옷장이 만들어져요.</Text>
             <Text style={styles.note}>· 다른 폰이나 브라우저에서도 같은 닉네임과 숫자로 들어오면 내 옷장이 그대로 열려요.</Text>
             <Text style={styles.note}>· 숫자를 잊으면 옷장을 다시 찾을 수 없어요. 다른 곳에서 쓰는 비밀번호는 넣지 마세요.</Text>

@@ -14,7 +14,7 @@
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| `GET` | `/health` | 함수 실행 상태 확인 |
+| `GET` | `/health` | 함수 실행 상태와 선택적 release metadata 확인 |
 | `POST` | `/wardrobe` | 옷장 아이템 등록 |
 | `GET` | `/wardrobe?user_id=` | 사용자의 옷장 조회 |
 | `GET` | `/style-preferences?user_id=` | 사용자의 추구미 조회 |
@@ -45,11 +45,11 @@
 }
 ```
 
-`visual_fit`은 종류별 표를 따른다. 예를 들어 슬랙스의 `null`, 로퍼의 `슬림`, 목록에 없는 색 `검정`은 모두 `400 invalid_enum`이다.
+`visual_fit`은 종류별 표를 따른다. 핏이 있는 종류도 앱에서 `모르겠어요`를 고르면 `null`을 보낼 수 있다. 숏팬츠는 `슬림`, `일자`, `와이드`, `버뮤다` 또는 `null`을 받는다. 로퍼의 `슬림`, 목록에 없는 색 `검정`처럼 종류·enum에 맞지 않는 값은 `400 invalid_enum`이다.
 
 ## 하트와 빈 옷장
 
-하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 각 `items[]`에는 갭 판정뿐 아니라 결과 화면에 필요한 `slot`, `kind`, `color`, `visual_fit`, `visibility`, 근거가 있는 상품 식별 정보가 함께 온다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 대표상품이 있으면 응답 최상위의 `shop`, `product_name`, `product_url`로 정확한 상품 페이지를 제공한다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
+하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 각 `items[]`에는 갭 판정뿐 아니라 결과 화면에 필요한 `slot`, `kind`, `color`, `visual_fit`, `visibility`, 근거가 있는 상품 식별 정보가 함께 온다. 옷장이 있으면 선택적 `match_metadata`가 `{ "wardrobe_item_id", "reason_code", "reason" }` 형태로 추가된다. 이 ID는 반드시 같은 응답의 `wardrobe_item_ids` 첫 후보이거나, 후보가 없는 `구매`에서는 `null`이다. `reason`은 종류·색·핏 기준의 한 줄 설명이며 유사도 숫자는 공개하지 않는다. 기존 필드는 바뀌지 않으므로 구버전 클라이언트는 새 필드를 무시할 수 있다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 대표상품이 있으면 응답 최상위의 `shop`, `product_name`, `product_url`로 정확한 상품 페이지를 제공한다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
 
 ## 비슷한 아이템 선택
 
@@ -70,7 +70,13 @@
 
 ## 저장 사진 챗봇
 
-`POST /chat`은 현재 **베타 API이며 필수 MVP 완료 판정에서 제외**한다. `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. `claimed_owned_item_ids`에는 실제 등록된 옷장 ID만 들어가며, 쇼핑 질문은 브랜드나 상품을 지어내지 않고 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다. 이 계약은 향후 안정화를 위한 진단 기준이며 현재 응답 품질의 안정성을 보장한다는 뜻은 아니다.
+`POST /chat`은 현재 **베타 API이며 필수 MVP 완료 판정에서 제외**한다. `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. 응답에는 기존 필드 외에 `intents`, `answer_sections`, 선택적 진단용 `comparison[]`이 추가된다. `comparison[]`의 gap/후보/근거는 비교 화면과 같은 `classifyGap`·승인된 대체 종류표를 사용한다. `claimed_owned_item_ids`에는 조회한 현재 옷장에 실제 존재하고 비교 또는 승인된 대체 후보인 ID만 들어간다.
+
+서버가 `wardrobe_outfit`, `saved_photo_outfit`, `product_search`, `general_advice`, `mixed`, `out_of_scope`를 자동 분류한다. 사용자가 상담 유형을 먼저 선택하지 않는다. 보유 옷·상품 탐색·저장 사진·범위 밖 질문은 결정론적 grounded 응답(`answer_source: grounded`)을 사용하며, 빈 옷장에서도 상품 탐색은 가능하다. 일반 패션 조언이 포함된 질문만 LLM을 호출한다. 복합 답변은 `answer_sections`의 `내 옷장 기준`, `저장 사진 기준`, `일반 패션 조언`을 분리한다. 모델은 보유 여부를 주장하지 않으며 실제 상품명·브랜드·가격·사이즈·URL을 만들지 않는다. 실패 시 `answer_source: fallback`으로 구조화된 비교 결과를 유지한다. 쇼핑 질문은 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다. 상세 JSON은 `docs/FRONTEND_MATCH_CHAT_HANDOFF.md`를 따른다.
+
+## Release metadata
+
+`GET /health`는 기존 `{ "ok": true }`와 함께 `release.git_sha`, `release.released_at`을 반환한다. 배포 환경에 `RELEASE_GIT_SHA`, `RELEASED_AT`이 설정되지 않았으면 두 값은 `null`이다. 값 설정과 검증 절차는 `docs/OPERATIONS_RELEASE.md`를 따른다.
 
 ## 사용 기록
 
