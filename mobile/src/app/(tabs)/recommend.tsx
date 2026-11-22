@@ -1,6 +1,6 @@
 // 추천 탭(11/20 확정 시안: 기본 디자인 + 반반 약속 + 매치 + 하나만 더하면 ①).
 // 날짜 줄(7일 + 약속 칸) → 다가오는 약속 한 줄(약속 있는 날은 약속 카드) → 날씨(누르면 시간별) →
-// 오늘의 룩(매치 표시) → 오늘 기온에 맞는 내 옷 → 하나만 더하면 완성.
+// 오늘의 룩(매치 표시) → 오늘 기온에 맞는 내 옷 → 하나만 더하면 완성 → 내 옷으로 조합 만들기(11/22).
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -10,18 +10,19 @@ import Svg, { Path } from 'react-native-svg';
 
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
-import { ItemIcon } from '@/components/WardrobeIcon';
-import { kindLabel } from '@/data/catalog';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
 import { TabScreen } from '@/components/TabScreen';
+import { ItemIcon } from '@/components/WardrobeIcon';
+import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
 import { nextPlan, plansOn, timeLabel, usePlans, type Plan } from '@/data/plans';
 import { clothesForWeather, lookTips, matchOf, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
 import { shoppingLinksFor } from '@/data/shopping';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import { nextTrip, nightsLabel, tripOn, useTrips, type Trip } from '@/data/trips';
+import type { WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
-import { loadWeather, REGIONS, setRegion, tempRangeLabel, weatherTip, type DayWeather } from '@/data/weather';
+import { loadWeather, REGIONS, setRegion, tempGap, tempRangeLabel, weatherTip, type DayWeather } from '@/data/weather';
 import { colors, fonts, glass, layout } from '@/theme';
 
 const DAYS = 7;
@@ -155,7 +156,7 @@ export default function RecommendScreen() {
             <View style={styles.section}>
               <View>
                 <Text style={styles.h2}>오늘 기온에 맞는 내 옷</Text>
-                <Text style={styles.sub}>기온별 옷차림 {tempRangeLabel(day)} · 내 옷장에서 {clothes.length}벌 · 눌러서 조합 보기</Text>
+                <Text style={styles.sub}>기온별 옷차림 {tempRangeLabel(day)} · 내 옷장에서 {clothes.length}벌</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.clothesRow}>
                 {clothes.map((item) => (
@@ -178,6 +179,8 @@ export default function RecommendScreen() {
           {almost !== undefined && (
             <AlmostSection almost={almost} index={almostIndex} total={view.almost.length} onNext={() => setAlmostIndex((i) => i + 1)} />
           )}
+
+          {view.wardrobe.length > 0 && <ComboMaker wardrobe={view.wardrobe} day={day} date={selected} />}
 
           {trip === undefined && (
             <Pressable onPress={() => router.push({ pathname: '/trip/edit', params: { start: selected } })} accessibilityRole="button" style={styles.tripEntry}>
@@ -464,6 +467,53 @@ function LookGrid({ look }: { look: Look }) {
   );
 }
 
+// 내 옷으로 조합 만들기: 옷장 옷 아무거나 하나를 고르면 조합 만들기(/combo/[id])로 간다.
+// 카테고리 칩으로 거르고, 고른 날 기온에 맞는 옷을 앞에 둔다. 안 맞는 옷도 고를 수 있게 두고 작게 알려 준다.
+function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]; day: DayWeather | undefined; date: string }) {
+  const [slot, setSlot] = useState<Slot | '전체'>('전체');
+  const slots = SLOTS.filter((item) => wardrobe.some((piece) => piece.slot === item));
+  const shown = wardrobe
+    .filter((item) => slot === '전체' || item.slot === slot)
+    .map((item) => ({ item, gap: day === undefined ? null : tempGap(item.kind, day) }))
+    .sort((a, b) => Number(a.gap !== null) - Number(b.gap !== null)
+      || SLOTS.indexOf(a.item.slot) - SLOTS.indexOf(b.item.slot)
+      || a.item.id.localeCompare(b.item.id));
+  return (
+    <View style={styles.section}>
+      <View>
+        <Text style={styles.h2}>내 옷으로 조합 만들기</Text>
+        <Text style={styles.sub}>옷 하나를 고르면 같이 입을 조합을 보여 드려요</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.makerChips}>
+        {(['전체', ...slots] as const).map((item) => {
+          const on = item === slot;
+          return (
+            <Pressable key={item} onPress={() => setSlot(item)} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.makerChip, on && styles.makerChipOn]}>
+              <Text style={[styles.makerChipText, on && styles.makerChipTextOn]}>{item}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.clothesRow}>
+        {shown.map(({ item, gap }) => (
+          <Pressable
+            key={item.id}
+            onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date } })}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 조합 만들기`}
+            style={styles.clothesItem}>
+            <View style={styles.clothesTile}>
+              <ItemIcon item={item} size={60} />
+            </View>
+            <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
+            {gap !== null && <Text style={styles.makerGap}>{gap === '추움' ? '추울 수도' : '더울 수도'}</Text>}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; index: number; total: number; onNext: () => void }) {
   const missing = almost.missing;
   const links = shoppingLinksFor(missing, []);
@@ -660,6 +710,12 @@ const styles = StyleSheet.create({
   clothesItem: { width: 76, alignItems: 'center', gap: 6 },
   clothesTile: { width: 76, height: 76, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   clothesName: { fontFamily: fonts.medium, fontSize: 12, color: colors.text },
+  makerChips: { gap: 6, paddingHorizontal: layout.screenPaddingX },
+  makerChip: { height: 32, paddingHorizontal: 13, borderRadius: 16, borderWidth: 1, borderColor: glass.border, backgroundColor: glass.background, justifyContent: 'center' },
+  makerChipOn: { backgroundColor: colors.purpleFill, borderColor: colors.purpleFill },
+  makerChipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.text },
+  makerChipTextOn: { fontFamily: fonts.bold, color: colors.onPurpleFill },
+  makerGap: { marginTop: -4, fontFamily: fonts.regular, fontSize: 10, color: colors.danger },
 
   ownPill: { height: 26, paddingHorizontal: 9, borderRadius: 7, backgroundColor: colors.photoPlaceholder, justifyContent: 'center' },
   ownPillText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
