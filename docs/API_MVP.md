@@ -24,6 +24,7 @@
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
 | `POST` | `/chat` | 베타 기능. 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변(MVP 필수 평가 제외) |
 | `POST` | `/events` | 앱 사용 기록(이탈 지점·최종 목표 측정용) 저장, 이름은 `docs/EVENTS.md` 목록만 |
+| `GET` | `/weather?lat=&lon=&days=` | 추천 탭 날씨. 기상청 단기·중기예보를 하루 단위로 바꿔 오늘부터 최대 10일 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
 | `PUT` | `/style-images/{id}/items/{item_id}/product` | 선택한 아이템에 정확한 상품 링크와 페이지 메타데이터 연결 |
 | `GET/PUT` | `/style-images/{id}/review` | AI 원본은 보존하고 운영용 스타일·아이템을 조회·검수 |
@@ -74,6 +75,10 @@
 ## 사용 기록
 
 `POST /events`는 `{ "device_id", "session_id", "platform", "events": [{ "name", "ts", "user_id", "props" }] }`를 한 번에 1~20개 받아 `user_events` 표에 넣고 `{ "accepted": N }`을 돌려준다. 이름은 `src/fulljoin/events.ts`의 닫힌 목록만 받고, 속성은 12개까지 짧은 글자·숫자·참거짓만 받는다. 닉네임·숫자 4자리·채팅 내용은 받지 않는다. 앱은 사전 확인(preflight) 없이 보내려고 `content-type: text/plain`으로 보낸다. 이벤트 목록과 조회 쿼리는 `docs/EVENTS.md`.
+
+## 추천 탭 날씨
+
+`GET /weather?lat=37.2596&lon=127.0465&days=7`은 한국 안 좌표만 받는다(위도 32.5~39, 경도 124~132, 1~10일, 기본 7일). 서버가 공공데이터포털의 기상청 단기예보(`VilageFcstInfoService_2.0/getVilageFcst`, 오늘~4일 뒤)와 중기예보(`MidFcstInfoService/getMidLandFcst`·`getMidTa`, 4~10일 뒤)를 서비스 키 `KMA_SERVICE_KEY`(Supabase Secrets)로 받아 `{ "days": [{ "date", "min", "max", "sky", "pop", "feels_like"?, "hourly": [{ "time", "temp", "sky", "pop" }] }], "issued_at", "source": "기상청" }`으로 돌려준다. `sky`는 `맑음`·`구름 많음`·`흐림`·`비`·`비/눈`·`눈`·`소나기` 중 하나, `hourly`는 단기예보 범위의 08~20시 2시간 간격이다. 위경도는 기상청 격자(nx, ny)로, 중기예보는 가장 가까운 대표 도시의 기온 구역과 그 도의 육상 구역으로 바꾼다. 중기예보를 받지 못하면 단기예보 날짜만 준다. 키가 없으면 `503 weather_not_configured`, 기상청이 답하지 않으면 `502 weather_unavailable`. 계산 규칙과 시험은 `src/fulljoin/weather.ts`, `scripts/check-weather.mjs`.
 
 ## 사진 분석과 CSV 일괄 등록
 

@@ -9,7 +9,8 @@ export type HintId =
   | 'home_after_closet' // 옷장에 옷이 있고 저장한 사진은 없음: 홈으로 가서 사진 보며 코디 고르기
   | 'save_compare' // 피드에서 사진 저장: '모든 저장'에서 비교하기
   | 'archive_open' // '모든 저장'에 사진 있음: 사진 눌러 비교 결과 보기
-  | 'result_chat'; // 비교 결과를 끝까지 봄: 챗봇에 물어보기
+  | 'result_chat' // 비교 결과를 끝까지 봄: 챗봇에 물어보기
+  | 'set_edit'; // 여행 짐·조합 만들기 처음: '수정'으로 옷을 빼고 더할 수 있다고 알려 주기(두 화면이 같이 씀)
 
 const STORAGE_KEY = 'odit-hints-v1';
 type DoneStore = Record<string, HintId[]>;
