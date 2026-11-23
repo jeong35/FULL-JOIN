@@ -40,6 +40,9 @@ jobs:
   local-supabase-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: local-supabase-integration
+      cancel-in-progress: false
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

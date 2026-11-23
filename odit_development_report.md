@@ -33,11 +33,11 @@
 
 ## 변경 이력
 
-### 2026-11-23 — PR #25·#28 순차 main 병합과 CI 중복 결함 확인
+### 2026-11-23 — PR #25·#28 순차 main 병합과 CI 중복·격리 결함 보완
 
 - Git: PR #25 Auth/RLS를 `964e8a4`, PR #28 CHAT-02를 `410f904`로 main에 merge commit 방식으로 병합했다. #28은 #25 병합 뒤 base를 main으로 전환하고 최신 사진 옷장 코드까지 합쳐 재검증했다.
 - 테스트: 두 PR 모두 서버·모바일 전체 검사와 local Supabase integration을 통과했다. #28의 중복 CI 한 건은 Supabase Mailpit `54324` 포트 충돌로 실패했으나 동일 SHA의 병렬 job과 실패 job 재실행은 성공했다.
-- CI 결정: branch push와 pull_request가 같은 SHA를 이중 실행하던 `verify.yml`을 main push + PR 검증으로 분리하고, PR별 concurrency로 오래된 실행을 취소하는 후속 PR을 준비한다.
+- CI 결정: PR #29에서 branch push와 pull_request가 같은 SHA를 이중 실행하지 않도록 main push + PR 검증으로 분리하고, PR별 concurrency로 오래된 실행을 취소한다. GitHub 실행기의 고정 Supabase 포트(`54322`/`54324`) 충돌과 이미지 registry rate limit을 재현했으므로 `local-supabase-integration` job은 저장소 전체에서 직렬 실행하고 일반 `check` job은 계속 병렬 실행한다.
 - 배포: main 병합만 수행했다. production migration, Edge Function, Expo 배포는 하지 않았으며 staging은 기존 `bd70fe4` 검증 배포를 유지한다.
 
 ### 2026-11-23 — PR #27 사진 기반 옷장 등록 main 병합
@@ -412,16 +412,16 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 항목 | 확인 값 |
 |---|---|
 | 현재 worktree 브랜치 | `codex/ci-dedupe` |
-| 현재 브랜치 HEAD | `origin/main@410f904`에서 CI 중복 방지 변경 작업 중 |
+| 현재 브랜치 HEAD | `c7d6ff5` 이후 PR #29의 CI 중복·Supabase job 직렬화 변경 작업 중 |
 | 기능 병합·검증 기준 `origin/main` | `410f904cfad4f6d4cc5ccae76a4be8f4b1d020a2` (PR #28 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| PR 상태 | #20, #21, #22, #25, #26, #27, #28 main 병합 완료; CI 중복 방지 후속 PR 준비 중 |
+| PR 상태 | #20, #21, #22, #25, #26, #27, #28 main 병합 완료; CI 중복·포트 충돌 방지 PR #29 검증 중 |
 
 세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 직전 추적 파일의 미커밋 변경은 `verify.yml`과 이번 보고서뿐이다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
+보고서 갱신 시점의 CI 변경은 PR #29에서 관리한다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -879,4 +879,4 @@ LLMOps·최신 eval
 
 현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/02/03·Auth/RLS·LLMOps·사진 옷장 등록 UI·local 통합 테스트·local 관리자 대시보드·승인형 release/alert**가 병합돼 있다. Auth와 사진별 영구 대화는 staging에서 실제 API/RLS 검증을 통과했지만 production에는 미배포다. 비교 학습 데이터와 추천 고도화는 아직 구현하지 않았다.
 
-다음 단계는 CI 중복 실행 방지 PR, 모바일 Auth 토큰 전달과 대화 복원/삭제 UI다. production migration과 Edge Function 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
+다음 단계는 PR #29의 CI 중복·Supabase job 격리 검증, 모바일 Auth 토큰 전달과 대화 복원/삭제 UI다. production migration과 Edge Function 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
