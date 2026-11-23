@@ -402,7 +402,7 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 보고서 갱신 전 현재 브랜치 HEAD | `bd70fe4b79f13dd96eb80f4b58d42b01113186a4` |
 | 기능 병합·검증 기준 `origin/main` | `3e5422860c77568018d18fb8b14270893bcaf3ae` (PR #26 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| PR 상태 | #25 draft·CI 성공, #28 stacked draft·CI 실행/검증 중; #20, #21, #22, #26 main 병합 완료 |
+| PR 상태 | #25 draft·CI 성공, #28 stacked draft·서버 및 local Supabase CI 성공; #20, #21, #22, #26 main 병합 완료 |
 
 세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
@@ -552,7 +552,7 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 - PR #21 base 전환 후 `Verify` run 133: **success**
 - PR #22 base 전환 후 `Verify` run 136: 서버·모바일 `check`, `local-supabase-integration` 모두 **success**
 - PR #25 `3cca4b6`: 서버 `check`와 `local-supabase-integration` **success**
-- PR #28 `bd70fe4`: push 직후 CI 실행 중이며 로컬 전체 검증과 별도 remote staging 검증은 성공
+- PR #28 `c878384`: 서버 `check`와 `local-supabase-integration` 모두 **success**, 별도 remote staging 검증도 성공
 - #20~#22·#26은 main에 병합됐다. workflow의 release는 사람 승인과 exact SHA 입력이 필요하며 자동 운영 배포는 없다.
 
 ---
