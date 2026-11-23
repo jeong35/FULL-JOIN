@@ -13,6 +13,9 @@ export type WardrobeItem = {
   pattern?: Pattern | null;
   seasons?: Season[];
   details?: WardrobeDetails;
+  photo_url?: string | null;
+  photo_color?: string | null;
+  photo_updated_at?: string | null;
 };
 
 export type StyleImageSource = '쇼핑몰' | '인플루언서' | '연예인' | '자체_촬영';

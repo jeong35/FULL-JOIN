@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { API_URL } from './api';
+import { apiIdentity } from './auth';
 import { getSession } from './session';
 
 // 서버 src/fulljoin/events.ts의 EVENT_NAMES와 같아야 한다(scripts/check-events.mjs가 확인).
@@ -265,7 +266,7 @@ export function track(name: EventName, props: EventProps = {}): void {
   }
 }
 
-export function flushEvents(): void {
+export async function flushEvents(): Promise<void> {
   if (timer !== null) {
     clearTimeout(timer);
     timer = null;
@@ -278,12 +279,19 @@ export function flushEvents(): void {
   }
   const queued = queue.slice(0, batchSize);
   queue = queue.slice(batchSize);
-  const events = queued.map(({ session_id: _sessionId, ...event }) => event);
   try {
+    const identity = await apiIdentity();
+    const events = queued.map(({ session_id: _sessionId, ...event }) => ({
+      ...event,
+      user_id: event.user_id === null ? null : identity.userId,
+    }));
     // text/plain이면 브라우저가 사전 확인(preflight) 없이 보내고, keepalive라 페이지를 닫는 중에도 전송된다.
     void fetch(`${API_URL}/events`, {
       method: 'POST',
-      headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      headers: {
+        'content-type': 'text/plain;charset=UTF-8',
+        authorization: `Bearer ${identity.accessToken}`,
+      },
       body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
       keepalive: true,
     }).catch(() => undefined);

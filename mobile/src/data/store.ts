@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 import { createWardrobeItem, deleteHeart, deleteWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
 import type { ArchiveImage, HeartResult, StyleImage, WardrobeItem } from './types';
+import { hydrateWardrobePhotos } from './wardrobePhotos';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -75,6 +76,7 @@ export async function loadWardrobe(): Promise<void> {
   setState({ wardrobe: { ...state.wardrobe, status: 'loading', error: null } });
   try {
     const items = await fetchWardrobe();
+    hydrateWardrobePhotos(items);
     setState({ wardrobe: { status: 'ready', data: items, error: null, loadedAt: Date.now() } });
   } catch (error) {
     setState({ wardrobe: { ...state.wardrobe, status: 'error', error: errorMessage(error) } });

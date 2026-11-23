@@ -2,13 +2,13 @@
 
 ## 현재 상태와 위험
 
-운영 API는 `verify_jwt=false`이며 body/query의 `user_id`를 service-role DB client가 그대로 신뢰한다. 따라서 현재 구조는 사용자 A가 사용자 B의 식별자를 알면 옷장·취향·저장 사진·챗 요청에 접근할 수 있는 IDOR 가능성이 있다. 이번 브랜치는 운영 인증 동작을 바꾸지 않는다.
+운영 API는 아직 이전 공개 버전이다. 개발 브랜치에서는 함수 내부 JWT 검증, subject 기반 요청 검증, owner RLS와 private 옷장 사진 정책을 구현해 로컬 A/B 격리를 통과했다. 정식 로그인 UI와 운영 배포는 별도 승인 대상이다.
 
 ## 목표 식별 흐름
 
 1. 모바일이 Supabase Auth로 로그인하고 access token을 `Authorization: Bearer <JWT>`로 보낸다.
-2. Edge Function gateway에서 `verify_jwt=true`로 서명을 검증한다.
-3. 서버는 검증된 JWT의 `sub` 또는 `supabase.auth.getUser(token)` 결과를 사용자 ID로 사용한다.
+2. 현재 전환 단계에서는 함수가 `supabase.auth.getUser(token)`으로 검증한다. 공개/관리 함수를 분리한 뒤 사용자 함수 gateway도 `verify_jwt=true`로 전환한다.
+3. 서버는 검증된 사용자 ID를 정본으로 사용한다.
 4. body/query의 `user_id`는 제거한다. 전환 기간에 남겨 둘 경우 JWT 사용자와 다르면 `403 user_id_mismatch`로 거절한다.
 5. 사용자 데이터는 `auth.uid() = user_id` RLS를 적용한다. service role은 관리 작업과 서버 전용 원자적 RPC로 제한한다.
 

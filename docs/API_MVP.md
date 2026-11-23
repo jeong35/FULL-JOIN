@@ -7,8 +7,9 @@
 - Supabase Edge Function 이름: `api`
 - 배포 기본 URL: `https://<project-ref>.supabase.co/functions/v1/api`
 - 오류: `{ "error": { "code": string, "message": string, "field"?: string } }`
-- 현재 MVP는 합의 대기 항목에 따라 요청의 `user_id`를 데모 사용자 식별자로 사용한다.
-- 실제 사용자 배포 전에는 Supabase Anonymous Auth의 사용자 ID와 RLS 정책으로 교체해야 한다.
+- 사용자 경로는 `Authorization: Bearer <Supabase access token>`을 요구한다. 서버가 `auth.getUser`로 확인한 JWT subject가 사용자 ID의 정본이다.
+- 전환 기간에는 기존 `user_id` 필드를 유지하지만 JWT subject와 다르면 `403 user_id_mismatch`, 토큰이 없거나 유효하지 않으면 `401 authentication_required`다. 이 변경은 아직 운영 배포되지 않았다.
+- `/health`와 별도 `x-admin-token`을 쓰는 운영자 경로는 기존 계약을 유지한다. 같은 Edge Function에서 공개/관리 경로와 사용자 경로를 함께 제공하므로 gateway 설정은 아직 `verify_jwt=false`이고, 사용자 경로가 함수 내부에서 JWT를 검증한다.
 
 ## 구현된 경로
 
@@ -17,6 +18,9 @@
 | `GET` | `/health` | 함수 실행 상태와 선택적 release metadata 확인 |
 | `POST` | `/wardrobe` | 옷장 아이템 등록 |
 | `GET` | `/wardrobe?user_id=` | 사용자의 옷장 조회 |
+| `PUT/DELETE` | `/wardrobe/{id}/photo` | 본인 옷의 확인된 투명 PNG 저장/삭제 |
+| `POST` | `/wardrobe/cutout` | 인증된 사진을 별도 누끼 서버에 전달하고 투명 PNG와 대표 색 반환 |
+| `POST` | `/wardrobe/tag` | 확인된 PNG를 스키마 enum으로 AI 태깅, 실패 시 null fallback |
 | `GET` | `/style-preferences?user_id=` | 사용자의 추구미 조회 |
 | `PUT` | `/style-preferences` | 사용자의 추구미를 0~3개로 교체 저장 |
 | `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
@@ -46,6 +50,14 @@
 ```
 
 `visual_fit`은 종류별 표를 따른다. 핏이 있는 종류도 앱에서 `모르겠어요`를 고르면 `null`을 보낼 수 있다. 숏팬츠는 `슬림`, `일자`, `와이드`, `버뮤다` 또는 `null`을 받는다. 로퍼의 `슬림`, 목록에 없는 색 `검정`처럼 종류·enum에 맞지 않는 값은 `400 invalid_enum`이다.
+
+## 옷장 사진
+
+`PUT /wardrobe/{id}/photo`는 `multipart/form-data`의 `file`(PNG, 최대 3MB)과 선택 `color`(`#RRGGBB`)를 받는다. JWT 사용자가 소유한 옷에만 저장하며, private `wardrobe-photos/{auth-user-id}/{wardrobe-id}.png` 경로를 쓴다. 원본 사진과 크롭 JPEG는 서버에 저장하지 않는다. `GET /wardrobe`는 내부 `photo_path` 대신 1시간짜리 `photo_url`, `photo_color`, `photo_updated_at`만 반환한다.
+
+`POST /wardrobe/cutout`은 최대 8MB의 JPG/PNG/WebP 한 장을 별도 `CUTOUT_URL`로 프록시한다. 비밀값 `CUTOUT_SECRET`은 Edge Function에만 둔다. 누끼 서버가 없으면 `503 cutout_unavailable`이며 원본은 저장하지 않는다.
+
+`POST /wardrobe/tag`는 `{ "user_id", "image": "data:image/png;base64,..." }`를 받는다. 출력의 `slot`, `kind`, `color`, `visual_fit`은 공통 카탈로그로 재검증하고 LLMOps의 `wardrobe_photo_tagging`으로 계측한다. 실패 시 `200 { "wardrobe_tag": null, "fallback": true }`로 사용자가 직접 칸을 고를 수 있게 한다.
 
 ## 하트와 빈 옷장
 

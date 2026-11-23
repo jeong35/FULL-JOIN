@@ -4,6 +4,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { API_URL } from './api';
+import { authorizationHeaders } from './auth';
 import type { Kind, Slot } from './catalog';
 
 // ── 지역 ────────────────────────────────────────────
@@ -83,7 +84,7 @@ export type WeatherResponse = { days: DayWeather[]; issued_at: string; source?: 
 
 export async function fetchWeather(at: Region, days = 7): Promise<WeatherResponse> {
   const query = `lat=${at.lat}&lon=${at.lon}&days=${days}`;
-  const response = await fetch(`${API_URL}/weather?${query}`);
+  const response = await fetch(`${API_URL}/weather?${query}`, { headers: await authorizationHeaders() });
   if (!response.ok) throw new Error('weather_unavailable');
   return (await response.json()) as WeatherResponse;
 }

@@ -17,6 +17,8 @@
     "test:chat03": "node --test --test-reporter=spec tests/test_chat_consultation.ts",
     "test:llmops": "node --test --test-reporter=spec tests/test_llm_observability.ts",
     "test:auth-policy": "node --test --test-reporter=spec tests/test_auth_policy.ts",
+    "test:api-auth": "node --test --test-reporter=spec tests/test_api_auth.ts",
+    "test:wardrobe-photo": "node --test --test-reporter=spec tests/test_wardrobe_photo.ts",
     "test:admin-metrics": "node --test --test-reporter=spec tests/test_admin_metrics.ts",
     "test:integration:local": "node scripts/test-local-integration.mjs",
     "dashboard:local": "node admin-dashboard/server.mjs",
@@ -34,7 +36,7 @@
     "test:server": "node --test --test-reporter=spec tests/test_server_contract.ts",
     "test:similarity": "node --test --test-reporter=spec tests/test_garment_similarity.ts tests/test_matching_integration.ts",
     "check:mobile": "npm --prefix mobile run typecheck && npm --prefix mobile run lint",
-    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:decision && npm run check:outfits && npm run check:archive && npm run check:chat && npm run check:chat-grounding && npm run check:match-explanations && npm run check:events && npm run check:weather && npm run check:wardrobe-expansion && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server && npm run test:similarity && npm run test:chat03 && npm run test:llmops && npm run test:auth-policy && npm run test:admin-metrics"
+    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:decision && npm run check:outfits && npm run check:archive && npm run check:chat && npm run check:chat-grounding && npm run check:match-explanations && npm run check:events && npm run check:weather && npm run check:wardrobe-expansion && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server && npm run test:similarity && npm run test:chat03 && npm run test:llmops && npm run test:auth-policy && npm run test:api-auth && npm run test:wardrobe-photo && npm run test:admin-metrics"
   },
   "engines": {
     "node": ">=22.18"

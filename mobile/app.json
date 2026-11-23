@@ -32,6 +32,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "옷 사진을 옷장에 넣으려고 사진을 불러와요",
+          "cameraPermission": "옷을 찍어서 옷장에 넣으려고 카메라를 써요"
+        }
       ]
     ],
     "experiments": {

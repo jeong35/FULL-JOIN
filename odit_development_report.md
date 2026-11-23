@@ -1,6 +1,6 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
-- 기준 시각: 2026-11-21 KST
+- 기준 시각: 2026-11-23 KST
 - 조사 대상 저장소: `jeong35/FULL-JOIN`
 - 조사 worktree: `/Users/choijeong-in/.codex/worktrees/kind-expansion-main/FULL-JOIN`
 - 작성 목적: 다른 개발 세션과 팀원이 이전 대화 없이도 현재 구현·테스트·Git·배포·의사결정 상태를 이어받을 수 있게 한다.
@@ -28,10 +28,39 @@
 
 - GitHub PR #20, #21, #22를 순서대로 병합했고 기능 병합·검증 기준 main SHA는 `73c435a63ae5aa95a2087753520680866a638153`이다. 이 문서 갱신 커밋은 그 뒤의 docs-only main 이력이며 최신 SHA는 `origin/main` ref를 원천으로 삼는다.
 - main에는 코사인 A안, CHAT-01/03, LLMOps migration/계측, local Supabase 통합 테스트와 local-only 관리자 대시보드가 포함됐다.
-- 운영 DB migration, Edge Function, 운영 대시보드는 배포하지 않았다. production은 계속 기존 `b53b6d6` 기준 증거만 있다.
-- 실제 API의 `verify_jwt=false`/신뢰하는 `user_id` 취약점은 남아 있으며 다음 최우선 보안 PR에서 해결한다.
+- 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 15개가 적용됐다. Edge Function은 깨끗한 `origin/main@2d0369b` 스냅샷으로 version 22를 배포했고 release SHA/시각 metadata를 연결했다. 운영 대시보드는 배포하지 않았다.
+- `codex/auth-photo-integration`에서 함수 내부 JWT 검증, subject 기반 user_id 강제와 owner RLS를 구현했고 로컬 A/B 격리를 통과했다. 운영은 아직 이전 공개 API이므로 취약점이 해소된 것으로 간주하지 않는다.
+- 추천 탭은 PR #23으로 main(`2d0369b`)에 병합됐고 Verify run 145가 성공했다. 운영 `KMA_SERVICE_KEY` 설정과 Edge Function version 22 배포 후 `/weather`가 기상청 7일 예보를 HTTP 200으로 반환했다. 모바일 앱 배포 여부는 확인 불가다.
+- 사진 옷장 등록 UI는 `origin/feat/photo-closet@1f65680`에서 현재 개발 브랜치로 선택 포팅했다. private Storage/DB 계약, 업로드·삭제, 누끼 proxy, enum 기반 태깅과 LLMOps를 추가했으며 운영에는 미배포다.
 
 ## 변경 이력
+
+### 2026-11-23 — LLMOps 운영 migration·release metadata
+
+- 깨끗한 `origin/main@2d0369b` 스냅샷에서 운영 pending이던 `202611200003_llm_operation_metrics.sql` 1개만 적용했다. Auth/사진 migration `202611230001`·`202611230002`는 pending 유지했다.
+- 운영 Secrets에 `RELEASE_GIT_SHA=2d0369b...`, `RELEASED_AT=2026-11-23T03:03:10Z`를 설정했다.
+- smoke: `/health`가 정확한 SHA/시각을 반환했고 `/weather`도 기상청 3일 응답 200을 유지했다.
+- 현재 인증·사진 개발 브랜치 코드는 운영에 배포하지 않았다.
+
+### 2026-11-23 — 기상청 운영 API 연동
+
+- 운영 Secrets에서 `KMA_SERVICE_KEY` 이름을 확인하고 값은 출력·저장하지 않았다.
+- 현재 미커밋 인증·사진 작업을 제외하기 위해 `/private/tmp`의 깨끗한 `origin/main@2d0369b` archive에서 `api`만 배포했다. 운영 함수는 ACTIVE version 22다.
+- smoke: `/health` 200, 수원 영통구 기준 `/weather?days=7` 200, `source: 기상청`, 7일과 시간대별 기온·하늘·강수확률 반환.
+- 이 시점에는 DB migration·main merge·모바일 배포를 하지 않았으며, 후속 작업에서 LLMOps migration과 release metadata를 별도 반영했다.
+
+### 2026-11-23 — 인증 격리·사진 옷장 서버 통합 개발
+
+- 브랜치: 최신 `origin/main@2d0369b`에서 `codex/auth-photo-integration` 생성. 기존 stash·다른 worktree·미추적 발표 PDF 보존, commit/push/merge 없음.
+- 구현: 사용자 API JWT 검증과 owner RLS, private `wardrobe-photos` Storage, 확인된 PNG 업로드/삭제·서명 URL, 누끼 proxy, schema enum 사진 태깅·LLMOps, 팀원 사진 등록 UI 선택 포팅과 모바일 Auth transport.
+- 테스트: 로컬 DB reset에서 17개 migration+seed 성공. 두 Auth 사용자로 401/403/404 격리, RLS, PNG Storage, 비교 후보 ID, 챗, 이벤트, LLMOps 통합 통과. `npm run check`(골든 47/47 포함)와 모바일 typecheck/lint 통과.
+- 기술 결정: 원본/크롭 JPEG는 서버에 저장하지 않고 확인된 투명 PNG만 저장한다. 정식 로그인 UI·데모 데이터 이전·계정 삭제와 외부 누끼 성공/live OpenAI 호출은 미완료다. 운영 변경 없음.
+
+### 2026-11-23 — 추천 탭·사진 옷장 등록 원격 확인
+
+- 추천 탭: PR #23 main 병합, 서버·모바일·local Supabase CI 성공. 운영 함수는 여전히 version 20이고 `202611200003`도 pending이어서 추천 `/weather`와 최신 main은 운영 미배포다.
+- 사진 등록: 별도 브랜치 2커밋, main과 텍스트 충돌 없음, CI 성공. 전용 기능/E2E 테스트와 서버 영구 저장은 없으며 native에서는 앱을 닫으면 사진이 사라진다.
+- 우선순위: 실제 API 사용자 격리 보안 PR → 인증된 사진 Storage/DB 계약 → 사진 브랜치 최신 main 재검증 순서. 운영 배포는 수행하지 않았다.
 
 ### 2026-11-21 — PR #20·#21·#22 main 병합
 
@@ -51,15 +80,15 @@
 ## 0. 핵심 요약
 
 1. **옷 종류 확장 P0는 main과 운영 서버에 반영됐다.** 현재 프론트와 서버는 확장된 `slot/kind/color/visual_fit`, `material`, `pattern`, `seasons`, `details` 계약을 사용하며 실제 운영 POST→GET→DELETE smoke test도 통과했다.
-2. **코사인 A안은 main에 반영됐고 운영에는 미배포다.** AC9의 활용·비슷함·구매 버킷은 그대로 유지하고, 실제 버킷 내부 후보 순서에만 cosine을 사용한다.
-3. **PR #20·#21·#22는 순차적으로 main에 병합됐다.** 후속 PR마다 base를 main으로 전환하고 새 CI와 충돌 여부를 확인했다.
+2. **코사인 A안 서버 코드는 main과 운영 version 22에 반영됐다.** AC9의 활용·비슷함·구매 버킷은 그대로 유지하고, 실제 버킷 내부 후보 순서에만 cosine을 사용한다. 프론트 reason 표시는 남아 있다.
+3. **PR #20~#23은 main에 병합됐다.** #23 추천 탭까지 포함한 최신 main CI가 성공했다.
 4. **기존 `match_metadata` 버킷 이탈 결함을 수정했다.** 공개 metadata는 AC9 결과의 첫 후보만 참조하며 점수는 노출하지 않는다. 승인되지 않은 `데님팬츠↔슬랙스` 관계도 포함하지 않았고 회귀 테스트로 고정했다.
 5. **사용자 행동 이벤트는 main/운영에 구현됐다.** 배치 `POST /events`, 30분 세션, 허용 이벤트, 비차단 전송이 동작한다. 코사인 학습용 비교 피드백은 별도 로컬 작업본만 있고 운영에는 없다.
 6. **서버 전체 검증이 통과한다.** `npm run check`에서 승인 골든 47/47, 서버 3/3, 코사인·통합 19/19과 chat grounding/근거 검사가 모두 성공했다.
 7. **모바일 검증도 통과한다.** `mobile/package-lock.json` 기준 `npm ci` 후 typecheck와 Expo lint가 성공했다. `verify.yml`에도 기존 서버 검증을 유지한 채 모바일 설치·검증 단계를 추가했다.
 8. **CHAT-01/03은 main에 반영됐다.** 여섯 상담 유형을 자동 분류하고 보유 옷·저장 사진·상품 탐색은 grounded로, 일반 조언 부분만 LLM으로 처리한다. 사진별 영구 기록은 인증 정책 확정 뒤로 보류했다.
-9. **기능 병합·검증 기준 main SHA는 `73c435a`다.** 보고서 전용 후속 커밋을 포함한 최신 값은 `origin/main`을 확인한다. 로컬 이름 `main`은 여전히 오래돼 있으므로 새 작업은 `origin/main`에서 분기한다.
-10. **운영 마이그레이션은 14개 그대로다.** `202611200003_llm_operation_metrics.sql`은 main에 포함됐고 local 적용은 검증됐지만 운영에는 적용하지 않았다.
+9. **개발 브랜치는 최신 main `2d0369b`에서 분기했다.** 현재 브랜치는 `codex/auth-photo-integration`이며 GitHub PR 준비 대상이다.
+10. **운영 마이그레이션은 15개다.** `202611200003_llm_operation_metrics.sql`까지 적용됐고 Auth/사진 2개는 pending이다.
 
 ---
 
@@ -161,16 +190,16 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | MVP 핵심 피드→저장→비교→코디→쇼핑 | 완료 | 프론트·서버·운영 연결 |
 | 확장 옷 종류/상세 옷장 | 완료 | 프론트·서버·DB·운영 연결 |
 | 규칙 기반 gap 판정 | 완료 | 운영 사용 중 |
-| 코사인 기반 후보 정렬 | 부분 완료 | main 반영·검증 완료, 운영 미배포 |
+| 코사인 기반 후보 정렬 | 부분 완료 | API는 운영 version 22 반영, 프론트 reason 표시·실사용 shadow 검증 미완료 |
 | 판정 근거/후보 메타데이터 | 부분 완료 | main의 optional API 계약·테스트 완료, 프론트 표시·운영 배포 미완료 |
 | 비교 피드백/학습 데이터 | 부분 완료 | 로컬 코드·migration만 존재, 동의 UI·운영 없음 |
 | 챗봇 기본형 | 완료 | 운영 beta |
 | 챗봇 의도 분리·강한 grounding | 부분 완료 | main 반영·검증 완료, 프론트의 optional 진단 필드 활용·운영 배포 미완료 |
 | 취향 기반 홈 정렬 | 완료 | 운영 사용 중 |
-| 별도 추천 탭/옷장 기반 추천 | 미구현 | 추천 탭은 Coming Soon |
-| 사진 기반 옷장 등록 | 미구현 | 수동 칩 등록만 제공 |
+| 별도 추천 탭/옷장 기반 추천 | 부분 완료 | 기상청 `/weather` 운영 smoke 완료; 모바일 배포 확인 불가, 일부 약속·조합·여행 상태는 기기 로컬 저장 |
+| 사진 기반 옷장 등록 | 부분 완료 | 개발 브랜치에 UI·웹 누끼·private Storage/DB·태깅 API 통합 및 로컬 검증 완료; 외부 누끼 성공·실기기·main/운영 미완료 |
 | 사진별 챗 기록 저장 | 미구현 | 클라이언트 메모리의 현재 대화만 유지 |
-| 출시용 인증/탈퇴 | 미구현 | 닉네임+PIN 데모 세션 |
+| 출시용 인증/탈퇴 | 부분 완료 | 개발 브랜치 JWT/RLS·익명 Auth transport와 로컬 격리 완료; 정식 로그인·데모 이전·탈퇴 미구현 |
 | LLMOps 토큰·비용·p95 | 부분 완료 | 로컬 계측 DB 통합·대시보드·테스트 완료, 운영 적용·실제 운영 표본·alert 없음 |
 
 ---
@@ -182,10 +211,10 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
 | P0 옷 종류 확장 서버 통합 | **완료** | main `npm run check` 통과, wardrobe 확장 check 통과, 운영 POST/GET/DELETE smoke 통과 | 완료 | 완료 | 구형 레코드의 유실 세부값은 복구 불가임을 UX/문서에 명시 | schema, catalog, API, `202611160002`, `202611200001`, mobile catalog/add-item |
-| P1 코사인 코디 비교 | **부분 완료** | 최종 main에서 cosine·통합 19/19, 전체 check와 local API 통합 통과 | UI 미연동, 구버전은 optional 필드 무시 가능 | main 반영, 운영 미배포 | staging API 검증, 프론트 이유 표시, shadow 평가 | `garment_similarity.ts`, gap/outfit/API, docs/tests |
-| P2 취향·옷장 추천 고도화 | **미구현** | 없음 | 추천 탭 미연동 | 미배포 | 추천 정책·점수·콜드스타트 합의 후 구현 | `mobile/src/app/(tabs)/recommend.tsx`, feed/gap 모듈 예정 |
+| P1 코사인 코디 비교 | **부분 완료** | 최종 main에서 cosine·통합 19/19, 전체 check와 local API 통합 통과 | UI 미연동, 구버전은 optional 필드 무시 가능 | API 운영 version 22 | 프론트 이유 표시, shadow 평가 | `garment_similarity.ts`, gap/outfit/API, docs/tests |
+| P2 취향·옷장 추천 고도화 | **부분 완료** | PR #23 CI와 전체 회귀, 운영 weather smoke 통과 | 추천 탭·날씨·약속/조합/여행 시안 main 반영 | weather API 배포, 모바일 배포 확인 불가 | 옷장 활용 중심 추천 정확도·특정 아이템 기반 추천·상태 서버 저장 | recommend 화면, weather/feed/gap 모듈 |
 | P3 챗봇 보충 | **부분 완료** | 최종 main에서 CHAT-01/03 회귀·local API 통합 통과 | optional 타입/인수인계 문서 준비, UI 미연동 | main 반영, 운영은 기본형 | staging API 검증; 사진별 기록은 Auth 이후 | `chat.ts`, API, `FRONTEND_MATCH_CHAT_HANDOFF.md` |
-| P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위·local DB/API 통합·대시보드 집계 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | 운영 migration/계측 미배포 | 실제 운영 표본, alert, live eval 12건 | `llm_observability.ts`, `admin_metrics.ts`, `202611200003`, dashboard/eval/docs |
+| P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위·local DB/API 통합·대시보드 집계 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | 운영 migration/API 반영 | 실제 운영 표본, alert, live eval 12건, 대시보드 운영 인증 | `llm_observability.ts`, `admin_metrics.ts`, `202611200003`, dashboard/eval/docs |
 
 RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으로 유지된다.
 
@@ -196,8 +225,8 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
 | MATCH-01 스키마 동기화 | **완료** | schema/catalog 정합, wardrobe expansion, 골든 및 서버 계약 통과; 운영 smoke 통과 | 완료 | 완료 | 프론트가 종류를 다시 바꾸면 공통 enum·핏 그룹·DB를 함께 변경 | schema, catalog, prompt, API, migrations, mobile catalog |
-| MATCH-02 코사인 유사도 | **부분 완료** | 최종 main 19/19, AC9 eval 11/11 유지, local API 통합 통과 | 응답 후보 순서만 호환 적용, UI 점수 없음 | main 반영, 운영 미배포 | staging 및 실제 데이터 shadow 검증 | `garment_similarity.ts`, gap/outfit, tests |
-| MATCH-03 근거·후보 제공 | **부분 완료** | 버킷 누수·근거·local 후보 ID 정합성 통과 | mobile 타입 반영, UI 미표시 | main 반영, 운영 미배포 | 프론트 한 줄 reason 표시·staging 확인 | gap/API/mobile types/API 문서 |
+| MATCH-02 코사인 유사도 | **부분 완료** | 최종 main 19/19, AC9 eval 11/11 유지, local API 통합 통과 | 응답 후보 순서만 호환 적용, UI 점수 없음 | API 운영 version 22 | 실제 데이터 shadow 검증 | `garment_similarity.ts`, gap/outfit, tests |
+| MATCH-03 근거·후보 제공 | **부분 완료** | 버킷 누수·근거·local 후보 ID 정합성 통과 | mobile 타입 반영, UI 미표시 | API 운영 version 22 | 프론트 한 줄 reason 표시 | gap/API/mobile types/API 문서 |
 
 #### CHAT — 신뢰성과 문맥
 
@@ -205,20 +234,20 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 |---|---|---|---|---|---|---|
 | CHAT-01 의도 분리·근거·일관성 | **부분 완료** | 최종 main의 chat grounding·local API 통합 통과 | 기존 UI 하위 호환, 신규 진단 필드 미사용 | main 반영, 운영은 기본형 | staging E2E와 live eval 계약 합의 | `chat.ts`, API, scripts |
 | CHAT-02 사진별 대화·문맥·복합 질문 | **부분 완료** | 복합 intent 회귀는 CHAT-03에서 통과, 영구 기록 테스트 없음 | 복합 답변 타입만 준비, 대화는 현재 화면 메모리만 | 복합 처리 main 반영, 영구 기록 미배포 | 대화 DB/접근 제어/삭제 정책, 사진 A→B→A 복원 | chat API/UI 및 신규 DB 필요 |
-| CHAT-03 질문 범위·구매 도움 | **부분 완료** | 일반/빈 옷장/복합/범위 밖/소유권 회귀와 local API 통합 통과 | optional `intents`·`answer_sections` 문서화, UI 미연동 | main 반영, 운영 미배포 | staging E2E, 평가 v2 승인, 검증된 사이즈 경로 | chat/API/mobile types/frontend handoff |
+| CHAT-03 질문 범위·구매 도움 | **부분 완료** | 일반/빈 옷장/복합/범위 밖/소유권 회귀와 local API 통합 통과 | optional `intents`·`answer_sections` 문서화, UI 미연동 | API 운영 version 22 | 운영 E2E, 평가 v2 승인, 검증된 사이즈 경로 | chat/API/mobile types/frontend handoff |
 
 #### WARD — 옷장 등록
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| WARD-01 사진 기반 단일 등록 | **미구현** | 없음 | 없음 | 미배포 | 권한·업로드·AI 태깅·사용자 수정 후 확정·실패 fallback·원본 보존 정책 | 신규 mobile flow, analysis 재사용, storage/API 필요 |
+| WARD-01 사진 기반 단일 등록 | **부분 완료** | photo 계약 3/3, local private Storage/API·fallback 통합, 전체 모바일 검증 통과 | 팀원 UI 선택 포팅 및 서버 업로드 연결 | 미배포·미push | Python 누끼 성공/live 태깅/실기기, 정식 Auth·삭제 정책, staging | photo screens/data, `wardrobe_photo.ts`, API, `202611230002` |
 | WARD-02 일괄 등록·샘플 옷장 | **미구현** | 없음 | 없음 | 미배포 | 단일 사진 등록 이후 개별 검토 batch, 부분 실패, 샘플 격리/삭제 | 신규 기능 |
 
 #### REC / FEED — 추천과 탐색
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| REC-01 사용자별 코디 추천 | **미구현**(취향 홈 정렬만 기존 완료) | 홈 피드 정렬 계약 통과 | 홈만, 추천 탭 없음 | 홈만 배포 | 취향+재현 가능성 결합, 특정 옷 기반 추천, 이유, 콜드스타트·페이지네이션 | feed/gap, recommend tab |
+| REC-01 사용자별 코디 추천 | **부분 완료** | PR #23 CI, 전체 check, 운영 weather smoke 통과 | 추천 탭 main 반영 | weather API 배포, 모바일 배포 확인 불가 | 옷장 재현 가능성 고도화, 특정 옷 기반 추천, 이유·콜드스타트·페이지네이션 | feed/gap/weather/recommend tab |
 | FEED-01 검색·필터 | **부분 완료** | archive 필터 check 통과 | 저장 아카이브 필터와 취향 정렬 있음 | 해당 부분 배포 | 홈의 종류·색·스타일 키워드 검색, 필터 UI, 선택 추구미 설명 | feed/archive API, home UI |
 
 #### UX — 모바일 사용성
@@ -232,7 +261,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| ACC-01 계정·데이터 관리 | **미구현 / 논의 필요** | 없음 | 데모 닉네임+PIN만 | 출시형 미배포 | Supabase Auth, 가입/로그인 분리, 계정·연관 데이터 삭제, 이전 정책, RLS | `mobile/src/data/session.ts`, users 관련 DB/API |
+| ACC-01 계정·데이터 관리 | **부분 완료 / 논의 필요** | auth/API 단위와 로컬 A/B JWT·RLS 격리 통과 | 개발용 익명 Auth transport; 기존 닉네임+PIN UI는 정식 인증 아님 | 미배포·미push | 로그인 방식, 데모 이전, 탈퇴·Storage 삭제 job, gateway JWT, staging | `mobile/src/data/auth.ts`, API auth, RLS migration, auth docs |
 | BUY-01 구매 직전 사이즈 정보 | **미구현** | 없음 | 검색/대표 링크만 | 미배포 | 검증된 상품 상세·사이즈표 출처 연결; 추측 금지 | shopping/product metadata |
 | CONTENT-01 콘텐츠 이용 권리 | **논의 필요** | 코드 테스트 대상 아님 | private seed 표시 일부 | 저장 구조 배포 | 팀이 이용 허락·공개 범위 확인, 출시 가능 콘텐츠 선별, 대체 데이터 계획 | storage/source/permission metadata, 출시 체크리스트 |
 | FUTURE-01 주문 캡처·체형/사이즈·RAG | **의도적으로 미구현** | 없음 | 없음 | 없음 | 별도 스펙·개인정보·정확도 검토 전 자동 구현 금지 | 장기 백로그 |
@@ -241,7 +270,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버, LLMOps 단위+local 통합, dashboard 집계, 11/17 baseline; live 12건 미실행 | 행동 이벤트 연결 | 이벤트만 운영 배포 | 운영 migration, 실제 표본/alert, CHAT-03 eval v2 승인 | `evals/`, events, LLMOps/admin 코드·docs, workflow |
+| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버, LLMOps 단위+local 통합, dashboard 집계, 11/17 baseline; live 12건 미실행 | 행동 이벤트 연결 | 이벤트·LLMOps migration/API 운영 반영 | 실제 표본/alert, CHAT-03 eval v2 승인, 운영 대시보드 인증 | `evals/`, events, LLMOps/admin 코드·docs, workflow |
 
 ### 2.3 명시적 제외 항목 준수
 
@@ -388,17 +417,17 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 | 항목 | 확인 값 |
 |---|---|
-| 현재 worktree 브랜치 | `codex/local-supabase-dashboard` |
-| 보고서 갱신 전 현재 브랜치 HEAD | `73c435a63ae5aa95a2087753520680866a638153` (PR #22 merge commit) |
-| 기능 병합·검증 기준 `origin/main` | `73c435a63ae5aa95a2087753520680866a638153` |
-| 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| PR 상태 | #20, #21, #22 모두 main 병합 완료 |
+| 현재 worktree 브랜치 | `codex/auth-photo-integration` |
+| 현재 worktree HEAD | `2d0369bb629a5396c0534aad474d63ac1ea81070` + 미커밋 개발 변경 |
+| 최신 `origin/main` | `2d0369bb629a5396c0534aad474d63ac1ea81070` (PR #23 merge commit) |
+| 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 61커밋 뒤 |
+| PR 상태 | #20~#23 main 병합 완료; 사진 브랜치는 PR 없음 |
 
-세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
+PR #20~#23의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 직전 추적 파일의 미커밋 변경은 이 보고서뿐이었다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. PR #20~#22의 코드 변경은 모두 main에 병합됐으며 운영에는 배포하지 않았다.
+현재 worktree에는 인증/RLS, 사진 DB·Storage·API·모바일 통합, 관련 문서·테스트가 미커밋 상태다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. 원격 push·main merge·운영 배포는 하지 않았다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -437,7 +466,7 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 
 ### 4.4 Supabase 마이그레이션
 
-2026-11-20 읽기 전용 조회 기준으로 원격 production에는 아래 14개 버전이 applied되어 모두 일치한다. main에는 신규 `202611200003`이 포함됐고 local reset으로 적용을 검증했지만 운영에는 적용하지 않았다.
+2026-11-23 운영 확인 기준으로 production에는 `202611200003`까지 15개가 applied되어 있다. 현재 개발 브랜치의 Auth/사진 2개는 운영에 적용하지 않았다.
 
 | 버전 | 파일 / 역할 |
 |---|---|
@@ -455,9 +484,11 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 | 202611160003 | `remote_user_events_grants_history.sql` — 원격 과거 이력 정렬용 no-op 기록 |
 | 202611200001 | `wardrobe_fit_frontend_alignment.sql` |
 | 202611200002 | `user_events_batch_alignment.sql` — 운영 분석 프로토타입을 canonical batch schema로 무삭제 변환 |
-| 202611200003 | `llm_operation_metrics.sql` — **main 포함·local 적용 검증·운영 pending**, 원문 없는 LLM/grounded 운영 지표 |
+| 202611200003 | `llm_operation_metrics.sql` — **운영 적용 완료**, 원문 없는 LLM/grounded 운영 지표 |
+| 202611230001 | `auth_access_control.sql` — **개발 브랜치·local 적용·운영 pending**, owner RLS와 authenticated grants |
+| 202611230002 | `wardrobe_photos.sql` — **개발 브랜치·local 적용·운영 pending**, 사진 메타데이터와 private Storage 정책 |
 
-과거 운영 이력 불일치는 해결됐다. 현재 local/main과 production의 차이는 의도적인 신규 pending migration 하나뿐이다. 이번 작업에서는 local `db reset`만 수행했고 remote repair·push·reset·운영 적용은 수행하지 않았다.
+과거 운영 이력 불일치는 해결됐다. 현재 개발 브랜치 local과 production의 차이는 의도적으로 보류한 Auth/사진 migration 2개(`202611230001`, `202611230002`)뿐이다. remote repair·reset은 수행하지 않았다.
 
 ### 4.5 최근 DB와 Edge Function 배포
 
@@ -472,7 +503,7 @@ stash는 3개이며 발표 PDF 보존 2개와 과거 review-publish 작업 보�
 
 - 이름: `full-join-mvp`
 - ref: `gctbcanltqgcymdlplyr`
-- 함수 `api`: `ACTIVE`, version `20`
+- 함수 `api`: `ACTIVE`, version `22` (`origin/main@2d0369b` clean archive 배포)
 - `verify_jwt`: `false`
 - health GET: `{"ok":true}`
 
@@ -538,7 +569,7 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 
 ## 5. 테스트 및 품질 검증
 
-### 5.1 2026-11-21 최종 main 기준 실제 실행한 테스트
+### 5.1 2026-11-23 개발 브랜치 기준 실제 실행한 테스트
 
 | 명령 | 위치 | 결과 | 해석 |
 |---|---|---|---|
@@ -550,8 +581,10 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 | `npm run check:match-explanations` | 최종 main과 동일한 파일 트리 | **성공** | exact/color/fit/substitute/no-candidate 문구 |
 | `npm run typecheck` | `mobile/` | **성공** | lockfile 설치 후 strict typecheck |
 | `npm run lint` | `mobile/` | **성공** | Expo lint 무경고 |
-| `supabase db reset --local` | local Docker | **성공** | 15개 migration과 synthetic seed 적용 |
-| `npm run test:integration:local` | local Edge Function/DB | **성공** | 옷장 CRUD, 비교·근거·후보 ID, 챗, events, LLMOps persistence; 실제 user_id 격리 실패도 재현 |
+| `supabase db reset --local` | local Docker | **성공** | 17개 migration과 synthetic seed 적용 |
+| `npm run test:integration:local` | local Edge Function/DB | **성공** | 옷장/PNG Storage, 비교·후보 ID, 챗, events, LLMOps, 태깅 fallback, JWT/RLS A/B 격리 |
+| `npm run test:api-auth` | 현재 worktree | **4/4 성공** | 사용자 경로·Bearer parsing·request user ID·JWT subject 검증 |
+| `npm run test:wardrobe-photo` | 현재 worktree | **3/3 성공** | owner path, enum 조합, base64 크기 계산 |
 | `npm run test:admin-metrics` | 현재 worktree | **3/3 성공** | KST, distinct 사용자, funnel, 테스트 제외, LLMOps 비용·p95·fallback |
 
 ### 5.2 골든 케이스 해석
@@ -632,9 +665,9 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 - 사용자 행동 이벤트와 별도 `llm_operation_metrics` 테이블
 - 사진·프롬프트·대화·URL·사용자/사진 ID를 저장하지 않는 필드 allowlist
 
-아직 없는 것은 운영 migration 적용, 실제 운영 표본, alert, 보존 기간 확정이다. Docker local Supabase에서 DB/API 통합 테스트와 local-only dashboard는 완료했고 운영 DB는 변경하지 않았다. 별도 remote staging 프로젝트 테스트는 아직 없다.
+운영 migration은 적용됐지만 실제 운영 표본·alert·보존 기간 확정은 남아 있다. Docker local Supabase에서 DB/API 통합 테스트와 local-only dashboard는 완료했고 별도 remote staging 프로젝트 테스트는 아직 없다.
 
-사진 기반 옷장 등록은 원격 branch와 현재 모바일 코드에서 구현 흔적을 확인하지 못했다. 프론트 담당자가 아직 push하지 않은 작업일 수 있으므로 이 브랜치에서는 화면·업로드 API를 추측해 구현하지 않았다.
+사진 기반 옷장 등록은 팀원 브랜치의 화면·웹 누끼 구현을 선택 포팅했다. 서버는 확인된 투명 PNG만 private Storage에 저장하고 DB에는 소유자 prefix path·대표 색·갱신 시각을 둔다. 조회에는 서명 URL만 반환한다. 로컬 업로드/조회/격리는 통과했지만 별도 Python 누끼 서버 성공 경로, live AI 태깅, 실제 기기와 운영 배포는 미검증이다.
 
 코사인 학습용 비교 피드백은 일반 `user_events`와 별개로 설계됐으나 로컬 작업본뿐이다. 현재 운영 데이터를 코사인 학습 라벨로 간주하면 안 된다.
 
@@ -696,7 +729,7 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 
 ### 6.4 기술 검토가 필요한 사항
 
-1. 운영 함수의 `verify_jwt=false`와 사용자 요청의 `user_id` 신뢰는 수평 권한 침해 위험이 있다. 출시 전 Supabase Auth와 RLS 또는 검증된 JWT 기반 user identity가 필요하다.
+1. 개발 브랜치는 함수 내부 JWT와 RLS 격리를 구현했지만 운영은 아직 `user_id`를 신뢰하는 버전이다. 정식 로그인과 운영 전환 전까지 수평 권한 침해 위험이 남는다.
 2. 서비스 역할 키는 서버 내부에 있지만 공개 함수가 잘못된 user_id를 받아 다른 사용자 데이터를 접근하지 못하도록 별도 권한 경계가 필요하다.
 3. 단일 Edge Function을 계속 유지할지, 관리/분석/사용자 API를 분리할지 검토한다.
 4. migration 이력 복구용 no-op 파일의 의미를 문서화하고 신규 개발자가 삭제하지 않게 해야 한다.
@@ -793,12 +826,12 @@ LLMOps·최신 eval
 
 ### 7.5 추천 개발 순서
 
-1. **보안·출시 기준:** 실제 API의 `user_id` 신뢰 제거, JWT/RLS 전환 정책과 격리 회귀
-2. **리뷰·staging:** main A안/CHAT-01/03의 별도 staging API smoke
-3. **프론트 호환:** optional 한 줄 근거 표시와 grounded 챗 응답 수용 확인
-4. **측정:** 동의 기반 비교 피드백, 알고리즘 버전, shadow 결과
-5. **추천:** 안정된 공통 매칭 모듈로 옷장 기반 추천과 특정 아이템 검색
-6. **등록 간소화:** 단일 사진 등록→검토/수정→저장, 이후 batch
+1. **보안·출시 기준:** 현재 인증/RLS 브랜치 리뷰, 정식 로그인·데모 이전·계정 삭제 결정, staging 격리
+2. **사진 등록 검증:** Python 누끼 성공 경로, 실제 AI 태깅, iOS/Android 업로드와 Storage 정리 회귀
+3. **리뷰·staging:** A안/CHAT-01/03·추천·사진 API의 별도 staging smoke
+4. **프론트 호환:** optional 한 줄 근거 표시와 grounded 챗 응답 수용 확인
+5. **측정:** 동의 기반 비교 피드백, 알고리즘 버전, shadow 결과
+6. **추천:** 안정된 공통 매칭 모듈로 옷장 기반 추천과 특정 아이템 검색
 7. **대화 지속성:** 인증/삭제 정책을 전제로 사진별 챗 history
 8. **출시 준비:** Auth/탈퇴, 권리, 사이즈 출처, 실제 기기·E2E·운영 관측
 
@@ -807,7 +840,9 @@ LLMOps·최신 eval
 - 로컬 `main` 포인터가 37커밋 뒤라 잘못된 분기 위험
 - 여러 worktree에 중복·상충하는 schema/API/migration 작업
 - 코사인 작업본이 오래된 분기점과 미커밋 상태
-- 공개 Edge Function + 신뢰하는 `user_id`로 인한 접근 제어 위험
+- 운영 공개 Edge Function + 신뢰하는 `user_id`로 인한 접근 제어 위험(개발 브랜치 로컬 수정 완료, 미배포)
+- 개발용 anonymous Auth와 기존 닉네임+PIN UI의 계정 의미가 다르므로 정식 인증 UI 없이 출시할 수 없음
+- Python 누끼 서버와 live 옷장 태깅은 미검증이며 모바일 native data URL 업로드는 실제 기기 확인 필요
 - 단일 함수 배포의 큰 blast radius
 - 모바일 및 local Supabase CI는 원격에서 통과했지만 운영과 동일한 staging E2E는 없음
 - release metadata 코드가 운영에 미배포이고 자동화되지 않음
@@ -837,6 +872,6 @@ LLMOps·최신 eval
 
 ## 9. 최종 상태 판정
 
-현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/03·LLMOps·local 통합 테스트·local 관리자 대시보드**가 병합돼 있다. 운영 오딧은 여전히 `b53b6d6` 기준의 확장 옷장 스키마와 기존 규칙 기반 비교를 사용하는 MVP이며, 이번 main 변경은 운영 DB나 Edge Function에 배포하지 않았다. 비교 학습 데이터, 추천, 사진별 영구 대화는 아직 구현하지 않았다.
+현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/03·LLMOps·local 통합 테스트·local 관리자 대시보드·추천 탭**이 병합돼 있다. 운영 Edge Function은 `origin/main@2d0369b` 기준 version 22이고 기상청 `/weather` smoke가 성공했다. 운영 DB도 `202611200003`까지 적용됐으며 `/health`가 배포 SHA와 시각을 반환한다. `codex/auth-photo-integration`의 인증 격리와 사진 영속화는 운영 반영하지 않았다.
 
-다음 단계는 별도 신규 PR에서 실제 API 사용자 접근 격리를 최우선으로 해결한 뒤, 팀 승인 하에 staging/운영 migration과 Edge Function 배포를 진행하는 것이다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 구체적인 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
+다음 단계는 현재 브랜치를 기능별 커밋/PR로 리뷰하고, 정식 로그인·데모 이전·계정 삭제 정책 및 별도 누끼 서버를 확정한 뒤 staging에서 실제 기기와 외부 연동을 검증하는 것이다. 팀 승인 전 운영 migration과 Edge Function 배포는 하지 않는다. 구체적인 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.

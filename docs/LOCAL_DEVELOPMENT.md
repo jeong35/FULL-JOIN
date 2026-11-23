@@ -25,7 +25,7 @@ npm ci
 ./node_modules/.bin/supabase start
 ```
 
-`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. 현재 기준은 기존 14개와 `202611200003_llm_operation_metrics.sql`을 합친 15개다.
+`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. 현재 기준은 기존 15개에 Auth/RLS와 옷장 사진 Storage 마이그레이션 2개를 더한 17개다.
 
 로컬 주소는 CLI가 출력한다. 기본값은 다음과 같다.
 
@@ -35,6 +35,8 @@ npm ci
 - Edge Function: `http://127.0.0.1:54321/functions/v1/api`
 
 로컬 anon/service-role 키는 `supabase status -o env`로 확인한다. 키를 문서나 Git에 복사하지 않는다. `.env`와 `.env.*`는 ignore되어 있지만, 기본 개발 흐름은 CLI 상태를 직접 읽으므로 파일을 만들 필요가 없다.
+
+`supabase/config.toml`은 모바일 transport 검증을 위해 local anonymous Auth를 허용한다. 이는 운영 로그인 정책이 아니며 production 프로젝트 설정을 자동으로 바꾸지 않는다.
 
 ## Edge Function 확인
 
@@ -63,7 +65,7 @@ curl -i http://127.0.0.1:54321/functions/v1/api/health
 
 성공 조건:
 
-- `202611040001`부터 `202611200003`까지 15개가 local target에 모두 표시된다.
+- `202611040001`부터 `202611230002`까지 17개가 local target에 모두 표시된다.
 - `supabase/seed.sql`이 오류 없이 적용된다.
 - seed는 `demo-analytics-*`, `smoke-*` 합성 사용자만 포함하며 사용자 사진·대화 원문·운영 데이터는 포함하지 않는다.
 
@@ -81,9 +83,11 @@ npm run test:auth-policy
 - AC9 후보 버킷 내부 코사인 정렬과 `wardrobe_item_id` 정합성
 - 보유 옷 상담, 일반 상담 fallback, 복합 상담 section 분리
 - 이벤트 batch 저장과 LLMOps DB 기록
-- 현재 API의 알려진 접근 격리 결함 재현
+- 인증 없음/타 사용자 요청 차단, 실제 API와 RLS의 A/B 사용자 격리
+- private Storage PNG 업로드와 서명 URL 반환
+- 사진 태깅 configuration fallback 및 누끼 서버 미설정 503
 
-`test:auth-policy`는 Supabase Auth 전환용 순수 정책 모듈의 격리 규칙을 검증한다. 실제 API는 아직 `verify_jwt=false`이며 body/query의 `user_id`를 신뢰하므로, 이 정책 테스트 통과와 실제 API 보안은 별개다.
+`test:auth-policy`는 순수 정책을, 통합 테스트는 실제 JWT 검증과 RLS를 각각 검증한다. gateway 설정은 공개·관리 경로와 같은 함수에 있어 아직 `verify_jwt=false`지만 사용자 경로는 함수 내부에서 토큰을 검증한다.
 
 외부 OpenAI 호출은 기본 통합 테스트에서 실행하지 않는다. 따라서 비용은 0달러이고, configuration fallback과 grounded 경로를 검증한다.
 
