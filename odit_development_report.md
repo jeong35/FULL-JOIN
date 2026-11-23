@@ -41,6 +41,7 @@
 - 운영 Secrets에 `RELEASE_GIT_SHA=2d0369b...`, `RELEASED_AT=2026-11-23T03:03:10Z`를 설정했다.
 - smoke: `/health`가 정확한 SHA/시각을 반환했고 `/weather`도 기상청 3일 응답 200을 유지했다.
 - 현재 인증·사진 개발 브랜치 코드는 운영에 배포하지 않았다.
+- 인증·사진 통합은 commit `6f3c4f8`로 원격 `codex/auth-photo-integration`에 push하고 draft PR #24를 생성했다. main merge는 하지 않았다.
 
 ### 2026-11-23 — 기상청 운영 API 연동
 
@@ -87,7 +88,7 @@
 6. **서버 전체 검증이 통과한다.** `npm run check`에서 승인 골든 47/47, 서버 3/3, 코사인·통합 19/19과 chat grounding/근거 검사가 모두 성공했다.
 7. **모바일 검증도 통과한다.** `mobile/package-lock.json` 기준 `npm ci` 후 typecheck와 Expo lint가 성공했다. `verify.yml`에도 기존 서버 검증을 유지한 채 모바일 설치·검증 단계를 추가했다.
 8. **CHAT-01/03은 main에 반영됐다.** 여섯 상담 유형을 자동 분류하고 보유 옷·저장 사진·상품 탐색은 grounded로, 일반 조언 부분만 LLM으로 처리한다. 사진별 영구 기록은 인증 정책 확정 뒤로 보류했다.
-9. **개발 브랜치는 최신 main `2d0369b`에서 분기했다.** 현재 브랜치는 `codex/auth-photo-integration`이며 GitHub PR 준비 대상이다.
+9. **개발 브랜치는 최신 main `2d0369b`에서 분기했다.** `codex/auth-photo-integration@6f3c4f8`을 push하고 draft PR #24를 열었으며 main에는 미병합이다.
 10. **운영 마이그레이션은 15개다.** `202611200003_llm_operation_metrics.sql`까지 적용됐고 Auth/사진 2개는 pending이다.
 
 ---
