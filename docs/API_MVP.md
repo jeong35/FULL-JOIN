@@ -7,8 +7,9 @@
 - Supabase Edge Function 이름: `api`
 - 배포 기본 URL: `https://<project-ref>.supabase.co/functions/v1/api`
 - 오류: `{ "error": { "code": string, "message": string, "field"?: string } }`
-- 현재 MVP는 합의 대기 항목에 따라 요청의 `user_id`를 데모 사용자 식별자로 사용한다.
-- 실제 사용자 배포 전에는 Supabase Anonymous Auth의 사용자 ID와 RLS 정책으로 교체해야 한다.
+- 사용자 경로는 `Authorization: Bearer <Supabase access token>`을 요구한다. 서버가 `auth.getUser`로 확인한 JWT subject가 사용자 ID의 정본이다.
+- 전환 기간에는 기존 `user_id` 필드를 유지하지만 JWT subject와 다르면 `403 user_id_mismatch`, 토큰이 없거나 유효하지 않으면 `401 authentication_required`다. 이 변경은 아직 운영 배포되지 않았다.
+- `/health`와 별도 `x-admin-token`을 쓰는 운영자 경로는 기존 계약을 유지한다. 공개·관리 경로와 사용자 경로가 같은 함수에 있어 gateway는 아직 `verify_jwt=false`이고, 사용자 경로가 함수 내부에서 JWT를 검증한다.
 
 ## 구현된 경로
 

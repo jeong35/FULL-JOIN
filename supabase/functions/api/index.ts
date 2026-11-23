@@ -1,4 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  authorizeRequestedUsers,
+  bearerToken,
+  requestedUserIds,
+  userRouteRequiresAuth,
+} from "../../../src/fulljoin/api_auth.ts";
+import { AccessControlError } from "../../../src/fulljoin/auth_policy.ts";
 
 import {
   analyzeInputSchema,
@@ -135,6 +142,36 @@ async function bodyAsObject(request: Request): Promise<JsonObject | null> {
   } catch {
     return null;
   }
+}
+
+async function bodyForAccessControl(request: Request): Promise<unknown> {
+  if (request.method === "GET" || request.method === "OPTIONS") return null;
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json") && !contentType.includes("text/plain")) return null;
+  try {
+    return await request.clone().json();
+  } catch {
+    return null;
+  }
+}
+
+async function authenticateUserRoute(
+  request: Request,
+  url: URL,
+  path: string,
+  db: SupabaseClient,
+): Promise<void> {
+  if (!userRouteRequiresAuth(path, request.method)) return;
+  const token = bearerToken(request.headers.get("authorization"));
+  if (token === null) throw new AccessControlError(401, "authentication_required");
+  const { data, error } = await db.auth.getUser(token);
+  if (error !== null || data.user === null) throw new AccessControlError(401, "authentication_required");
+  authorizeRequestedUsers(data.user.id, requestedUserIds({
+    path,
+    method: request.method,
+    queryUserId: url.searchParams.get("user_id"),
+    body: await bodyForAccessControl(request),
+  }));
 }
 
 async function styleImageExists(db: SupabaseClient, styleImageId: string): Promise<boolean> {
@@ -1187,6 +1224,7 @@ export default {
     const path = routePath(url);
 
     try {
+      await authenticateUserRoute(request, url, path, db);
       if (path === "/health" && request.method === "GET") {
         return json({
           ok: true,
@@ -1232,6 +1270,12 @@ export default {
       if (heartMatch?.[1] !== undefined) return await handleHeart(request, decodeURIComponent(heartMatch[1]), db);
       return apiError(404, "route_not_found", "요청한 API를 찾을 수 없어요");
     } catch (error) {
+      if (error instanceof AccessControlError) {
+        const message = error.code === "user_id_mismatch"
+          ? "인증된 사용자와 요청 사용자가 일치하지 않아요"
+          : "로그인이 필요해요";
+        return apiError(error.status, error.code, message, "user_id");
+      }
       console.error(error);
       return apiError(500, "internal_error", "서버에서 요청을 처리하지 못했어요");
     }

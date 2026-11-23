@@ -15,25 +15,34 @@ function localEnvironment() {
   });
   const values = new Map([...output.matchAll(/^([A-Z_]+)="([^"]*)"$/gmu)].map((match) => [match[1], match[2]]));
   const apiUrl = values.get("API_URL");
+  const anonKey = values.get("ANON_KEY");
   const serviceRoleKey = values.get("SERVICE_ROLE_KEY");
-  if (!apiUrl || !serviceRoleKey || !["127.0.0.1", "localhost"].includes(new URL(apiUrl).hostname)) {
+  if (!apiUrl || !anonKey || !serviceRoleKey || !["127.0.0.1", "localhost"].includes(new URL(apiUrl).hostname)) {
     throw new Error("Integration tests require a running local Supabase stack.");
   }
-  return { apiUrl, serviceRoleKey };
+  return { apiUrl, anonKey, serviceRoleKey };
 }
 
 const environment = localEnvironment();
 const db = createClient(environment.apiUrl, environment.serviceRoleKey, { auth: { persistSession: false } });
 const functionUrl = `${environment.apiUrl}/functions/v1/api`;
 const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
-const owner = `test-owner-${suffix}`;
-const attacker = `test-attacker-${suffix}`;
+let owner = "";
+let attacker = "";
+let ownerToken = "";
+let attackerToken = "";
 const styleImageId = `test-look-${suffix}`;
 
-async function api(path, init = {}) {
+async function api(path, init = {}, token = ownerToken) {
+  const hasBody = init.body !== undefined;
+  const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
   const response = await fetch(`${functionUrl}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    headers: {
+      ...(hasBody && !isForm ? { "content-type": "application/json" } : {}),
+      ...(token === "" ? {} : { authorization: `Bearer ${token}` }),
+      ...(init.headers ?? {}),
+    },
   });
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
@@ -69,8 +78,34 @@ async function insertFixture() {
   assert.equal(itemError, null);
 }
 
+async function createAuthenticatedUser(label) {
+  const email = `${label}-${suffix}@local.odit.test`;
+  const password = `Local-${suffix}-Aa1!`;
+  const { data: created, error: createError } = await db.auth.admin.createUser({ email, password, email_confirm: true });
+  assert.equal(createError, null);
+  assert.ok(created.user);
+  const client = createClient(environment.apiUrl, environment.anonKey, { auth: { persistSession: false } });
+  const { data: signedIn, error: signInError } = await client.auth.signInWithPassword({ email, password });
+  assert.equal(signInError, null);
+  assert.ok(signedIn.session);
+  return { id: created.user.id, token: signedIn.session.access_token, client };
+}
+
 async function run() {
-  const health = await api("/health", { method: "GET" });
+  const anonymousClient = createClient(environment.apiUrl, environment.anonKey, { auth: { persistSession: false } });
+  const { data: anonymousData, error: anonymousError } = await anonymousClient.auth.signInAnonymously();
+  assert.equal(anonymousError, null);
+  assert.ok(anonymousData.session);
+  ok("모바일 개발용 익명 Auth", "local config에서 access token과 사용자 UUID 발급");
+
+  const ownerAuth = await createAuthenticatedUser("owner");
+  const attackerAuth = await createAuthenticatedUser("attacker");
+  owner = ownerAuth.id;
+  attacker = attackerAuth.id;
+  ownerToken = ownerAuth.token;
+  attackerToken = attackerAuth.token;
+
+  const health = await api("/health", { method: "GET" }, "");
   assert.equal(health.status, 200);
   assert.equal(health.body.ok, true);
   ok("Edge Function", "local /health returned 200");
@@ -172,19 +207,24 @@ async function run() {
     ok("LLM 실패·fallback", "현재 환경은 LLM 성공 경로; 실패 경로는 단위 테스트로 검증");
   }
 
-  const securityProbe = await api(`/wardrobe?user_id=${encodeURIComponent(owner)}`, {
-    method: "GET",
-    headers: { "x-test-actor": attacker },
-  });
-  assert.equal(securityProbe.status, 200);
-  assert.ok(securityProbe.body.wardrobe_items.length > 0);
-  ok("실제 API 보안 점검", "KNOWN GAP: JWT 없이 타 user_id 조회가 가능함(운영 연결 전 보완 필요)");
+  const unauthenticated = await api(`/wardrobe?user_id=${encodeURIComponent(owner)}`, { method: "GET" }, "");
+  assert.equal(unauthenticated.status, 401);
+  const securityProbe = await api(`/wardrobe?user_id=${encodeURIComponent(owner)}`, { method: "GET" }, attackerToken);
+  assert.equal(securityProbe.status, 403);
+  ok("실제 API 사용자 격리", "토큰 없음 401, 타 user_id 403");
+
+  const { data: ownerRows, error: ownerRlsError } = await ownerAuth.client.from("wardrobe_items").select("id,user_id");
+  assert.equal(ownerRlsError, null);
+  assert.ok((ownerRows ?? []).every((row) => row.user_id === owner));
+  const { data: attackerRows, error: attackerRlsError } = await attackerAuth.client.from("wardrobe_items").select("id,user_id");
+  assert.equal(attackerRlsError, null);
+  assert.equal(attackerRows?.length, 0);
+  ok("DB RLS 사용자 격리", "authenticated 클라이언트는 자기 user_id 행만 조회");
 
   console.log("\nLocal integration summary");
   console.log("- Mock/grounded/fallback paths: executed without paid external calls");
   console.log("- Live OpenAI call: not executed; no cost incurred");
-  console.log("- Auth policy module: test separately with npm run test:auth-policy");
-  console.log("- Actual API isolation: currently fails by design because verify_jwt=false and user_id is trusted");
+  console.log("- Auth policy and actual API/RLS isolation: passed locally with two users");
 }
 
 await run();
