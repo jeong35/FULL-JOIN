@@ -21,6 +21,27 @@ export const chatInputSchema = z.object({
   history: z.array(chatHistoryMessageSchema).max(8).optional(),
 }).strict();
 
+export const chatHistoryQuerySchema = z.object({
+  style_image_id: z.string().trim().min(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  before: z.coerce.number().int().positive().optional(),
+}).strict();
+
+export const storedChatMessageSchema = z.object({
+  id: z.string().uuid(),
+  ordinal: z.coerce.number().int().positive(),
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1).max(4_000),
+  products: z.array(z.object({
+    item_id: z.string().min(1),
+    platform: z.string().min(1),
+    url: z.string().url(),
+    match_type: z.enum(["exact", "similar"]),
+  }).strict()),
+  answer_source: z.enum(["grounded", "openai", "fallback"]).nullable(),
+  created_at: z.string().datetime({ offset: true }),
+}).strict();
+
 export const chatModelOutputSchema = z.object({
   answer: z.string().trim().min(1).max(1_200),
 }).strict();
