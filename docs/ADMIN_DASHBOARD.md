@@ -1,16 +1,29 @@
-# 로컬 관리자 대시보드 지표 정의
+# 관리자 대시보드 지표 정의
 
 ## 범위와 보안
 
-- 실행 위치: `admin-dashboard/`, `npm run dashboard:local`
-- 데이터: 로컬 `user_events`, `wardrobe_items`, `llm_operation_metrics`
+- 실행 위치: `admin-dashboard/`, 로컬 데이터는 `npm run dashboard:local`, 운영 읽기는 `npm run dashboard:production`
+- 데이터: 선택한 Supabase의 `user_events`, `wardrobe_items`, `llm_operation_metrics`
 - 시간대: 모든 일·주 구간과 날짜 표시는 `Asia/Seoul`
 - 기간: 일별·주별 빠른 선택과 사용자 지정 시작/종료일, 최대 366일
-- 보안: `127.0.0.1`에만 bind한다. service-role 키는 서버 프로세스에만 있고 브라우저 bundle/API 응답에는 없다.
+- 보안: 두 모드 모두 `127.0.0.1`에만 bind한다. service-role 키는 서버 프로세스에만 있고 브라우저 bundle/API 응답에는 없다. 운영 모드는 별도 32자 이상 관리자 bearer token도 요구한다.
 - 개인정보 최소화: 집계 결과만 브라우저로 보내며 user_id 목록, 사진, 채팅/프롬프트 원문은 표시하지 않는다.
 - 테스트 구분: `eval-`, `test-`, `smoke-` user_id 또는 `props.is_test/smoke_test/environment` 표시 이벤트는 Product Analytics에서 제외하고 제외 건수만 표시한다.
 
-관리자 인증과 운영 API 접근 제어가 완성되기 전에는 외부 호스트에 bind하거나 배포하지 않는다.
+관리자 인증과 전용 read-only credential/proxy가 완성되기 전에는 외부 호스트에 bind하거나 배포하지 않는다. 운영 모드의 현재 코드는 select만 수행하지만 service-role credential 자체는 쓰기 권한이 있으므로 localhost 운영 도구로만 사용한다.
+
+운영 실행 예시의 실제 값은 shell history나 저장소에 남기지 않는다.
+
+```bash
+DASHBOARD_DATA_SOURCE=production \
+DASHBOARD_ALLOW_REMOTE_READONLY=true \
+SUPABASE_URL=https://<project-ref>.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=<server-only-key> \
+DASHBOARD_ADMIN_TOKEN=<32자-이상-임시-관리자-토큰> \
+npm run dashboard:production
+```
+
+브라우저 입력칸의 관리자 토큰은 메모리에서 요청 헤더에만 사용하며 localStorage/sessionStorage에 저장하지 않는다.
 
 ## 공통 기준
 
