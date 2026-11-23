@@ -13,6 +13,9 @@ test("user routes require auth while public and admin routes keep their own boun
   assert.equal(userRouteRequiresAuth("/wardrobe", "GET"), true);
   assert.equal(userRouteRequiresAuth("/style-images/image-a/heart", "POST"), true);
   assert.equal(userRouteRequiresAuth("/style-images/image-a/items/item-a/decision", "POST"), true);
+  assert.equal(userRouteRequiresAuth("/chat", "POST"), true);
+  assert.equal(userRouteRequiresAuth("/chat/history", "GET"), true);
+  assert.equal(userRouteRequiresAuth("/chat/history", "DELETE"), true);
   assert.equal(userRouteRequiresAuth("/weather", "GET"), true);
   assert.equal(userRouteRequiresAuth("/health", "GET"), false);
   assert.equal(userRouteRequiresAuth("/analyze", "POST"), false);

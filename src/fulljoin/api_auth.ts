@@ -7,7 +7,7 @@ const USER_ROUTE_PATTERNS: readonly RegExp[] = [
   /^\/style-preferences$/,
   /^\/feed$/,
   /^\/archive$/,
-  /^\/chat$/,
+  /^\/chat(?:\/history)?$/,
   /^\/events$/,
   /^\/weather$/,
   /^\/style-images\/[^/]+\/heart$/,

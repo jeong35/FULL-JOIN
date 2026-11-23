@@ -25,7 +25,7 @@ npm ci
 ./node_modules/.bin/supabase start
 ```
 
-`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. 현재 인증 브랜치 기준은 기존 15개와 `202611230001_auth_access_control.sql`을 합친 16개다.
+`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. CHAT-02 브랜치 기준은 기존 15개, `202611230001_auth_access_control.sql`, `202611230003_chat_conversations.sql`을 합친 17개다. `202611230002`는 사진 옷장 브랜치와의 번호 충돌을 피하려고 비워 둔다.
 
 로컬 주소는 CLI가 출력한다. 기본값은 다음과 같다.
 
@@ -65,7 +65,7 @@ curl -i http://127.0.0.1:54321/functions/v1/api/health
 
 성공 조건:
 
-- `202611040001`부터 `202611230001`까지 16개가 local target에 모두 표시된다.
+- `202611040001`부터 `202611230003`까지 파일로 존재하는 17개가 local target에 모두 표시된다.
 - `supabase/seed.sql`이 오류 없이 적용된다.
 - seed는 `demo-analytics-*`, `smoke-*` 합성 사용자만 포함하며 사용자 사진·대화 원문·운영 데이터는 포함하지 않는다.
 
@@ -88,6 +88,19 @@ npm run test:auth-policy
 `test:auth-policy`는 순수 정책을, 통합 테스트는 실제 JWT 검증과 RLS를 각각 검증한다. gateway는 공개·관리 경로와 같은 함수에 있어 아직 `verify_jwt=false`지만 사용자 경로는 함수 내부에서 토큰을 검증한다.
 
 외부 OpenAI 호출은 기본 통합 테스트에서 실행하지 않는다. 따라서 비용은 0달러이고, configuration fallback과 grounded 경로를 검증한다.
+
+원격 staging 검증은 운영 project ref를 명시적으로 거부하는 별도 모드다. 키는 파일에 저장하지 않고 실행 프로세스 환경에만 주입한다.
+
+```bash
+FULL_JOIN_INTEGRATION_TARGET=staging \
+FULL_JOIN_STAGING_PROJECT_REF=... \
+FULL_JOIN_STAGING_URL=... \
+FULL_JOIN_STAGING_ANON_KEY=... \
+FULL_JOIN_STAGING_SERVICE_ROLE_KEY=... \
+npm run test:integration:staging
+```
+
+이 모드는 synthetic 이메일 Auth 사용자 A/B와 fixture를 생성하고 종료 시 정리한다. 익명 로그인 설정은 변경하지 않는다.
 
 ## 로컬 관리자 대시보드
 
