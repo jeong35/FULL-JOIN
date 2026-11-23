@@ -25,7 +25,7 @@ npm ci
 ./node_modules/.bin/supabase start
 ```
 
-`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. 현재 인증 브랜치 기준은 기존 15개와 `202611230001_auth_access_control.sql`을 합친 16개다.
+`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. CHAT-02 브랜치 기준은 기존 15개, `202611230001_auth_access_control.sql`, `202611230003_chat_conversations.sql`을 합친 17개다. `202611230002`는 사진 옷장 브랜치와의 번호 충돌을 피하려고 비워 둔다.
 
 로컬 주소는 CLI가 출력한다. 기본값은 다음과 같다.
 
@@ -65,7 +65,7 @@ curl -i http://127.0.0.1:54321/functions/v1/api/health
 
 성공 조건:
 
-- `202611040001`부터 `202611230001`까지 16개가 local target에 모두 표시된다.
+- `202611040001`부터 `202611230003`까지 파일로 존재하는 17개가 local target에 모두 표시된다.
 - `supabase/seed.sql`이 오류 없이 적용된다.
 - seed는 `demo-analytics-*`, `smoke-*` 합성 사용자만 포함하며 사용자 사진·대화 원문·운영 데이터는 포함하지 않는다.
 

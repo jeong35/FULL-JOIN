@@ -18,7 +18,7 @@
 - `/wardrobe`, `/wardrobe/{id}`
 - `/style-preferences`
 - `/feed?user_id=`, `/archive?user_id=`
-- `/chat`, `/events`
+- `/chat`, `/chat/history`, `/events`
 - `/style-images/{id}/heart`
 - `/style-images/{id}/items/{item_id}/decision`
 
@@ -56,6 +56,7 @@
 - 정책 모듈과 API 인증 테스트: 검증된 JWT subject를 서버 사용자 ID로 쓰고 다른 request user_id를 거부한다.
 - 실제 API: 인증 없음 401, A JWT + B user_id 403.
 - 실제 DB: authenticated A/B client가 각자 owner 행만 조회하며 B는 A의 옷장을 볼 수 없다.
+- CHAT-02: B의 history 조회는 빈 결과이고 삭제도 A의 conversation에 영향이 없으며, DB RLS에서도 B는 A의 `chat_conversations`를 볼 수 없다.
 - 테스트 데이터와 대상은 모두 local Docker stack이며 운영 프로젝트에는 요청하지 않았다.
 
 로컬 격리 통과를 운영 배포 완료로 해석하면 안 된다. 정식 인증 UI, gateway JWT 검증, 계정/Storage 삭제, rate limit과 staging 회귀가 끝날 때까지 외부 공개하지 않는다.

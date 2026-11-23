@@ -1,6 +1,6 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
-- 기준 시각: 2026-11-21 KST
+- 기준 시각: 2026-11-23 KST
 - 조사 대상 저장소: `jeong35/FULL-JOIN`
 - 조사 worktree: `/Users/choijeong-in/.codex/worktrees/kind-expansion-main/FULL-JOIN`
 - 작성 목적: 다른 개발 세션과 팀원이 이전 대화 없이도 현재 구현·테스트·Git·배포·의사결정 상태를 이어받을 수 있게 한다.
@@ -26,12 +26,21 @@
 
 ## 최신 상태
 
-- GitHub PR #20, #21, #22를 순서대로 병합했고 기능 병합·검증 기준 main SHA는 `73c435a63ae5aa95a2087753520680866a638153`이다. 이 문서 갱신 커밋은 그 뒤의 docs-only main 이력이며 최신 SHA는 `origin/main` ref를 원천으로 삼는다.
-- main에는 코사인 A안, CHAT-01/03, LLMOps migration/계측, local Supabase 통합 테스트와 local-only 관리자 대시보드가 포함됐다.
-- 운영 DB migration, Edge Function, 운영 대시보드는 배포하지 않았다. production은 계속 기존 `b53b6d6` 기준 증거만 있다.
-- 실제 API의 `verify_jwt=false`/신뢰하는 `user_id` 취약점은 남아 있으며 다음 최우선 보안 PR에서 해결한다.
+- 최신 `origin/main`은 PR #26을 병합한 `3e5422860c77568018d18fb8b14270893bcaf3ae`다. 승인형 release workflow와 localhost 운영 LLMOps 경고가 main에 포함됐지만 자동 배포는 발생하지 않았다.
+- 운영 Edge Function과 Expo production은 `2d0369b` 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
+- 인증 전용 변경은 draft PR #25(`8059bd1`)에서 CI 성공 상태이며 main·운영에는 미반영이다. Auth/사진 통합 draft PR #24도 미병합이다.
+- `codex/chat-history`는 PR #25를 기반으로 사진별 conversation·메시지 저장, pagination, 삭제와 RLS를 구현했다. 로컬 Docker 17개 migration과 실제 A/B Auth 통합 테스트를 통과했지만 아직 미커밋·미푸시·미배포다.
+- 무료 Supabase 두 번째 슬롯에 `full-join-staging`(`ylbrssggfzuzyhgdhehu`, Singapore)을 생성하고 main 기준 migration 15개를 dry-run 후 적용했다. 운영/로컬 seed와 사용자 데이터는 넣지 않았고 Edge Function은 미배포다.
 
 ## 변경 이력
+
+### 2026-11-23 — PR #26 병합·무료 staging 생성·CHAT-02 백엔드
+
+- Git: PR #26을 merge commit `3e54228`로 main에 병합했다. workflow는 수동 승인형이라 병합으로 운영 배포되지 않았다.
+- staging: Free 플랜의 두 번째 활성 프로젝트로 `full-join-staging`을 생성했다. main의 15개 migration만 적용했으며 운영 데이터·local seed·secret은 복제하지 않았다. DB 비밀번호는 macOS Keychain에 저장했다.
+- CHAT-02: 한 인증 사용자·한 저장 사진당 conversation 하나, 원자적 user/assistant exchange, ordinal pagination, 명시적 삭제, 하트 삭제 cascade와 owner RLS를 구현했다. 원문은 LLMOps에 저장하지 않는다.
+- 테스트: `npm run check` 성공(골든 47/47), 모바일 typecheck/lint 성공, Docker `db reset`으로 17개 migration 적용 성공, 실제 API에서 사진별 복원·이전 페이지·타 사용자 조회/삭제 격리·RLS·삭제 cascade 성공. 외부 LLM 유료 호출은 없었다.
+- 배포: staging DB baseline만 구성했다. 현재 `--no-verify-jwt` Edge 배포는 보안 경계를 약화하므로 실행하지 않았고 CHAT-02/Auth migration도 운영·staging 미적용이다. 자동 보존 기간·계정 전체 삭제·모바일 Auth 연동은 후속 작업이다.
 
 ### 2026-11-21 — PR #20·#21·#22 main 병합
 
@@ -184,7 +193,7 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | P0 옷 종류 확장 서버 통합 | **완료** | main `npm run check` 통과, wardrobe 확장 check 통과, 운영 POST/GET/DELETE smoke 통과 | 완료 | 완료 | 구형 레코드의 유실 세부값은 복구 불가임을 UX/문서에 명시 | schema, catalog, API, `202611160002`, `202611200001`, mobile catalog/add-item |
 | P1 코사인 코디 비교 | **부분 완료** | 최종 main에서 cosine·통합 19/19, 전체 check와 local API 통합 통과 | UI 미연동, 구버전은 optional 필드 무시 가능 | main 반영, 운영 미배포 | staging API 검증, 프론트 이유 표시, shadow 평가 | `garment_similarity.ts`, gap/outfit/API, docs/tests |
 | P2 취향·옷장 추천 고도화 | **미구현** | 없음 | 추천 탭 미연동 | 미배포 | 추천 정책·점수·콜드스타트 합의 후 구현 | `mobile/src/app/(tabs)/recommend.tsx`, feed/gap 모듈 예정 |
-| P3 챗봇 보충 | **부분 완료** | 최종 main에서 CHAT-01/03 회귀·local API 통합 통과 | optional 타입/인수인계 문서 준비, UI 미연동 | main 반영, 운영은 기본형 | staging API 검증; 사진별 기록은 Auth 이후 | `chat.ts`, API, `FRONTEND_MATCH_CHAT_HANDOFF.md` |
+| P3 챗봇 보충 | **부분 완료** | CHAT-01/03 및 CHAT-02 단위·Docker 실제 API/RLS 통합 통과 | 기록 API 문서화, 모바일 복원 UI·Auth 미연동 | CHAT-01/03 main·운영 기본형, CHAT-02 로컬만 | PR #25 선행 병합, 모바일 Auth·복원/삭제 UI, staging 검증 | `chat.ts`, API, `202611230003`, `FRONTEND_MATCH_CHAT_HANDOFF.md` |
 | P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위·local DB/API 통합·대시보드 집계 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | 운영 migration/계측 미배포 | 실제 운영 표본, alert, live eval 12건 | `llm_observability.ts`, `admin_metrics.ts`, `202611200003`, dashboard/eval/docs |
 
 RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으로 유지된다.
@@ -204,7 +213,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
 | CHAT-01 의도 분리·근거·일관성 | **부분 완료** | 최종 main의 chat grounding·local API 통합 통과 | 기존 UI 하위 호환, 신규 진단 필드 미사용 | main 반영, 운영은 기본형 | staging E2E와 live eval 계약 합의 | `chat.ts`, API, scripts |
-| CHAT-02 사진별 대화·문맥·복합 질문 | **부분 완료** | 복합 intent 회귀는 CHAT-03에서 통과, 영구 기록 테스트 없음 | 복합 답변 타입만 준비, 대화는 현재 화면 메모리만 | 복합 처리 main 반영, 영구 기록 미배포 | 대화 DB/접근 제어/삭제 정책, 사진 A→B→A 복원 | chat API/UI 및 신규 DB 필요 |
+| CHAT-02 사진별 대화·문맥·복합 질문 | **부분 완료** | 저장·pagination·A/B API/RLS·삭제 cascade local 통합 및 신규 단위 2/2 통과 | API 계약 완료, 모바일은 아직 화면 메모리만 | 로컬 미커밋·미배포 | 모바일 Auth, 사진 A→B→A 복원/삭제 UI, 보존·계정삭제 정책, staging | chat API, `202611230003`, 신규 테스트/문서 |
 | CHAT-03 질문 범위·구매 도움 | **부분 완료** | 일반/빈 옷장/복합/범위 밖/소유권 회귀와 local API 통합 통과 | optional `intents`·`answer_sections` 문서화, UI 미연동 | main 반영, 운영 미배포 | staging E2E, 평가 v2 승인, 검증된 사이즈 경로 | chat/API/mobile types/frontend handoff |
 
 #### WARD — 옷장 등록
@@ -553,6 +562,9 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 | `supabase db reset --local` | local Docker | **성공** | 15개 migration과 synthetic seed 적용 |
 | `npm run test:integration:local` | local Edge Function/DB | **성공** | 옷장 CRUD, 비교·근거·후보 ID, 챗, events, LLMOps persistence; 실제 user_id 격리 실패도 재현 |
 | `npm run test:admin-metrics` | 현재 worktree | **3/3 성공** | KST, distinct 사용자, funnel, 테스트 제외, LLMOps 비용·p95·fallback |
+| `npm run test:chat-history` | `codex/chat-history` | **2/2 성공** | pagination 경계와 저장 메시지 외부 경계 zod 검증 |
+| `supabase db reset --local` | CHAT-02 local Docker | **성공** | 17개 migration과 synthetic seed 적용 |
+| `npm run test:integration:local` | CHAT-02 local Edge Function/DB/Auth | **성공** | 사진별 저장·복원·pagination, 타 사용자 API/RLS 격리, 삭제 cascade |
 
 ### 5.2 골든 케이스 해석
 
