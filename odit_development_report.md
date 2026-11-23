@@ -26,12 +26,25 @@
 
 ## 최신 상태
 
-- 최신 `origin/main`은 PR #28을 병합한 `410f904cfad4f6d4cc5ccae76a4be8f4b1d020a2`다. 사진 옷장 등록, 사용자 API Auth/RLS, 사진별 챗 기록 백엔드가 main에 포함됐지만 Expo·운영 서버·production DB 자동 배포는 발생하지 않았다.
+- 최신 `origin/main`은 CI 격리 PR #29를 병합한 `0cb92639e7fc5a9633be9c32bd263470114a92b0`다. 사진 옷장 등록, 사용자 API Auth/RLS, 사진별 챗 기록 백엔드가 main에 포함됐지만 Expo·운영 서버·production DB 자동 배포는 발생하지 않았다.
 - 운영 Edge Function과 Expo production은 `2d0369b` 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 - Auth/RLS PR #25는 merge commit `964e8a4`, CHAT-02 PR #28은 merge commit `410f904`로 main에 순차 병합됐다. local/staging A/B 격리와 채팅 기록 통합 테스트를 통과했지만 production 미배포이며 모바일 로그인·복원 UI는 미연동이다.
 - `full-join-staging`에는 migration 17개와 `bd70fe4` API를 적용했다. `/health` release SHA 일치, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
 
 ## 변경 이력
+
+### 2026-11-23 — draft PR #30 모바일 Auth 전달 경계와 사진별 챗 기록 UI
+
+- 구현(브랜치): `codex/mobile-auth-chat-history`에 로그인 방식을 고정하지 않는 access token provider를 추가하고, 일반 API·사진 cutout·events·weather 요청이 등록된 Bearer token을 전달하도록 연결했다. 토큰은 환경변수·저장소에 보관하지 않는다.
+- 챗 UI(브랜치): feature flag 아래 사진별 기록 복원, 100개 cursor pagination, 명시적 삭제와 웹/네이티브 확인 UI를 추가했다. 사진 전환 중 늦게 도착한 복원·전송·삭제 응답이 다른 사진 대화를 덮어쓰지 않도록 요청 대상 ID를 검증한다.
+- 테스트: `npm run check` 전체 통과(골든 47/47, 코사인 19/19 포함), 모바일 typecheck·Expo lint 통과, 토큰 provider smoke 통과, Expo web export 통과. GitHub PR #30의 `check`와 직렬화된 `local-supabase-integration`도 head `3b513d4`에서 모두 통과했다. Auth 로그인 공급자가 미확정이라 실제 모바일 JWT E2E와 staging UI 테스트는 아직 수행하지 않았다.
+- 결정/배포: `EXPO_PUBLIC_CHAT_HISTORY_ENABLED` 기본값은 꺼짐이다. Supabase Auth 또는 외부 포털 로그인 모듈이 갱신 가능한 token과 JWT subject 기반 `Session.userId`를 제공한 뒤에만 켠다. main 병합·Expo·production 배포는 아직 하지 않았다.
+
+### 2026-11-23 — CI 중복·로컬 Supabase 포트 충돌 방지 병합
+
+- Git/CI: PR #29를 merge commit `0cb9263`으로 main에 병합했다. feature branch push와 PR의 이중 실행을 제거하고 local Supabase job을 저장소 전체에서 직렬화했다.
+- 테스트: head `1f02ca7`에서 서버·모바일 `check`와 `local-supabase-integration`이 각각 한 번만 실행되어 모두 통과했다. 이전 실패 원인은 코드가 아니라 동시 job의 `54322` 포트 충돌과 registry rate limit이었다.
+- 배포: CI 설정만 변경했으며 production DB, Edge Function, Expo 배포는 하지 않았다.
 
 ### 2026-11-23 — PR #25·#28 순차 main 병합과 CI 중복·격리 결함 보완
 
@@ -411,17 +424,17 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 | 항목 | 확인 값 |
 |---|---|
-| 현재 worktree 브랜치 | `codex/ci-dedupe` |
-| 현재 브랜치 HEAD | `c7d6ff5` 이후 PR #29의 CI 중복·Supabase job 직렬화 변경 작업 중 |
-| 기능 병합·검증 기준 `origin/main` | `410f904cfad4f6d4cc5ccae76a4be8f4b1d020a2` (PR #28 merge commit) |
+| 현재 worktree 브랜치 | `codex/mobile-auth-chat-history` |
+| 현재 브랜치 HEAD | `3b513d4` 이후 draft PR #30의 보고서 상태 갱신 중 |
+| 기능 병합·검증 기준 `origin/main` | `0cb92639e7fc5a9633be9c32bd263470114a92b0` (PR #29 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| PR 상태 | #20, #21, #22, #25, #26, #27, #28 main 병합 완료; CI 중복·포트 충돌 방지 PR #29 검증 중 |
+| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29 main 병합 완료; 모바일 Auth·챗 기록 UI는 draft PR #30, 기능·통합 CI 통과 |
 
 세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 시점의 CI 변경은 PR #29에서 관리한다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
+모바일 Auth 전달 경계·챗 기록 UI는 commit `3b513d4`로 push되어 draft PR #30에서 관리한다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`만 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02 백엔드는 main·staging에 반영됐고 production에는 미배포다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -879,4 +892,4 @@ LLMOps·최신 eval
 
 현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/02/03·Auth/RLS·LLMOps·사진 옷장 등록 UI·local 통합 테스트·local 관리자 대시보드·승인형 release/alert**가 병합돼 있다. Auth와 사진별 영구 대화는 staging에서 실제 API/RLS 검증을 통과했지만 production에는 미배포다. 비교 학습 데이터와 추천 고도화는 아직 구현하지 않았다.
 
-다음 단계는 PR #29의 CI 중복·Supabase job 격리 검증, 모바일 Auth 토큰 전달과 대화 복원/삭제 UI다. production migration과 Edge Function 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
+다음 단계는 모바일 Auth·챗 기록 브랜치를 PR로 검증하고, 팀이 Supabase 로그인 방식·외부 포털 identity 연결·데모 데이터 이전 정책을 확정한 뒤 token provider를 실제 로그인 세션에 연결해 staging 기기 E2E를 수행하는 것이다. production migration과 Edge Function·Expo 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.

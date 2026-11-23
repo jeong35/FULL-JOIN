@@ -102,6 +102,7 @@ export type ItemDecisionResult = {
 
 export type ChatResult = {
   answer: string;
+  conversation_id?: string;
   analysis_id_used: string;
   claimed_owned_item_ids: string[];
   products: Product[];
@@ -128,6 +129,25 @@ export type ChatResult = {
     substitute_wardrobe_item_ids: string[];
     match_metadata: MatchMetadata;
   }[];
+};
+
+export type StoredChatMessage = {
+  id: string;
+  ordinal: number;
+  role: 'user' | 'assistant';
+  content: string;
+  products: Product[];
+  answer_source: 'openai' | 'fallback' | 'grounded' | null;
+  created_at: string;
+};
+
+export type ChatHistoryResult = {
+  conversation_id: string | null;
+  style_image_id: string;
+  created_at?: string;
+  updated_at?: string;
+  messages: StoredChatMessage[];
+  next_before: number | null;
 };
 
 // POST /style-images/{id}/heart. shop~product_url은 사진 출처(쇼핑몰 상품)로, 서버가 줄 때만 온다.

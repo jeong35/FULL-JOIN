@@ -198,6 +198,24 @@ export function login(nickname: string, pin: string, returning = false, styles: 
   });
 }
 
+// Supabase Auth 또는 외부 포털 연동이 완료되면 검증된 JWT subject로 앱 세션을 맞춘다.
+// access token 자체는 이 객체나 localStorage에 넣지 않고 auth.ts의 공급자가 관리한다.
+export function loginWithAuthSession(input: {
+  userId: string;
+  nickname?: string;
+  styles?: readonly Style[];
+  onboarded?: boolean;
+}) {
+  const userId = input.userId.trim();
+  if (userId === '') throw new Error('authenticated_user_id_required');
+  setSession({
+    userId,
+    nickname: input.nickname?.trim() ?? '',
+    styles: [...new Set(input.styles ?? [])].filter(isStyle).slice(0, 3),
+    onboarded: input.onboarded ?? true,
+  });
+}
+
 export function logout() {
   if (!LOGIN_ENABLED) return;
   setSession(null);
