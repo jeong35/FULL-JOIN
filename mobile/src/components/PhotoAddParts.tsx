@@ -44,7 +44,7 @@ export function PhotoSteps({ labels, current }: { labels: readonly string[]; cur
 }
 
 // ── 네모 편집기 ──
-export const BOX_COLORS = ['#FFFFFF', '#D6CCF1', '#FFE08A', '#BDE7D6'] as const;
+export const BOX_COLORS = ['#FFFFFF', '#D9D3F3', '#FFE08A', '#BDE7D6'] as const;
 const MIN_SIDE = 0.08;
 const HANDLE = 26;
 // 웹에서 네모를 끄는 동안 화면이 같이 스크롤되지 않게 한다.

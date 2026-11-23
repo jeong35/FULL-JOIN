@@ -1,7 +1,10 @@
 // 옷장 옷의 사진(배경 지운 사진)과 옷장 보기 방식(그림 · 사진). 11/22 사진으로 옷 추가 시안.
-// - 서버에 사진 칸(photo_path)이 생기기 전까지는 이 브라우저에만 저장한다(계정마다 따로). 앱(Expo Go)에서는 켜 둔 동안만 기억한다.
+// - 서버에 사진 칸(photo_path)이 생기기 전까지는 이 기기에만 저장한다(계정마다 따로).
+//   웹은 브라우저 저장 공간(localStorage), 앱(Expo Go·설치 앱)은 앱 문서 폴더의 파일 하나(11/23 — 전에는 켜 둔 동안만 기억).
 // - 옷장 기본은 그림. 사진 있는 옷은 칸을 옆으로 밀거나 옷 자세히에서 넘기면 사진이 보인다.
+import { File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
+import { Platform } from 'react-native';
 
 import { getSession, useSession } from './session';
 
@@ -23,9 +26,26 @@ type Store = Record<string, Account>;
 
 const EMPTY_PHOTOS: Readonly<Record<string, WardrobePhoto>> = {};
 
+// 앱: 문서 폴더(앱을 지우기 전까지 남는 곳)의 JSON 파일. 웹은 쓰지 않는다(expo-file-system이 웹을 안 받음).
+const nativeFile = Platform.OS === 'web' ? null : new File(Paths.document, `${STORAGE_KEY}.json`);
+
+function loadRaw(): string | null {
+  if (nativeFile === null) return globalThis.localStorage?.getItem(STORAGE_KEY) ?? null;
+  return nativeFile.exists ? nativeFile.textSync() : null;
+}
+
+function saveRaw(raw: string) {
+  if (nativeFile === null) {
+    globalThis.localStorage?.setItem(STORAGE_KEY, raw);
+    return;
+  }
+  if (!nativeFile.exists) nativeFile.create();
+  nativeFile.writeSync(raw);
+}
+
 function read(): Store {
   try {
-    const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
+    const raw = loadRaw();
     const parsed: unknown = raw ? JSON.parse(raw) : {};
     return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Store) : {};
   } catch {
@@ -41,7 +61,7 @@ function write(next: Store): boolean {
   store = next;
   let saved = true;
   try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(next));
+    saveRaw(JSON.stringify(next));
   } catch {
     saved = false;
   }

@@ -8,6 +8,7 @@ import { Image } from 'react-native';
 import { cutoutPhoto, SERVER_HAS_PHOTO_CUTOUT, SERVER_HAS_PHOTO_TAGGING, tagWardrobePhoto } from './api';
 import { canCutoutInBrowser, cutoutInBrowser } from './cutoutWeb';
 import { BASE_COLORS, COLOR_HEX, colorsForKind, fitsForKind, type Color, type Kind, type Slot, type VisualFit } from './catalog';
+import { jpegColor, toLab } from './photoColor';
 import type { Season } from './types';
 
 export const MAX_BOXES = 4;
@@ -17,6 +18,9 @@ const UPLOAD_SIDE = 1024;
 const BROWSER_SIDE = 768;
 // 배경을 못 지웠을 때 저장하는 사진의 긴 쪽(이 브라우저 저장 공간을 아끼려고 작게).
 const FALLBACK_SIDE = 640;
+// 배경을 못 지웠을 때 옷 색을 보는 곳: 네모 가운데 60%를 이 크기로 작게 잘라 본다(가장자리 배경이 덜 섞이게).
+const COLOR_SIDE = 48;
+const COLOR_INSET = 0.2;
 
 export type PhotoSource = { uri: string; width: number; height: number };
 
@@ -101,20 +105,6 @@ export function clearPhotoDraft() {
 
 // ── 사진 색 → 색 이름 ──
 // 사진 색(#RRGGBB)과 가장 가까운 색 칩을 고른다. 조명 때문에 밝기는 많이 달라지므로 밝기 차이는 덜 본다(색감 위주).
-
-function toLab(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  const lin = (v: number) => {
-    const c = v / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  const [r, g, b] = [lin((n >> 16) & 255), lin((n >> 8) & 255), lin(n & 255)];
-  const x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
-  const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  const z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
-  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
-}
 
 const LIGHTNESS_WEIGHT = 0.25;
 
@@ -210,7 +200,17 @@ async function cutOne(source: PhotoSource, box: Box): Promise<CutItem> {
   } catch {
     // 아래에서 자른 사진으로 넣는다.
   }
-  return { ...base, uri: await cropBox(source, box, FALLBACK_SIDE), color: null, cutout: false };
+  return { ...base, uri: await cropBox(source, box, FALLBACK_SIDE), color: await centerColor(source, box), cutout: false };
+}
+
+// 배경을 못 지운 사진(앱에서 서버 누끼 전)의 옷 색: 네모 가운데만 보고 고른다. 못 보면 null.
+async function centerColor(source: PhotoSource, box: Box): Promise<string | null> {
+  try {
+    const inner = { ...box, x: box.x + box.w * COLOR_INSET, y: box.y + box.h * COLOR_INSET, w: box.w * (1 - 2 * COLOR_INSET), h: box.h * (1 - 2 * COLOR_INSET) };
+    return jpegColor(await cropBox(source, inner, COLOR_SIDE));
+  } catch {
+    return null;
+  }
 }
 
 // 네모마다 잘라서 배경을 지운다. 못 지우면 자른 사진을 그대로 쓴다(cutout: false).
