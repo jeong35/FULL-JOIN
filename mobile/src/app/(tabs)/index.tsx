@@ -769,7 +769,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.75)',
   },
   pillActive: {
-    backgroundColor: colors.purpleFill,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.purpleLine,
   },
   pillText: {
     fontFamily: fonts.medium,
@@ -783,7 +785,7 @@ const styles = StyleSheet.create({
   },
   pillTextActive: {
     fontFamily: fonts.bold,
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   clearFilter: {
     paddingHorizontal: 4,
@@ -835,8 +837,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetChipSelected: {
-    borderColor: colors.purpleStrong,
-    backgroundColor: colors.purpleFill,
+    borderColor: colors.purpleLine,
+    backgroundColor: colors.white,
   },
   sheetChipText: {
     fontFamily: fonts.bold,
@@ -844,7 +846,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   sheetChipTextSelected: {
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   photo: {
     // 사진은 각진 네모(모서리 0).

@@ -2,7 +2,9 @@
 // - ItemIcon: 옷장에 넣은 옷 한 벌. 시안 그림을 불러오기 전에는 종류·색·핏 그림(v12)으로 먼저 그린다.
 // - LookIcon: 옷 추가 ②에서 지금 고른 값으로 계산한 그림(Look).
 import type { Color, Kind, VisualFit } from '@/data/catalog';
+import { photoTint } from '@/data/photoColor';
 import type { WardrobeItem } from '@/data/types';
+import { useWardrobePhoto } from '@/data/wardrobePhotos';
 import { lookForItem, useWardrobeArt, type Look } from '@/data/wardrobeLook';
 
 import { KindIcon } from './KindIcon';
@@ -14,9 +16,11 @@ type LookIconProps = {
   color?: Color | null;
   fit?: VisualFit | null;
   size: number;
+  /** 색 이름 대신 칠할 색(사진이 있는 옷의 사진 색감) */
+  tint?: string | null;
 };
 
-export function LookIcon({ look, kind, color, fit, size }: LookIconProps) {
+export function LookIcon({ look, kind, color, fit, size, tint }: LookIconProps) {
   if (look === null || look.v12) {
     return (
       <KindIcon
@@ -26,6 +30,7 @@ export function LookIcon({ look, kind, color, fit, size }: LookIconProps) {
         size={size}
         pattern={look?.pattern ?? null}
         noWeave={look?.v12 ? look.plainKnit : false}
+        tint={tint}
       />
     );
   }
@@ -38,12 +43,16 @@ export function LookIcon({ look, kind, color, fit, size }: LookIconProps) {
       place={look.place}
       overlay={look.overlay}
       pattern={look.pattern}
+      tint={tint}
     />
   );
 }
 
+// 사진이 있는 옷은 그림도 사진 색감으로 칠한다(밝기는 색 이름 쪽으로, 11/23).
 export function ItemIcon({ item, size }: { item: WardrobeItem; size: number }) {
   const art = useWardrobeArt();
+  const photo = useWardrobePhoto(item.id);
   const look = art ? lookForItem(art, item) : null;
-  return <LookIcon look={look} kind={item.kind} color={item.color} fit={item.visual_fit} size={size} />;
+  const tint = photoTint(photo?.color, item.color);
+  return <LookIcon look={look} kind={item.kind} color={item.color} fit={item.visual_fit} size={size} tint={tint} />;
 }

@@ -1,7 +1,9 @@
 // 서버(Supabase Edge Function 'api') 호출. 경로와 응답 모양은 docs/API_MVP.md(PR #1)를 따른다.
 // 이 주소는 누구나 부를 수 있는 공개 주소라 앱에 넣어도 된다.
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
-import type { Style } from './catalog';
+import { Platform } from 'react-native';
+
+import { colorsForKind, fitsForKind, isKindOfSlot, isSlot, type Color, type Kind, type Slot, type Style, type VisualFit } from './catalog';
 import { getSession } from './session';
 import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
@@ -158,6 +160,57 @@ export async function createWardrobeItem(input: NewWardrobeItem): Promise<Wardro
 
 export function deleteWardrobeItem(id: string): Promise<{ wardrobe_item_id: string; deleted: true }> {
   return request('DELETE', `/wardrobe/${encodeURIComponent(id)}`, { user_id: userId() });
+}
+
+// 옷 사진 배경 지우기(누끼, 11/22). 서버 POST /wardrobe/cutout(파이썬 u2net 서버를 부름)이 배포되면 true로 바꾼다.
+// false면 서버를 부르지 않고 네모로 자른 사진을 그대로 쓴다.
+export const SERVER_HAS_PHOTO_CUTOUT = false;
+
+export type CutoutResult = { image: string; color: string | null };
+
+// 네모로 자른 사진(data:image/jpeg) 한 장 → 배경 지운 정사각 PNG(data:image/png)와 옷 색.
+export async function cutoutPhoto(dataUrl: string): Promise<CutoutResult> {
+  const form = new FormData();
+  form.append('user_id', userId());
+  if (Platform.OS === 'web') {
+    form.append('file', await (await fetch(dataUrl)).blob(), 'photo.jpg');
+  } else {
+    form.append('file', { uri: dataUrl, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 40_000);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/wardrobe/cutout`, { method: 'POST', body: form, signal: controller.signal });
+  } catch {
+    throw new ApiError(0, 'network_error', '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요');
+  } finally {
+    clearTimeout(timer);
+  }
+  const data = (await response.json().catch(() => null)) as (Partial<CutoutResult> & ErrorBody) | null;
+  if (!response.ok || typeof data?.image !== 'string') {
+    throw new ApiError(response.status, data?.error?.code ?? 'cutout_failed', data?.error?.message ?? '배경을 지우지 못했어요');
+  }
+  return { image: data.image, color: typeof data.color === 'string' ? data.color : null };
+}
+
+// 옷 사진 AI 태깅(11/22). 서버 POST /wardrobe/tag가 배포되면 true로 바꾼다.
+// 사진(배경 지운 옷 한 벌)을 보내면 부위 · 종류 · 색 · 핏을 미리 채워 주고, 사람은 틀린 칸만 고친다.
+export const SERVER_HAS_PHOTO_TAGGING = false;
+
+export type PhotoTag = { slot: Slot; kind: Kind; color: Color | null; visual_fit: VisualFit | null };
+
+type ServerPhotoTag = { slot?: unknown; kind?: unknown; color?: unknown; visual_fit?: unknown } | null;
+
+// 서버가 준 값도 앱의 닫힌 목록(부위별 종류, 종류별 색 · 핏)에 맞는지 다시 확인한다. 틀리면 그 칸은 비운다.
+export async function tagWardrobePhoto(dataUrl: string): Promise<PhotoTag | null> {
+  const data = await request<{ wardrobe_tag: ServerPhotoTag }>('POST', '/wardrobe/tag', { user_id: userId(), image: dataUrl }, 30_000);
+  const tag = data.wardrobe_tag;
+  if (tag === null || !isSlot(tag.slot) || !isKindOfSlot(tag.slot, tag.kind)) return null;
+  const { slot, kind } = tag;
+  const color = colorsForKind(kind).find((c) => c === tag.color) ?? null;
+  const visual_fit = fitsForKind(slot, kind).find((f) => f === tag.visual_fit) ?? null;
+  return { slot, kind, color, visual_fit };
 }
 
 // ── 피드·저장 ───────────────────────────────────────
