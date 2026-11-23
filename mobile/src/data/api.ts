@@ -3,12 +3,14 @@
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import { Platform } from 'react-native';
 
+import { getAccessToken } from './auth';
 import { colorsForKind, fitsForKind, isKindOfSlot, isSlot, type Color, type Kind, type Slot, type Style, type VisualFit } from './catalog';
 import { getSession } from './session';
-import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
+import type { ArchiveImage, ChatHistoryResult, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
 const DEFAULT_API_URL = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/api';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, '');
+export const CHAT_HISTORY_ENABLED = process.env.EXPO_PUBLIC_CHAT_HISTORY_ENABLED === 'true';
 
 // 지금 로그인한 사용자(session.ts). 로그인 전에는 서버를 부르지 않는다.
 function userId(): string {
@@ -41,9 +43,13 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
+    const accessToken = await getAccessToken();
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    if (accessToken !== null) headers.authorization = `Bearer ${accessToken}`;
     response = await fetch(`${API_URL}${path}`, {
       method,
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      headers: Object.keys(headers).length === 0 ? undefined : headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
@@ -181,7 +187,13 @@ export async function cutoutPhoto(dataUrl: string): Promise<CutoutResult> {
   const timer = setTimeout(() => controller.abort(), 40_000);
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/wardrobe/cutout`, { method: 'POST', body: form, signal: controller.signal });
+    const accessToken = await getAccessToken();
+    response = await fetch(`${API_URL}/wardrobe/cutout`, {
+      method: 'POST',
+      headers: accessToken === null ? undefined : { authorization: `Bearer ${accessToken}` },
+      body: form,
+      signal: controller.signal,
+    });
   } catch {
     throw new ApiError(0, 'network_error', '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요');
   } finally {
@@ -270,4 +282,15 @@ export function postChat(
     message,
     history,
   }, 30_000);
+}
+
+export function fetchChatHistory(styleImageId: string, before?: number): Promise<ChatHistoryResult> {
+  const params = new URLSearchParams({ style_image_id: styleImageId, limit: '100' });
+  if (before !== undefined) params.set('before', String(before));
+  return request<ChatHistoryResult>('GET', `/chat/history?${params.toString()}`);
+}
+
+export function deleteChatHistory(styleImageId: string): Promise<{ style_image_id: string; deleted: true }> {
+  const params = new URLSearchParams({ style_image_id: styleImageId });
+  return request('DELETE', `/chat/history?${params.toString()}`);
 }

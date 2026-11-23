@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { API_URL } from './api';
+import { getAccessToken } from './auth';
 import { getSession } from './session';
 
 // 서버 src/fulljoin/events.ts의 EVENT_NAMES와 같아야 한다(scripts/check-events.mjs가 확인).
@@ -281,12 +282,15 @@ export function flushEvents(): void {
   const events = queued.map(({ session_id: _sessionId, ...event }) => event);
   try {
     // text/plain이면 브라우저가 사전 확인(preflight) 없이 보내고, keepalive라 페이지를 닫는 중에도 전송된다.
-    void fetch(`${API_URL}/events`, {
-      method: 'POST',
-      headers: { 'content-type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
-      keepalive: true,
-    }).catch(() => undefined);
+    void getAccessToken().then((accessToken) => fetch(`${API_URL}/events`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'text/plain;charset=UTF-8',
+          ...(accessToken === null ? {} : { authorization: `Bearer ${accessToken}` }),
+        },
+        body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
+        keepalive: true,
+    })).catch(() => undefined);
   } catch {
     // 기록은 앱 사용을 막지 않는다.
   }

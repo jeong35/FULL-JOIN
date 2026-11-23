@@ -5,6 +5,7 @@ import type { ElementRef } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,7 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SmallWhiteButton } from '@/components/ui';
-import { errorMessage, postChat } from '@/data/api';
+import { CHAT_HISTORY_ENABLED, deleteChatHistory, errorMessage, fetchChatHistory, postChat } from '@/data/api';
 import { track } from '@/data/events';
 import { markHintDone } from '@/data/hints';
 import { loadArchive, useArchiveState } from '@/data/store';
@@ -25,7 +26,7 @@ import type { ArchiveImage, Product } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 type Message = {
-  id: number;
+  id: string;
   role: 'user' | 'assistant';
   text: string;
   products: Product[];
@@ -46,6 +47,10 @@ export default function ChatScreen() {
   const [conversationImageId, setConversationImageId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [nextBefore, setNextBefore] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const nextMessageId = useRef(1);
   const scrollRef = useRef<ElementRef<typeof ScrollView>>(null);
   const inputStarted = useRef(false);
@@ -72,12 +77,109 @@ export default function ChatScreen() {
   }, [archive.status, archive.data.length]);
 
   const selected = archive.data.find((image) => image.id === selectedId) ?? archive.data[0] ?? null;
+  const activeImageId = useRef<string | null>(null);
   const visibleMessages = selected?.id === conversationImageId ? messages : [];
+
+  useEffect(() => {
+    activeImageId.current = selected?.id ?? null;
+  }, [selected?.id]);
+
+  useEffect(() => {
+    const styleImageId = selected?.id;
+    if (!CHAT_HISTORY_ENABLED || styleImageId === undefined) return;
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      if (cancelled) return;
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const history = await fetchChatHistory(styleImageId);
+        if (cancelled) return;
+        setConversationImageId(styleImageId);
+        setMessages(history.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.content,
+          products: message.products,
+        })));
+        setNextBefore(history.next_before);
+      } catch (error) {
+        if (cancelled) return;
+        setConversationImageId(styleImageId);
+        setMessages([]);
+        setNextBefore(null);
+        setHistoryError(errorMessage(error));
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id]);
+
+  async function loadEarlier() {
+    if (selected === null || nextBefore === null || historyLoading) return;
+    const styleImageId = selected.id;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const history = await fetchChatHistory(styleImageId, nextBefore);
+      if (activeImageId.current !== styleImageId) return;
+      setMessages((current) => [
+        ...history.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.content,
+          products: message.products,
+        })),
+        ...current,
+      ]);
+      setNextBefore(history.next_before);
+    } catch (error) {
+      if (activeImageId.current === styleImageId) setHistoryError(errorMessage(error));
+    } finally {
+      if (activeImageId.current === styleImageId) setHistoryLoading(false);
+    }
+  }
+
+  function confirmDeleteHistory() {
+    if (selected === null || deleting) return;
+    const styleImageId = selected.id;
+    const deleteSelectedHistory = () => {
+      setDeleting(true);
+      setHistoryError(null);
+      void deleteChatHistory(styleImageId)
+        .then(() => {
+          if (activeImageId.current !== styleImageId) return;
+          setMessages([]);
+          setConversationImageId(styleImageId);
+          setNextBefore(null);
+        })
+        .catch((error) => setHistoryError(errorMessage(error)))
+        .finally(() => setDeleting(false));
+    };
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('이 사진의 대화를 지울까요? 삭제한 대화는 복구할 수 없어요.')) {
+        deleteSelectedHistory();
+      }
+      return;
+    }
+    Alert.alert('이 사진의 대화를 지울까요?', '삭제한 대화는 복구할 수 없어요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: deleteSelectedHistory,
+      },
+    ]);
+  }
 
   // preset: 빈 대화 화면의 예시 질문 버튼을 눌렀을 때 그 문장을 바로 보낸다.
   async function send(preset?: string) {
     const text = (preset ?? input).trim();
     if (selected === null || text.length === 0 || sending) return;
+    const styleImageId = selected.id;
     setInput('');
     setSendError(null);
     const history = visibleMessages.slice(-8).map((message) => ({
@@ -85,7 +187,7 @@ export default function ChatScreen() {
       content: message.text,
     }));
     const userMessage: Message = {
-      id: nextMessageId.current++,
+      id: `local-user-${nextMessageId.current++}`,
       role: 'user',
       text,
       products: [],
@@ -100,12 +202,13 @@ export default function ChatScreen() {
     const startedAt = Date.now();
     inputStarted.current = false;
     // 질문 내용은 남기지 않고, 어느 사진에 몇 번째 질문인지만 남긴다.
-    track('chat_send', { style_image_id: selected.id, turn: history.filter((message) => message.role === 'user').length + 1 });
+    track('chat_send', { style_image_id: styleImageId, turn: history.filter((message) => message.role === 'user').length + 1 });
     markHintDone('result_chat');
     try {
-      const result = await postChat(selected.id, text, history);
+      const result = await postChat(styleImageId, text, history);
+      if (activeImageId.current !== styleImageId) return;
       setMessages((current) => [...current, {
-        id: nextMessageId.current++,
+        id: `local-assistant-${nextMessageId.current++}`,
         role: 'assistant',
         text: result.answer,
         products: result.products,
@@ -115,7 +218,7 @@ export default function ChatScreen() {
       const message = errorMessage(error);
       track('chat_response_failed', { latency_ms: Date.now() - startedAt, error_code: message });
       track('error_shown', { screen: 'chat', error_code: message });
-      setSendError(message);
+      if (activeImageId.current === styleImageId) setSendError(message);
     } finally {
       setSending(false);
     }
@@ -168,6 +271,8 @@ export default function ChatScreen() {
                       setShowPicker(false);
                       setMessages([]);
                       setConversationImageId(null);
+                      setNextBefore(null);
+                      setHistoryError(null);
                     }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: image.id === selected.id }}
@@ -187,7 +292,23 @@ export default function ChatScreen() {
               style={styles.messages}
               contentContainerStyle={styles.messagesContent}
               onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-              {visibleMessages.length === 0 && (
+              {CHAT_HISTORY_ENABLED && (historyLoading || historyError !== null || visibleMessages.length > 0) && (
+                <View style={styles.historyActions}>
+                  {nextBefore !== null && (
+                    <Pressable onPress={() => void loadEarlier()} disabled={historyLoading} accessibilityRole="button">
+                      <Text style={styles.historyActionText}>이전 대화 더 보기</Text>
+                    </Pressable>
+                  )}
+                  {visibleMessages.length > 0 && (
+                    <Pressable onPress={confirmDeleteHistory} disabled={deleting} accessibilityRole="button">
+                      <Text style={styles.deleteHistoryText}>{deleting ? '삭제 중…' : '대화 삭제'}</Text>
+                    </Pressable>
+                  )}
+                  {historyLoading && <ActivityIndicator size="small" color={colors.textPurple} />}
+                </View>
+              )}
+              {historyError !== null && <Text style={styles.error}>{historyError}</Text>}
+              {!historyLoading && visibleMessages.length === 0 && (
                 <View style={styles.emptyChat}>
                   <Text style={styles.emptyChatTitle}>이 사진에서 궁금한 걸 물어보세요</Text>
                   <Text style={styles.emptyChatText}>
@@ -353,6 +474,9 @@ const styles = StyleSheet.create({
   pickerImageSelected: { borderColor: colors.purpleStrong },
   messages: { flex: 1 },
   messagesContent: { flexGrow: 1, gap: 14, padding: 18, paddingBottom: 8 },
+  historyActions: { minHeight: 24, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 14 },
+  historyActionText: { fontFamily: fonts.medium, fontSize: 12, color: colors.textPurple },
+  deleteHistoryText: { fontFamily: fonts.medium, fontSize: 12, color: colors.danger },
   emptyChat: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 24 },
   emptyChatTitle: { textAlign: 'center', fontFamily: fonts.bold, fontSize: 15, color: colors.text },
   emptyChatText: { textAlign: 'center', fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, color: colors.textSecondary },

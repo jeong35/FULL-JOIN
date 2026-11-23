@@ -39,6 +39,7 @@ npx expo start
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | 배포 서버 주소 | 로컬 서버(`http://127.0.0.1:54321/functions/v1/api`)로 바꿀 때 |
 | `EXPO_PUBLIC_DEMO_USER_ID` | `eunjae-demo` | 앱(시뮬레이터·Expo Go)의 시연용 사용자. 넣은 채로 웹을 만들면 웹도 로그인 없이 모두 이 사용자 하나를 같이 쓴다 |
+| `EXPO_PUBLIC_CHAT_HISTORY_ENABLED` | `false` | Auth access token 공급자가 연결된 staging/출시 빌드에서만 `true`. 사진별 대화 복원·삭제 UI를 켠다 |
 
 ## 웹 링크로 나눠 주기 (동료평가)
 
@@ -59,6 +60,7 @@ npx eas-cli@latest deploy --prod    # 처음엔 프로젝트 만들기·주소 �
 - 주소 끝에 `?user=eunjae-demo`를 붙이면 로그인 없이 시연용 사용자로 들어간다(웹으로 시연할 때).
 - 앱(시뮬레이터·Expo Go)은 로그인 없이 시연용 사용자 `eunjae-demo`로 바로 들어간다. 튜토리얼은 마이 탭에서 다시 볼 수 있다.
 - `mobile/.env`에 `EXPO_PUBLIC_DEMO_USER_ID`를 넣은 채로 export하면 모든 사람이 그 사용자 하나를 같이 쓰게 되니 주의한다.
+- `EXPO_PUBLIC_CHAT_HISTORY_ENABLED=true`만으로 인증이 생기지는 않는다. 로그인 모듈이 `registerAccessTokenProvider`로 갱신 가능한 Supabase access token을 제공하고 `loginWithAuthSession`으로 `Session.userId`를 JWT subject와 일치시킨 뒤 켠다. 토큰은 Expo 환경변수나 저장소에 넣지 않는다.
 - 피드에는 허락받지 않은 쇼핑몰 사진이 있으니 링크는 수업 안에서만 공유한다.
 
 ## 검사
