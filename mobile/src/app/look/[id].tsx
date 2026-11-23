@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ItemArt } from '@/components/ArtPager';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { MatchBadge, pieceNote } from '@/components/LookParts';
 import { BackButton } from '@/components/ui';
@@ -13,6 +14,7 @@ import { dayOfMonth, todayKey, weekday } from '@/data/dates';
 import { lookTips, matchOf, sortPieces, type OwnedPiece } from '@/data/recommend';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import { useRecommendation } from '@/data/useRecommendation';
+import { useClosetView, useWardrobePhotos } from '@/data/wardrobePhotos';
 import { loadWeather } from '@/data/weather';
 import { colors, fonts, glass, layout } from '@/theme';
 
@@ -120,6 +122,9 @@ export default function LookDetailScreen() {
 
 function FlatLay({ pieces, onCompare }: { pieces: readonly OwnedPiece[]; onCompare: () => void }) {
   const used: Partial<Record<Slot, number>> = {};
+  // 추천 탭·옷장에서 '사진'으로 보기를 골랐으면 사진 넣은 옷은 사진으로 펼쳐 놓는다.
+  const photos = useWardrobePhotos();
+  const artView = useClosetView();
   return (
     <View style={styles.board} accessibilityLabel="내 옷을 펼쳐 놓은 코디">
       {sortPieces(pieces).map((piece) => {
@@ -131,7 +136,7 @@ function FlatLay({ pieces, onCompare }: { pieces: readonly OwnedPiece[]; onCompa
           <View key={piece.wardrobeItem.id} style={[styles.spot, { left: spot.left, top: spot.top, transform: [{ rotate: `${spot.rotate}deg` }] }]}>
             <MatchBadge match={matchOf(piece)} style={styles.spotBadge} />
             <View style={styles.shadow}>
-              <ItemIcon item={piece.wardrobeItem} size={spot.size} />
+              <ItemArt item={piece.wardrobeItem} photo={photos[piece.wardrobeItem.id]} view={artView} size={spot.size} />
             </View>
           </View>
         );

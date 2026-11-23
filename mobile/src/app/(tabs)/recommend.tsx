@@ -8,6 +8,7 @@ import { useCallback, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { ArtPager, ViewToggle } from '@/components/ArtPager';
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
@@ -22,6 +23,7 @@ import { loadArchive, loadWardrobe } from '@/data/store';
 import { nextTrip, nightsLabel, tripOn, useTrips, type Trip } from '@/data/trips';
 import type { WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
+import { setClosetView, useClosetView, useWardrobePhotos, type ClosetView, type WardrobePhoto } from '@/data/wardrobePhotos';
 import { loadWeather, REGIONS, setRegion, tempGap, tempRangeLabel, weatherTip, type DayWeather } from '@/data/weather';
 import { colors, fonts, glass, layout } from '@/theme';
 
@@ -364,6 +366,10 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
   onNext: () => void;
 }) {
   const total = view.looks.length;
+  const photos = useWardrobePhotos();
+  const artView = useClosetView();
+  // 이 룩에 사진 넣은 옷이 있으면 그림 | 사진 보기를 고를 수 있다(옷장과 같은 설정).
+  const hasPhoto = look !== undefined && look.pieces.some((piece) => photos[piece.wardrobeItem.id] !== undefined);
   let empty: { text: string; action?: { label: string; onPress: () => void } } | null = null;
   if (look === undefined) {
     if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') empty = { text: '불러오는 중이에요' };
@@ -377,7 +383,8 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
-        <Text style={styles.h2}>{title}</Text>
+        <Text style={[styles.h2, styles.flex]}>{title}</Text>
+        {hasPhoto && <ViewToggle value={artView} onChange={setClosetView} label="룩 옷 보기" />}
         {total > 0 && <Text style={styles.sub}>{(index % total) + 1} / {total}</Text>}
       </View>
       {look === undefined ? (
@@ -407,7 +414,7 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
               </Pressable>
             </View>
             <MatchLegend pieces={look.pieces} />
-            <LookGrid look={look} />
+            <LookGrid look={look} photos={photos} artView={artView} />
             {lookTips(look.pieces, view.day).map((tip) => (
               <View key={tip.label} style={styles.tipRow}>
                 <Text style={styles.tipLabel}>{tip.label}</Text>
@@ -433,14 +440,15 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
 }
 
 // 큰 칸(첫 옷) + 오른쪽 두 칸 + 아래 줄. 옷이 2벌이면 나란히.
-function LookGrid({ look }: { look: Look }) {
+// 사진 넣은 옷은 칸을 옆으로 밀면 그림 ↔ 사진(옷장 칸과 같음). 위 '그림 | 사진'으로 전부 한 번에 바꿀 수도 있다.
+function LookGrid({ look, photos, artView }: { look: Look; photos: Readonly<Record<string, WardrobePhoto>>; artView: ClosetView }) {
   const pieces = sortPieces(look.pieces);
   const tile = (index: number, size: number, style: object) => {
     const piece = pieces[index];
     const mine = piece.wardrobeItem;
     return (
       <View key={mine.id} style={[styles.tile, style]}>
-        <ItemIcon item={mine} size={size} />
+        <ArtPager key={`${mine.id}-${artView}`} item={mine} photo={photos[mine.id]} view={artView} iconSize={size} photoSize={size} height={size + 14} />
         <MatchBadge match={matchOf(piece)} style={styles.tileBadge} />
         <View style={styles.tileName}>
           <Text style={styles.tileKind}>{kindLabel(mine.kind)}</Text>
@@ -712,19 +720,19 @@ const styles = StyleSheet.create({
   clothesName: { fontFamily: fonts.medium, fontSize: 12, color: colors.text },
   makerChips: { gap: 6, paddingHorizontal: layout.screenPaddingX },
   makerChip: { height: 32, paddingHorizontal: 13, borderRadius: 16, borderWidth: 1, borderColor: glass.border, backgroundColor: glass.background, justifyContent: 'center' },
-  makerChipOn: { backgroundColor: colors.purpleFill, borderColor: colors.purpleFill },
+  makerChipOn: { backgroundColor: colors.white, borderColor: colors.purpleLine, borderWidth: 1.5 },
   makerChipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.text },
-  makerChipTextOn: { fontFamily: fonts.bold, color: colors.onPurpleFill },
+  makerChipTextOn: { fontFamily: fonts.bold, color: colors.textPurple },
   makerGap: { marginTop: -4, fontFamily: fonts.regular, fontSize: 10, color: colors.danger },
 
-  ownPill: { height: 26, paddingHorizontal: 9, borderRadius: 7, backgroundColor: colors.photoPlaceholder, justifyContent: 'center' },
+  ownPill: { height: 26, paddingHorizontal: 9, borderRadius: 7, backgroundColor: colors.purpleTint, justifyContent: 'center' },
   ownPillText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
   almostGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, backgroundColor: '#F1EFF7' },
   almostTile: { width: '31.5%', height: 128, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.white, borderWidth: 1.5, borderColor: 'transparent', alignItems: 'center', justifyContent: 'space-between' },
   almostTileNeed: { borderStyle: 'dashed', borderColor: colors.purpleStrong, boxShadow: '0 4px 12px rgba(30,20,50,0.10)' },
-  almostLabel: { height: 22, paddingHorizontal: 8, borderRadius: 6, backgroundColor: colors.purpleFill, justifyContent: 'center' },
+  almostLabel: { height: 22, paddingHorizontal: 8, borderRadius: 6, backgroundColor: colors.purpleTint, justifyContent: 'center' },
   almostLabelNeed: { backgroundColor: colors.textPurple },
-  almostLabelText: { fontFamily: fonts.bold, fontSize: 11, color: colors.onPurpleFill },
+  almostLabelText: { fontFamily: fonts.bold, fontSize: 11, color: colors.textPurple },
   almostLabelTextNeed: { color: colors.white },
   almostName: { fontFamily: fonts.bold, fontSize: 12, color: colors.text },
   almostNameNeed: { color: colors.tagText },

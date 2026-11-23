@@ -14,6 +14,7 @@ import { track } from '@/data/events';
 import { clearPhotoDraft, pickPhoto, removeCutItem, startPhotoDraft, updateCutItem, usePhotoDraft, withKind, type CutItem } from '@/data/photoAdd';
 import { addWardrobeItem, useWardrobe } from '@/data/store';
 import type { Season } from '@/data/types';
+import { photoTint } from '@/data/photoColor';
 import { setWardrobePhoto } from '@/data/wardrobePhotos';
 import { colors, fonts, glass, layout } from '@/theme';
 
@@ -262,7 +263,7 @@ function ItemCard({
       {item.kind !== null && (
         <View style={styles.autoIcon}>
           <View style={styles.autoIconBox}>
-            <LookIcon look={null} kind={item.kind} color={item.colorName ?? undefined} fit={item.fit} size={30} />
+            <LookIcon look={null} kind={item.kind} color={item.colorName ?? undefined} fit={item.fit} size={30} tint={photoTint(item.color, item.colorName)} />
           </View>
           <Text style={styles.autoIconText}>그림도 자동으로 만들어져요</Text>
         </View>
@@ -439,8 +440,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipOn: {
-    backgroundColor: colors.purpleFill,
-    borderColor: colors.purpleFill,
+    backgroundColor: colors.white,
+    borderColor: colors.purpleLine,
+    borderWidth: 1.5,
   },
   chipOff: {
     backgroundColor: colors.white,
@@ -454,7 +456,7 @@ const styles = StyleSheet.create({
   },
   chipTextOn: {
     fontFamily: fonts.bold,
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   chipTextOff: {
     fontFamily: fonts.regular,

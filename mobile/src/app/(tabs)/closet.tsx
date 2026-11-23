@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { ViewToggle } from '@/components/ArtPager';
 import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
 import { BottomSheet } from '@/components/PhotoAddParts';
@@ -353,26 +354,6 @@ function SheetRow({ icon, title, sub, onPress }: { icon: keyof typeof SHEET_ICON
 }
 
 // 옷장 보기: 그림(기본) · 사진. 사진 넣은 옷이 있을 때만 보인다.
-function ViewToggle({ value, onChange }: { value: ClosetView; onChange: (view: ClosetView) => void }) {
-  return (
-    <View style={styles.toggle} accessibilityRole="radiogroup" accessibilityLabel="옷장 보기">
-      {(['icon', 'photo'] as const).map((v) => {
-        const on = v === value;
-        return (
-          <Pressable
-            key={v}
-            onPress={() => onChange(v)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: on }}
-            style={[styles.toggleItem, on && styles.toggleItemOn]}>
-            <Text style={[styles.toggleText, on && styles.toggleTextOn]}>{v === 'icon' ? '그림' : '사진'}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 function WardrobeTile({
   item,
   width,
@@ -652,31 +633,6 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingLeft: layout.screenPaddingX,
   },
-  toggle: {
-    flexDirection: 'row',
-    padding: 2,
-    gap: 2,
-    borderRadius: 10,
-    backgroundColor: colors.progressTrack,
-  },
-  toggleItem: {
-    height: 26,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    justifyContent: 'center',
-  },
-  toggleItemOn: {
-    backgroundColor: colors.white,
-  },
-  toggleText: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  toggleTextOn: {
-    fontFamily: fonts.bold,
-    color: colors.text,
-  },
   tilePage: {
     height: 112,
     alignItems: 'center',
@@ -695,7 +651,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(142,106,216,0.35)',
+    backgroundColor: 'rgba(140,125,216,0.35)',
   },
   tileDotOn: {
     width: 12,
@@ -759,8 +715,9 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   seasonPillOn: {
-    backgroundColor: colors.purpleFill,
-    borderColor: colors.purpleFill,
+    backgroundColor: colors.white,
+    borderColor: colors.purpleLine,
+    borderWidth: 1.5,
   },
   seasonText: {
     fontFamily: fonts.regular,
@@ -769,7 +726,7 @@ const styles = StyleSheet.create({
   },
   seasonTextOn: {
     fontFamily: fonts.bold,
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   tileSeason: {
     marginTop: 1,
