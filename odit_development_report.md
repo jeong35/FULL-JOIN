@@ -29,7 +29,7 @@
 - 최신 `origin/main`은 PR #26을 병합한 `3e5422860c77568018d18fb8b14270893bcaf3ae`다. 승인형 release workflow와 localhost 운영 LLMOps 경고가 main에 포함됐지만 자동 배포는 발생하지 않았다.
 - 운영 Edge Function과 Expo production은 `2d0369b` 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 - 인증 전용 변경은 draft PR #25(`3cca4b6`)에서 서버와 local Supabase CI가 성공했으며 main·운영에는 미반영이다. Auth/사진 통합 draft PR #24도 미병합이다.
-- CHAT-02는 원격 `codex/chat-history`와 stacked draft PR #28(`bd70fe4`)에 있다. 사진별 conversation·메시지 저장, pagination, 삭제와 RLS를 구현했고 전체 검사·로컬 및 remote staging A/B Auth 통합 테스트를 통과했다. 모바일 복원 UI는 미연동이다.
+- CHAT-02는 원격 `codex/chat-history`와 stacked draft PR #28에 있다. 사진별 conversation·메시지 저장, pagination, 삭제와 RLS를 구현했고 최신 PR head의 전체 검사·로컬 및 remote staging A/B Auth 통합 테스트를 통과했다. staging 배포 SHA는 `bd70fe4`이며 모바일 복원 UI는 미연동이다.
 - `full-join-staging`에는 migration 17개와 `bd70fe4` API를 적용했다. `/health` release SHA 일치, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
 
 ## 변경 이력
@@ -399,7 +399,7 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 항목 | 확인 값 |
 |---|---|
 | 현재 worktree 브랜치 | `codex/chat-history` |
-| 보고서 갱신 전 현재 브랜치 HEAD | `bd70fe4b79f13dd96eb80f4b58d42b01113186a4` |
+| 현재 브랜치 HEAD | 원격 `codex/chat-history`의 PR #28 최신 head(문서 갱신 포함) |
 | 기능 병합·검증 기준 `origin/main` | `3e5422860c77568018d18fb8b14270893bcaf3ae` (PR #26 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
 | PR 상태 | #25 draft·CI 성공, #28 stacked draft·서버 및 local Supabase CI 성공; #20, #21, #22, #26 main 병합 완료 |
@@ -552,7 +552,7 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 - PR #21 base 전환 후 `Verify` run 133: **success**
 - PR #22 base 전환 후 `Verify` run 136: 서버·모바일 `check`, `local-supabase-integration` 모두 **success**
 - PR #25 `3cca4b6`: 서버 `check`와 `local-supabase-integration` **success**
-- PR #28 `c878384`: 서버 `check`와 `local-supabase-integration` 모두 **success**, 별도 remote staging 검증도 성공
+- PR #28 최신 head: 서버 `check`와 `local-supabase-integration` 모두 **success**, 별도 remote staging 검증도 성공
 - #20~#22·#26은 main에 병합됐다. workflow의 release는 사람 승인과 exact SHA 입력이 필요하며 자동 운영 배포는 없다.
 
 ---
