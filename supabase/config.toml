@@ -1,4 +1,9 @@
 project_id = "full-join"
 
+[auth]
+# Local development transport only. Production launch still needs an approved login UI,
+# demo-data migration policy, abuse controls, and an explicit project setting change.
+enable_anonymous_sign_ins = true
+
 [functions.api]
 verify_jwt = false
