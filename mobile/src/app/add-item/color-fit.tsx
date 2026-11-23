@@ -658,8 +658,9 @@ const styles = StyleSheet.create({
     borderColor: glass.border,
   },
   chipSelected: {
-    backgroundColor: colors.purpleFill,
-    borderColor: colors.purpleFill,
+    backgroundColor: colors.white,
+    borderColor: colors.purpleLine,
+    borderWidth: 1.5,
   },
   chipDisabled: {
     opacity: 0.45,
@@ -671,7 +672,7 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     fontFamily: fonts.bold,
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   materialNote: {
     marginTop: 10,

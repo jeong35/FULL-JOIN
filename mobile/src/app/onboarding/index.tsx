@@ -341,11 +341,11 @@ const pic = StyleSheet.create({
     justifyContent: 'center',
   },
   tagUse: {
-    backgroundColor: colors.purpleFill,
+    backgroundColor: colors.purpleTint,
   },
   tagSimilar: {
     borderWidth: 1,
-    borderColor: colors.purpleFill,
+    borderColor: colors.purpleLine,
     backgroundColor: colors.white,
   },
   tagNeed: {
@@ -359,7 +359,7 @@ const pic = StyleSheet.create({
     color: colors.tagText,
   },
   tagTextUse: {
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   closet: {
     alignItems: 'center',

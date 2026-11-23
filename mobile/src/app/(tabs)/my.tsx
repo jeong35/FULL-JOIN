@@ -126,13 +126,13 @@ const styles = StyleSheet.create({
     height: 28,
     paddingHorizontal: 12,
     borderRadius: 7,
-    backgroundColor: colors.purpleFill,
+    backgroundColor: colors.purpleTint,
     justifyContent: 'center',
   },
   chipText: {
     fontFamily: fonts.bold,
     fontSize: 13,
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   list: {
     paddingHorizontal: 16,

@@ -912,11 +912,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tagUse: {
-    backgroundColor: colors.purpleFill,
+    backgroundColor: colors.purpleTint,
   },
   tagSimilar: {
     borderWidth: 1,
-    borderColor: colors.purpleFill,
+    borderColor: colors.purpleLine,
     backgroundColor: colors.white,
   },
   tagSubstitute: {
@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
     color: colors.tagText,
   },
   tagTextUse: {
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   choice: {
     flexDirection: 'row',
