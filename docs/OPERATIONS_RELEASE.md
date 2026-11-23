@@ -51,6 +51,6 @@ curl https://<project-ref>.supabase.co/functions/v1/api/health
 - 이전 코드 재배포 시 metadata도 그 SHA와 새 배포 시각으로 다시 설정한다.
 - health SHA와 smoke 결과가 맞지 않으면 배포 완료로 표시하지 않는다.
 
-## 자동화 후보
+## 승인형 자동화
 
-main 보호와 staging이 준비되면 GitHub Actions의 승인 환경에서만 위 절차를 자동화한다. artifact에 SHA를 고정하고, secrets set→deploy→health SHA 검증→smoke 순서로 실패 즉시 중단한다. 현재 `verify.yml`은 검증 전용이며 운영 배포 권한을 갖지 않는다.
+`.github/workflows/release.yml`은 수동 `workflow_dispatch`와 GitHub Environment 승인을 전제로 위 절차를 구현한다. push·PR·merge에는 연결하지 않았다. production은 입력 SHA가 최신 `origin/main`과 같아야 하고, migration은 기본 false인 별도 입력을 승인한 경우에만 적용한다. 설정해야 할 환경·reviewer·secret과 실패 조건은 `docs/APPROVED_RELEASE.md`를 따른다. 기존 `verify.yml`은 계속 검증 전용이며 운영 배포 권한을 갖지 않는다.

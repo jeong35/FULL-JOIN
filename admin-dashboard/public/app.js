@@ -74,20 +74,30 @@ function renderLlmOps(llmops) {
   $("#future-cost").innerHTML = llmops.future_feature_unit_costs.map((row) => `<div class="metric-row"><span>${escape(featureLabels[row.feature] ?? row.feature)} · 표본 ${count(row.samples)}</span><strong>${row.status === "available" ? `${money(row.average_cost_usd)} / 건` : "확인 불가"}</strong></div>`).join("");
 }
 
+function renderAlerts(alerts) {
+  $("#llm-alerts").innerHTML = alerts.length === 0
+    ? empty("선택 기간에 경고 기준을 넘은 지표가 없습니다.")
+    : alerts.map((alert) => `<div class="alert ${escape(alert.severity)}"><div><strong>${escape(alert.code)}</strong><p>${escape(alert.message)}</p></div><span>${count(alert.value)} / 기준 ${count(alert.threshold)}</span></div>`).join("");
+}
+
 async function refresh() {
   const button = $("#refresh");
   const notice = $("#notice");
   button.disabled = true;
   notice.className = "notice";
-  notice.textContent = "로컬 Supabase에서 집계 중입니다.";
+  notice.textContent = "Supabase에서 집계 중입니다.";
   try {
     const query = new URLSearchParams({ from: toIso($("#from").value), to: toIso($("#to").value) });
-    const response = await fetch(`/api/dashboard?${query}`);
+    const token = $("#admin-token").value.trim();
+    const response = await fetch(`/api/dashboard?${query}`, {
+      headers: token === "" ? {} : { authorization: `Bearer ${token}` },
+    });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error ?? "지표 조회 실패");
     renderProduct(payload.product);
     renderLlmOps(payload.llmops);
-    notice.textContent = `로컬 데이터 · KST · 테스트 이벤트 ${count(payload.product.excluded_test_event_count)}건 제외 · ${new Date(payload.generated_at).toLocaleString("ko-KR")}`;
+    renderAlerts(payload.alerts ?? []);
+    notice.textContent = `${payload.data_source} · KST · 테스트 이벤트 ${count(payload.product.excluded_test_event_count)}건 제외 · ${new Date(payload.generated_at).toLocaleString("ko-KR")}`;
   } catch (error) {
     notice.className = "notice error";
     notice.textContent = error instanceof Error ? error.message : "지표 조회 실패";

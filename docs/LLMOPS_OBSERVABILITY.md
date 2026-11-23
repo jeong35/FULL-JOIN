@@ -2,12 +2,14 @@
 
 ## 구현 상태
 
-`codex/llmops-chat03`에 다음 로컬 구현이 있다. migration은 운영 DB에 적용하지 않았다.
+main과 운영 Edge Function에 다음 계측이 적용돼 있다. 운영 DB에는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 
 - `src/fulljoin/llm_observability.ts`: Responses API usage 검증, 모델 가격표, 비용·지연·fallback·grounded 집계
 - `supabase/migrations/202611200003_llm_operation_metrics.sql`: 행동 이벤트와 분리된 운영 지표 테이블
 - `supabase/functions/api/index.ts`: 사진 태깅과 챗 호출/grounded/fallback 계측
 - `tests/test_llm_observability.ts`: 토큰·비용·개인정보 최소화·평균/p95·grounded 비율 회귀
+- `src/fulljoin/llmops_alerts.ts`: 최소 표본을 둔 실패율·fallback·p95·일 비용 경고 평가
+- `admin-dashboard/`: localhost에서 로컬 또는 운영 Supabase를 읽는 집계 UI와 선택적 webhook 점검 command
 
 ## 범위
 
@@ -86,7 +88,15 @@ where feature = 'chat';
 1. 팀이 운영 지표 보존 기간을 합의한다.
 2. migration과 service-role 전용 권한을 별도 리뷰한다.
 3. 로컬/staging에서 원문과 사용자 식별자가 저장되지 않는지 테스트한다.
-4. dashboard 쿼리와 alert 기준을 만든다.
-5. 운영 적용 후 release SHA별 baseline을 만든다.
+4. 현재 실험용 alert 기준으로 baseline을 관찰하고 팀 기준을 확정한다.
+5. 전용 read-only credential/proxy와 관리자 인증을 확정한 뒤 외부 운영 화면 공개 여부를 결정한다.
+
+## 운영 조회와 알림
+
+운영 지표는 외부에 공개하지 않고 localhost에서만 조회한다. `DASHBOARD_DATA_SOURCE=production`, `DASHBOARD_ALLOW_REMOTE_READONLY=true`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, 32자 이상의 `DASHBOARD_ADMIN_TOKEN`을 서버 프로세스에 제공한 뒤 `npm run dashboard:production`을 실행한다. service-role 키는 브라우저에 전달되지 않고 서버 코드는 select만 수행하지만, 키 자체 권한은 read-only가 아니므로 전용 read-only proxy/credential이 생기기 전까지 원격 호스팅하지 않는다.
+
+`npm run dashboard:alerts`는 최근 24시간을 기본으로 읽어 경고를 JSON으로 출력하며 경고가 있으면 exit code 2를 반환한다. `LLMOPS_ALERT_WEBHOOK_URL`을 명시한 경우에만 원문 없는 집계 경고를 전송한다. 실제 webhook 목적지와 secret은 저장소에 두지 않으며 팀 승인 전 설정하지 않는다.
+
+현재 기본값은 최소 실제 호출 10건, 실패율 5%, fallback 10%, p95 15초, 하루 예상 비용 5달러다. 이는 제품 정책이 아니라 초기 운영용 실험값이며 baseline 후 조정한다.
 
 운영 migration 적용과 dashboard/alert 생성은 별도 승인 전 수행하지 않는다.
