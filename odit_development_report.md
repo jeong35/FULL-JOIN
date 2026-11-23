@@ -33,11 +33,11 @@
 
 ## 변경 이력
 
-### 2026-11-23 — 모바일 Auth 전달 경계와 사진별 챗 기록 UI
+### 2026-11-23 — draft PR #30 모바일 Auth 전달 경계와 사진별 챗 기록 UI
 
 - 구현(브랜치): `codex/mobile-auth-chat-history`에 로그인 방식을 고정하지 않는 access token provider를 추가하고, 일반 API·사진 cutout·events·weather 요청이 등록된 Bearer token을 전달하도록 연결했다. 토큰은 환경변수·저장소에 보관하지 않는다.
 - 챗 UI(브랜치): feature flag 아래 사진별 기록 복원, 100개 cursor pagination, 명시적 삭제와 웹/네이티브 확인 UI를 추가했다. 사진 전환 중 늦게 도착한 복원·전송·삭제 응답이 다른 사진 대화를 덮어쓰지 않도록 요청 대상 ID를 검증한다.
-- 테스트: `npm run check` 전체 통과(골든 47/47, 코사인 19/19 포함), 모바일 typecheck·Expo lint 통과, 토큰 provider smoke 통과, Expo web export 통과. Auth 로그인 공급자가 미확정이라 실제 모바일 JWT E2E와 staging UI 테스트는 아직 수행하지 않았다.
+- 테스트: `npm run check` 전체 통과(골든 47/47, 코사인 19/19 포함), 모바일 typecheck·Expo lint 통과, 토큰 provider smoke 통과, Expo web export 통과. GitHub PR #30의 `check`와 직렬화된 `local-supabase-integration`도 head `3b513d4`에서 모두 통과했다. Auth 로그인 공급자가 미확정이라 실제 모바일 JWT E2E와 staging UI 테스트는 아직 수행하지 않았다.
 - 결정/배포: `EXPO_PUBLIC_CHAT_HISTORY_ENABLED` 기본값은 꺼짐이다. Supabase Auth 또는 외부 포털 로그인 모듈이 갱신 가능한 token과 JWT subject 기반 `Session.userId`를 제공한 뒤에만 켠다. main 병합·Expo·production 배포는 아직 하지 않았다.
 
 ### 2026-11-23 — CI 중복·로컬 Supabase 포트 충돌 방지 병합
@@ -425,16 +425,16 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 항목 | 확인 값 |
 |---|---|
 | 현재 worktree 브랜치 | `codex/mobile-auth-chat-history` |
-| 현재 브랜치 HEAD | `origin/main@0cb9263`에서 모바일 Auth 경계·챗 기록 UI 작업 중 |
+| 현재 브랜치 HEAD | `3b513d4` 이후 draft PR #30의 보고서 상태 갱신 중 |
 | 기능 병합·검증 기준 `origin/main` | `0cb92639e7fc5a9633be9c32bd263470114a92b0` (PR #29 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29 main 병합 완료; 모바일 Auth·챗 기록 UI는 신규 브랜치 작업 중 |
+| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29 main 병합 완료; 모바일 Auth·챗 기록 UI는 draft PR #30, 기능·통합 CI 통과 |
 
 세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 시점에는 `codex/mobile-auth-chat-history`의 모바일 Auth 전달 경계·챗 기록 UI·문서가 미커밋 상태다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02 백엔드는 main·staging에 반영됐고 production에는 미배포다.
+모바일 Auth 전달 경계·챗 기록 UI는 commit `3b513d4`로 push되어 draft PR #30에서 관리한다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`만 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02 백엔드는 main·staging에 반영됐고 production에는 미배포다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
