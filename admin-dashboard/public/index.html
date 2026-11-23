@@ -3,20 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ODIT Admin — Local Analytics</title>
+    <title>ODIT Admin — Analytics</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="hero">
       <div>
-        <p class="eyebrow">ODIT · LOCAL ADMIN</p>
+        <p class="eyebrow">ODIT · ADMIN</p>
         <h1>제품과 AI 운영을<br />한 화면에서 봅니다.</h1>
-        <p class="subtitle">로컬 Supabase 전용 · Asia/Seoul · 원문·사진·개인정보 미표시</p>
+        <p class="subtitle">localhost 전용 · Asia/Seoul · 원문·사진·개인정보 미표시</p>
       </div>
-      <div class="local-badge"><span></span> Local only</div>
+      <div class="local-badge"><span></span> Localhost only</div>
     </header>
 
     <main>
+      <section class="auth-controls panel">
+        <label>운영 조회 토큰<input id="admin-token" type="password" autocomplete="off" placeholder="로컬 DB는 비워도 됩니다" /></label>
+        <p>운영 모드에서만 필요하며 브라우저 저장소에 보관하지 않습니다.</p>
+      </section>
+
       <section class="controls panel">
         <div class="presets" aria-label="기간 빠른 선택">
           <button data-days="1">오늘</button><button data-days="7" class="active">7일</button><button data-days="30">30일</button>
@@ -51,6 +56,7 @@
       </section>
 
       <section id="llmops" class="tab-panel">
+        <article class="panel section alerts-section"><div class="section-head"><div><p class="eyebrow">ALERTS</p><h2>운영 경고</h2></div><span>실험용 임계값 · 팀 확정 전</span></div><div id="llm-alerts" class="alerts"></div></article>
         <div id="llm-cards" class="cards"></div>
         <div class="grid two">
           <article class="panel section"><div class="section-head"><div><p class="eyebrow">FEATURE</p><h2>기능별 AI 운영</h2></div><span>호출 · 성공 · fallback</span></div><div id="llm-features" class="table-wrap"></div></article>
