@@ -102,9 +102,11 @@ type Props = {
   overlay?: Overlay | null;
   /** v12 니트·카디건의 꽈배기를 빼고 그린다(짜임 '민자'를 직접 고른 옷). */
   noWeave?: boolean;
+  /** 옷 색 대신 칠할 색(#RRGGBB) — 사진이 있는 옷은 사진 색감으로(data/photoColor.ts photoTint). 멀티면 무시. */
+  tint?: string | null;
 };
 
-export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place, pattern, overlay, noWeave }: Props) {
+export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place, pattern, overlay, noWeave, tint }: Props) {
   // 한 화면에 그림이 여러 개라 그라데이션·자르기 id가 겹치지 않게 그림마다 따로 만든다.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const icon = artLayers ?? KIND_ICONS[kind];
@@ -116,11 +118,13 @@ export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place
   const patternId = `kind-pattern-${uid}`;
   const isMulti = color === '멀티';
   const base =
-    color === undefined
-      ? BRAND_FILL
-      : color === null || color === '멀티' || color === '기타'
-        ? NEUTRAL_FILL
-        : COLOR_HEX[color];
+    tint && !isMulti
+      ? tint
+      : color === undefined
+        ? BRAND_FILL
+        : color === null || color === '멀티' || color === '기타'
+          ? NEUTRAL_FILL
+          : COLOR_HEX[color];
   const usePattern = Boolean(pattern) && !isMulti;
   const fill = isMulti ? `url(#${multiId})` : usePattern ? `url(#${patternId})` : base;
   const tone = tonesFor(base, isMulti);

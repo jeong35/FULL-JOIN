@@ -10,7 +10,7 @@ import { hasLoggedInBefore, hasSeenIntro, useSession } from '@/data/session';
 import { loadWardrobeArt } from '@/data/wardrobeLook';
 import { colors, fonts, layout } from '@/theme';
 
-// design/DESIGN.md 6절: 하단 탭 5개, 높이 76 + 위 1px 선, 고른 탭은 #6A3FC4 굵게, 나머지 #605C6B.
+// design/DESIGN.md 6절: 하단 탭 5개, 높이 76 + 위 1px 선, 고른 탭은 보라(textPurple) 굵게, 나머지 #605C6B.
 const TABS: { name: string; title: string; icon: TabIconName }[] = [
   { name: 'index', title: '홈', icon: 'home' },
   { name: 'recommend', title: '추천', icon: 'recommend' },

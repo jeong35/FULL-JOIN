@@ -10,11 +10,11 @@ import type { ArchiveImage, HeartItem, WardrobeItem } from './types';
 import { fitsTemp, needsOuter, type DayWeather } from './weather';
 
 export type OwnedPiece = Extract<OutfitPiece, { type: 'owned' }>;
-export type Match = '내 옷 쏙!' | '비슷해요' | '대체 추천';
+export type Match = '같은 옷' | '비슷한 옷' | '대신 입기';
 
 export function matchOf(piece: OwnedPiece): Match {
-  if (piece.substitute) return '대체 추천';
-  return piece.similar ? '비슷해요' : '내 옷 쏙!';
+  if (piece.substitute) return '대신 입기';
+  return piece.similar ? '비슷한 옷' : '같은 옷';
 }
 
 export type Look = {
@@ -98,8 +98,8 @@ export function recommend(input: {
   looks.sort((a, b) =>
     Number(b.weatherFit) - Number(a.weatherFit)
     || Number(b.styleMatch) - Number(a.styleMatch)
-    || count(a.pieces, '대체 추천') - count(b.pieces, '대체 추천')
-    || count(a.pieces, '비슷해요') - count(b.pieces, '비슷해요')
+    || count(a.pieces, '대신 입기') - count(b.pieces, '대신 입기')
+    || count(a.pieces, '비슷한 옷') - count(b.pieces, '비슷한 옷')
     || bySaved(a.image, b.image));
   almost.sort((a, b) => Number(b.styleMatch) - Number(a.styleMatch) || bySaved(a.image, b.image));
   return { looks: looks.slice(0, MAX_LOOKS), almost: almost.slice(0, MAX_LOOKS), pending };

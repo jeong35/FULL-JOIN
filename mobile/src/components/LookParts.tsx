@@ -7,11 +7,12 @@ import { matchOf, type Match, type OwnedPiece } from '@/data/recommend';
 import type { Sky } from '@/data/weather';
 import { colors, fonts } from '@/theme';
 
-// ── 매치 표시: 내 옷 쏙!(같은 옷) · 비슷해요(비슷한 내 옷) · 대체 추천(가까운 종류의 내 옷) ──
+// ── 매치 표시: 같은 옷 · 비슷한 옷(비슷한 내 옷) · 대신 입기(가까운 종류의 내 옷) ──
+// 11/22: 딱지는 누르는 것이 아니라서 '자세히' 같은 버튼(흰 바탕 + 테두리)과 헷갈리지 않게 테두리 없이 아주 옅은 바탕만 쓴다.
 const BADGE: Record<Match, { box: ViewStyle; text: string }> = {
-  '내 옷 쏙!': { box: { backgroundColor: colors.purpleFill }, text: colors.onPurpleFill },
-  비슷해요: { box: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.purpleStrong }, text: colors.tagText },
-  '대체 추천': { box: { backgroundColor: '#EEECF2' }, text: colors.textSecondary },
+  '같은 옷': { box: { backgroundColor: colors.purpleTint }, text: colors.textPurple },
+  '비슷한 옷': { box: { backgroundColor: colors.purpleTint }, text: colors.tagText },
+  '대신 입기': { box: { backgroundColor: '#EEECF2' }, text: colors.textSecondary },
 };
 
 export function MatchBadge({ match, label, small = false, style }: {
@@ -28,14 +29,20 @@ export function MatchBadge({ match, label, small = false, style }: {
   );
 }
 
-export function MatchLegend({ pieces }: { pieces: readonly OwnedPiece[] }) {
-  const counts = (['내 옷 쏙!', '비슷해요', '대체 추천'] as const)
+/** 룩 칸 위 한 줄: 모두 같은 옷이면 'n벌 모두 내 옷', 섞이면 '같은 옷 3 · 비슷한 옷 1'처럼 글자로만. */
+export function matchSummary(pieces: readonly OwnedPiece[]): string {
+  const counts = (['같은 옷', '비슷한 옷', '대신 입기'] as const)
     .map((match) => [match, pieces.filter((piece) => matchOf(piece) === match).length] as const)
     .filter(([, n]) => n > 0);
+  if (counts.length === 1 && counts[0][0] === '같은 옷') return `${counts[0][1]}벌 모두 내 옷`;
+  return counts.map(([match, n]) => `${match} ${n}`).join(' · ');
+}
+
+export function MatchLegend({ pieces }: { pieces: readonly OwnedPiece[] }) {
   return (
     <View style={styles.legend} accessibilityLabel="저장한 사진 속 옷과 내 옷 매치">
       <Text style={styles.legendTitle}>사진 속 옷과 매치</Text>
-      {counts.map(([match, n]) => <MatchBadge key={match} match={match} label={`${match} ${n}`} small />)}
+      <Text style={styles.legendSummary}>{matchSummary(pieces)}</Text>
     </View>
   );
 }
@@ -112,5 +119,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  legendSummary: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.textPurple,
   },
 });

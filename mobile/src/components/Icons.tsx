@@ -42,7 +42,7 @@ export function SearchIcon({ color, size = 22 }: IconProps) {
   );
 }
 
-// 저장(북마크): 저장됨이면 #6A3FC4로 채움.
+// 저장(북마크): 저장됨이면 보라(textPurple)로 채움.
 export function BookmarkIcon({ color, size = 16, filled }: IconProps & { filled: boolean }) {
   return (
     <Svg

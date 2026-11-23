@@ -6,14 +6,19 @@ export const colors = {
   background: '#F6F5FA',
   text: '#1F1C26',
   textSecondary: '#605C6B',
-  textPurple: '#6A3FC4',
-  purpleStrong: '#8E6AD8',
-  purpleFill: '#D6CCF1',
-  onPurpleFill: '#2E1A5C',
-  tagText: '#4A2D99',
+  // 11/22 '결 맞춘 보라': 바탕(아주 살짝 푸른 연회색)과 같은 쪽 보라로 맞춤(전: #6A3FC4·#8E6AD8·#D6CCF1·#2E1A5C·#4A2D99·#EBE5F7).
+  textPurple: '#6450C0',
+  purpleStrong: '#8C7DD8',
+  purpleFill: '#D9D3F3',
+  // 아주 옅은 보라: 누르지 않는 딱지·안내 상자 바탕(버튼과 헷갈리지 않게 테두리 없이).
+  purpleTint: '#EEEBFA',
+  // 고른 칩 테두리(11/22 '배경만 바꾼 안'): 고른 칩은 흰 바탕 + 이 테두리 + 보라 글자. 진한 연보라 바탕은 큰 버튼에만.
+  purpleLine: '#B9AFEB',
+  onPurpleFill: '#2B2263',
+  tagText: '#4C3CA0',
   danger: '#B33A4A',
   line: '#E6E4ED',
-  photoPlaceholder: '#EBE5F7',
+  photoPlaceholder: '#ECE9F8',
   progressTrack: '#E4E1EC',
   white: '#FFFFFF',
 } as const;

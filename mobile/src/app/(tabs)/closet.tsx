@@ -1,23 +1,29 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { ViewToggle } from '@/components/ArtPager';
 import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
+import { BottomSheet } from '@/components/PhotoAddParts';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { kindLabel, SEASONS, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
+import { pickPhoto, startPhotoDraft } from '@/data/photoAdd';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
 import type { Season, WardrobeItem } from '@/data/types';
+import { removeWardrobePhotos, setClosetView, useClosetView, useWardrobePhotos, type ClosetView, type WardrobePhoto } from '@/data/wardrobePhotos';
 import { colors, fonts, layout } from '@/theme';
 
 // 옷장 탭. 모양은 design/screens/22-tab-closet.html을 따른다. 옷은 서버(GET /wardrobe)에서 받고, 새로 넣은 옷이 맨 앞에 보인다.
 // 지우기: '편집'을 누르면 옷마다 동그라미가 생기고, 여러 벌을 골라 아래 '고른 N벌 삭제'로 한 번에 지운다
 // (디자인 캔버스 '옷 삭제 — B. 편집 → 여러 벌 골라 삭제', 11/10 팀 결정).
+// 11/22 사진으로 옷 추가: '+ 옷 추가'를 누르면 사진 찍기 · 앨범에서 고르기 · 직접 고르기를 고른다.
+// 옷장 기본은 그림. 사진 넣은 옷은 칸 밑에 점 두 개가 있고, 칸을 옆으로 밀면 사진이 나온다. 옷을 누르면 옷 자세히.
 
 const FILTERS = ['전체', ...SLOTS] as const;
 type Filter = '전체' | Slot;
@@ -43,12 +49,19 @@ export default function ClosetScreen() {
   const archive = useArchiveState();
   const emptyHintOpen = useHintOpen('closet_empty');
   const afterClosetHintOpen = useHintOpen('home_after_closet');
+  const swipeHintOpen = useHintOpen('closet_swipe');
+  const photos = useWardrobePhotos();
+  const view = useClosetView();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const photoCount = wardrobe.filter((item) => photos[item.id] !== undefined).length;
   // 다음 할 일 말풍선: 0벌이면 옷 넣기(위). 옷을 넣었고 아직 저장한 사진이 없으면 홈으로 가서 사진 보며 코디 고르기
   // (아래, 꼬리는 홈 탭을 가리킨다. 11/11 팀 결정).
   const hintable = !editing && !loading && wardrobeState.status === 'ready';
   const showEmptyHint = hintable && wardrobe.length === 0 && emptyHintOpen;
   const showAfterClosetHint = hintable && wardrobe.length > 0 && afterClosetHintOpen
     && archive.status === 'ready' && archive.data.length === 0;
+  const showSwipeHint = hintable && photoCount > 0 && swipeHintOpen && !showAfterClosetHint;
 
   // 다른 탭으로 가면 편집을 끝낸다. 저장한 사진이 있는지(아래 말풍선)는 홈을 안 거쳐도 알 수 있게 받아 둔다.
   useFocusEffect(
@@ -71,7 +84,29 @@ export default function ClosetScreen() {
   const emptyText =
     season === '전체' ? '아직 등록한 옷이 없어요' : `${season}에 입는 ${filter === '전체' ? '옷' : filter}이 아직 없어요`;
 
+  // '+ 옷 추가': 사진으로 넣을지, 직접 고를지 먼저 묻는다.
   function addItem() {
+    setSheetError(null);
+    setSheetOpen(true);
+  }
+
+  // 웹에서는 누른 그 순간에 파일 고르기 창을 열어야 해서, 판을 닫기 전에 사진부터 고른다.
+  async function addFromPhoto(from: 'camera' | 'album') {
+    setSheetError(null);
+    try {
+      const source = await pickPhoto(from);
+      if (source === null) return;
+      setSheetOpen(false);
+      track('wardrobe_add_start', { via: 'photo', source: from });
+      startPhotoDraft(source);
+      router.push('/add-item/photo-crop');
+    } catch (error) {
+      setSheetError(error instanceof Error ? error.message : '사진을 불러오지 못했어요');
+    }
+  }
+
+  function addByChips() {
+    setSheetOpen(false);
     if (filter === '전체') {
       router.push('/add-item/kind');
       return;
@@ -112,6 +147,7 @@ export default function ClosetScreen() {
     const failed = await removeWardrobeItems([...selected]);
     setDeleting(false);
     const deleted = requested - failed.length;
+    removeWardrobePhotos([...selected].filter((id) => !failed.includes(id)));
     if (deleted > 0) track('wardrobe_delete_done', { delete_count: deleted, remaining_count: wardrobe.length - deleted });
     if (failed.length === 0) {
       stopEditing();
@@ -130,7 +166,9 @@ export default function ClosetScreen() {
       : `지울 옷을 골라 주세요 · ${selected.size}벌 골랐어요`
     : loading && wardrobe.length === 0
       ? '불러오는 중'
-      : `${wardrobe.length}벌 등록`;
+      : photoCount > 0
+        ? `${wardrobe.length}벌 등록 · 사진 ${photoCount}벌`
+        : `${wardrobe.length}벌 등록`;
 
   return (
     <TabScreen
@@ -167,7 +205,8 @@ export default function ClosetScreen() {
         />
       )}
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
-      <View style={styles.seasonRow}>
+      <View style={styles.filterRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.seasonScroll} contentContainerStyle={styles.seasonRow}>
         {(['전체', ...SEASONS] as const).map((s) => {
           const on = s === season;
           return (
@@ -182,8 +221,18 @@ export default function ClosetScreen() {
             </Pressable>
           );
         })}
+        </ScrollView>
+        {photoCount > 0 && <ViewToggle value={view} onChange={setClosetView} />}
       </View>
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
+      {showSwipeHint && (
+        <HintBubble
+          id="closet_swipe"
+          text={view === 'photo' ? '사진 넣은 옷은 칸을 옆으로 밀면 그림이 나와요' : '사진 넣은 옷은 칸을 옆으로 밀면 내 옷 사진이 나와요'}
+          tail="none"
+          style={styles.hintTop}
+        />
+      )}
 
       {/* 아래 말풍선이 떠 있으면 마지막 줄 옷이 가려지지 않게 그만큼 더 내려 볼 수 있게 한다. */}
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.grid, showAfterClosetHint && styles.gridUnderHint]}>
@@ -201,13 +250,17 @@ export default function ClosetScreen() {
         ) : (
           visible.map((item, index) => (
             <WardrobeTile
-              key={item.id}
+              // 보기(그림 · 사진)를 바꾸면 칸을 새로 그려서 첫 장부터 보이게 한다.
+              key={`${item.id}-${view}`}
               item={item}
               width={tileWidth}
               index={index}
               editing={editing}
               checked={selected.has(item.id)}
               onToggle={() => toggle(item.id)}
+              photo={photos[item.id]}
+              view={view}
+              onOpen={() => router.push({ pathname: '/item/[id]', params: { id: item.id } })}
             />
           ))
         )}
@@ -261,10 +314,46 @@ export default function ClosetScreen() {
           )}
         </View>
       )}
+
+      <BottomSheet visible={sheetOpen} title="어떻게 넣을까요?" onClose={() => setSheetOpen(false)}>
+        <Text style={styles.sheetGroup}>사진으로</Text>
+        <SheetRow icon="camera" title="사진 찍기" sub="옷을 펴 놓고 위에서 찍어요" onPress={() => addFromPhoto('camera')} />
+        <SheetRow icon="album" title="앨범에서 고르기" sub="거울샷 · 쇼핑몰 캡처도 돼요 · 여러 벌 한 번에" onPress={() => addFromPhoto('album')} />
+        {sheetError !== null && <Text style={styles.sheetError}>{sheetError}</Text>}
+        <View style={styles.sheetDivider} />
+        <Text style={styles.sheetGroup}>사진 없이</Text>
+        <SheetRow icon="list" title="직접 고르기" sub="부위 · 종류 · 색 · 핏을 골라요" onPress={addByChips} />
+      </BottomSheet>
     </TabScreen>
   );
 }
 
+const SHEET_ICONS = {
+  camera: 'M4 8h3l2-3h6l2 3h3v11H4z M12 9.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2',
+  album: 'M4 5h16v14H4z M20 16l-5-5-8 8 M9 8.3a1.7 1.7 0 1 0 0 3.4a1.7 1.7 0 1 0 0-3.4',
+  list: 'M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01',
+} as const;
+
+function SheetRow({ icon, title, sub, onPress }: { icon: keyof typeof SHEET_ICONS; title: string; sub: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title}, ${sub}`} style={styles.sheetRow}>
+      <View style={styles.sheetIcon}>
+        <Svg width={22} height={22} viewBox="0 0 24 24">
+          <Path d={SHEET_ICONS[icon]} fill="none" stroke={colors.textPurple} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      </View>
+      <View style={styles.sheetText}>
+        <Text style={styles.sheetTitle}>{title}</Text>
+        <Text style={styles.sheetSub}>{sub}</Text>
+      </View>
+      <Svg width={18} height={18} viewBox="0 0 24 24">
+        <Path d="M9 5l7 7-7 7" fill="none" stroke="#A6A1B2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    </Pressable>
+  );
+}
+
+// 옷장 보기: 그림(기본) · 사진. 사진 넣은 옷이 있을 때만 보인다.
 function WardrobeTile({
   item,
   width,
@@ -272,6 +361,9 @@ function WardrobeTile({
   editing,
   checked,
   onToggle,
+  photo,
+  view,
+  onOpen,
 }: {
   item: WardrobeItem;
   width: number;
@@ -279,15 +371,53 @@ function WardrobeTile({
   editing: boolean;
   checked: boolean;
   onToggle: () => void;
+  photo: WardrobePhoto | undefined;
+  view: ClosetView;
+  onOpen: () => void;
 }) {
+  const [page, setPage] = useState(0);
+  const iconSize = Math.min(width * 0.72, 96);
+  const photoSize = Math.min(width - 8, 106);
+  const pages: ('icon' | 'photo')[] = photo === undefined ? ['icon'] : view === 'photo' ? ['photo', 'icon'] : ['icon', 'photo'];
+  const art = (p: 'icon' | 'photo') =>
+    p === 'photo' && photo !== undefined ? (
+      <Image source={{ uri: photo.uri }} style={{ width: photoSize, height: photoSize }} resizeMode="contain" accessibilityIgnoresInvertColors />
+    ) : (
+      <ItemIcon item={item} size={iconSize} />
+    );
   // 색(+ 무늬) · 핏. 무늬는 '더 자세히'에서 고른 옷만(11/19).
   const colorText = item.pattern ? `${item.color} ${item.pattern}` : item.color;
   const meta = item.visual_fit === null ? colorText : `${colorText} · ${item.visual_fit}`;
   const content = (
     <>
       <View style={[styles.tileImage, { backgroundColor: TILE_COLORS[index % 2] }]}>
-        <ItemIcon item={item} size={Math.min(width * 0.72, 96)} />
-        <View style={styles.tileSwatch}>
+        {pages.length > 1 && !editing ? (
+          // 사진 넣은 옷: 칸을 옆으로 밀면 그림 ↔ 사진. 위아래로 밀면 옷장이 스크롤된다.
+          <ScrollView
+            horizontal
+            pagingEnabled
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
+            style={{ width }}>
+            {pages.map((p) => (
+              <View key={p} style={[styles.tilePage, { width }]}>
+                {art(p)}
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          art(pages[0])
+        )}
+        {pages.length > 1 && !editing && (
+          <View style={styles.tileDots} pointerEvents="none">
+            {pages.map((p, i) => (
+              <View key={p} style={[styles.tileDot, i === page && styles.tileDotOn]} />
+            ))}
+          </View>
+        )}
+        <View style={styles.tileSwatch} pointerEvents="none">
           <ColorSwatch color={item.color} width={14} height={14} questionSize={9} lightBorderColor="#C9BFDB" />
         </View>
         {editing && checked && <View style={styles.tileRing} />}
@@ -322,9 +452,14 @@ function WardrobeTile({
 
   if (!editing) {
     return (
-      <View style={{ width }} accessible accessibilityLabel={`${kindLabel(item.kind)}, ${meta}`}>
+      <Pressable
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`${kindLabel(item.kind)}, ${meta}${photo !== undefined ? ', 사진 있음' : ''}`}
+        accessibilityHint="옷 자세히 보기"
+        style={{ width }}>
         {content}
-      </View>
+      </Pressable>
     );
   }
   return (
@@ -482,11 +617,94 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
   },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: layout.screenPaddingX,
+    paddingBottom: 10,
+  },
+  seasonScroll: {
+    flexGrow: 1,
+    flexShrink: 1,
+  },
   seasonRow: {
     flexDirection: 'row',
     gap: 6,
-    paddingHorizontal: layout.screenPaddingX,
-    paddingBottom: 10,
+    paddingLeft: layout.screenPaddingX,
+  },
+  tilePage: {
+    height: 112,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileDots: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 7,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  tileDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(140,125,216,0.35)',
+  },
+  tileDotOn: {
+    width: 12,
+    backgroundColor: colors.purpleStrong,
+  },
+  sheetGroup: {
+    paddingHorizontal: layout.screenPaddingX + 4,
+    paddingTop: 4,
+    paddingBottom: 2,
+    fontFamily: fonts.bold,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: layout.screenPaddingX + 4,
+    paddingVertical: 11,
+  },
+  sheetIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: colors.photoPlaceholder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetText: {
+    flex: 1,
+    gap: 2,
+  },
+  sheetTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 16,
+    color: colors.text,
+  },
+  sheetSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  sheetDivider: {
+    height: 1,
+    marginHorizontal: layout.screenPaddingX + 4,
+    marginVertical: 6,
+    backgroundColor: colors.line,
+  },
+  sheetError: {
+    paddingHorizontal: layout.screenPaddingX + 4,
+    fontFamily: fonts.regular,
+    fontSize: 12.5,
+    color: colors.danger,
   },
   seasonPill: {
     paddingHorizontal: 11,
@@ -497,8 +715,9 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   seasonPillOn: {
-    backgroundColor: colors.purpleFill,
-    borderColor: colors.purpleFill,
+    backgroundColor: colors.white,
+    borderColor: colors.purpleLine,
+    borderWidth: 1.5,
   },
   seasonText: {
     fontFamily: fonts.regular,
@@ -507,7 +726,7 @@ const styles = StyleSheet.create({
   },
   seasonTextOn: {
     fontFamily: fonts.bold,
-    color: colors.onPurpleFill,
+    color: colors.textPurple,
   },
   tileSeason: {
     marginTop: 1,
