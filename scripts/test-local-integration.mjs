@@ -7,6 +7,8 @@ import { createClient } from "@supabase/supabase-js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
+const integrationTarget = process.env.FULL_JOIN_INTEGRATION_TARGET ?? "local";
+
 function localEnvironment() {
   const output = execFileSync(`${root}/node_modules/.bin/supabase`, ["status", "-o", "env"], {
     cwd: root,
@@ -23,7 +25,24 @@ function localEnvironment() {
   return { apiUrl, anonKey, serviceRoleKey };
 }
 
-const environment = localEnvironment();
+function stagingEnvironment() {
+  const projectRef = process.env.FULL_JOIN_STAGING_PROJECT_REF;
+  const apiUrl = process.env.FULL_JOIN_STAGING_URL;
+  const anonKey = process.env.FULL_JOIN_STAGING_ANON_KEY;
+  const serviceRoleKey = process.env.FULL_JOIN_STAGING_SERVICE_ROLE_KEY;
+  if (!projectRef || !apiUrl || !anonKey || !serviceRoleKey) {
+    throw new Error("Staging integration requires the FULL_JOIN_STAGING_* environment variables.");
+  }
+  if (projectRef === "gctbcanltqgcymdlplyr") {
+    throw new Error("Refusing to run destructive integration fixtures against the production project.");
+  }
+  if (new URL(apiUrl).hostname !== `${projectRef}.supabase.co`) {
+    throw new Error("Staging project ref and API URL do not match.");
+  }
+  return { apiUrl, anonKey, serviceRoleKey };
+}
+
+const environment = integrationTarget === "staging" ? stagingEnvironment() : localEnvironment();
 const db = createClient(environment.apiUrl, environment.serviceRoleKey, { auth: { persistSession: false } });
 const functionUrl = `${environment.apiUrl}/functions/v1/api`;
 const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
@@ -92,11 +111,15 @@ async function createAuthenticatedUser(label) {
 }
 
 async function run() {
-  const anonymousClient = createClient(environment.apiUrl, environment.anonKey, { auth: { persistSession: false } });
-  const { data: anonymousData, error: anonymousError } = await anonymousClient.auth.signInAnonymously();
-  assert.equal(anonymousError, null);
-  assert.ok(anonymousData.session);
-  ok("모바일 개발용 익명 Auth", "local config에서 access token과 사용자 UUID 발급");
+  if (integrationTarget === "local") {
+    const anonymousClient = createClient(environment.apiUrl, environment.anonKey, { auth: { persistSession: false } });
+    const { data: anonymousData, error: anonymousError } = await anonymousClient.auth.signInAnonymously();
+    assert.equal(anonymousError, null);
+    assert.ok(anonymousData.session);
+    ok("모바일 개발용 익명 Auth", "local config에서 access token과 사용자 UUID 발급");
+  } else {
+    ok("스테이징 Auth 방식", "익명 로그인을 변경하지 않고 이메일 테스트 계정으로 격리 검증");
+  }
 
   const ownerAuth = await createAuthenticatedUser("owner");
   const attackerAuth = await createAuthenticatedUser("attacker");
@@ -108,7 +131,7 @@ async function run() {
   const health = await api("/health", { method: "GET" }, "");
   assert.equal(health.status, 200);
   assert.equal(health.body.ok, true);
-  ok("Edge Function", "local /health returned 200");
+  ok("Edge Function", `${integrationTarget} /health returned 200`);
 
   await insertFixture();
 
@@ -225,7 +248,7 @@ async function run() {
   ok("LLMOps DB 저장", `${metrics?.length ?? 0}개 운영 레코드 확인`);
   if (generalChat.body.answer_source === "fallback") {
     assert.ok((metrics ?? []).some((metric) => metric.fallback_used));
-    ok("LLM 실패·fallback", "로컬 키 미설정 실패를 configuration fallback으로 저장");
+    ok("LLM 실패·fallback", `${integrationTarget} 키 미설정 실패를 configuration fallback으로 저장`);
   } else {
     ok("LLM 실패·fallback", "현재 환경은 LLM 성공 경로; 실패 경로는 단위 테스트로 검증");
   }
@@ -266,10 +289,26 @@ async function run() {
   assert.deepEqual(emptyHistory.body.messages, []);
   ok("대화 삭제", "사진별 conversation 삭제 시 메시지도 cascade 삭제");
 
-  console.log("\nLocal integration summary");
+  console.log(`\n${integrationTarget === "staging" ? "Staging" : "Local"} integration summary`);
   console.log("- Mock/grounded/fallback paths: executed without paid external calls");
   console.log("- Live OpenAI call: not executed; no cost incurred");
-  console.log("- Auth policy and actual API/RLS isolation: passed locally with two users");
+  console.log(`- Auth policy and actual API/RLS isolation: passed on ${integrationTarget} with two users`);
 }
 
-await run();
+async function cleanup() {
+  await db.from("user_events").delete().eq("device_id", `device_${suffix}`);
+  await db.from("chat_conversations").delete().eq("style_image_id", styleImageId);
+  if (owner || attacker) {
+    await db.from("wardrobe_items").delete().in("user_id", [owner, attacker].filter(Boolean));
+  }
+  await db.from("style_images").delete().eq("id", styleImageId);
+  for (const userId of [owner, attacker].filter(Boolean)) {
+    await db.auth.admin.deleteUser(userId);
+  }
+}
+
+try {
+  await run();
+} finally {
+  await cleanup();
+}

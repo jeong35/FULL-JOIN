@@ -22,6 +22,7 @@
     "test:chat-history": "node --test --test-reporter=spec tests/test_chat_history.ts",
     "test:admin-metrics": "node --test --test-reporter=spec tests/test_admin_metrics.ts",
     "test:integration:local": "node scripts/test-local-integration.mjs",
+    "test:integration:staging": "FULL_JOIN_INTEGRATION_TARGET=staging node scripts/test-local-integration.mjs",
     "dashboard:local": "node admin-dashboard/server.mjs",
     "dashboard:production": "DASHBOARD_DATA_SOURCE=production DASHBOARD_ALLOW_REMOTE_READONLY=true node admin-dashboard/server.mjs",
     "dashboard:alerts": "node admin-dashboard/check-alerts.mjs",
