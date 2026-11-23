@@ -89,6 +89,19 @@ npm run test:auth-policy
 
 외부 OpenAI 호출은 기본 통합 테스트에서 실행하지 않는다. 따라서 비용은 0달러이고, configuration fallback과 grounded 경로를 검증한다.
 
+원격 staging 검증은 운영 project ref를 명시적으로 거부하는 별도 모드다. 키는 파일에 저장하지 않고 실행 프로세스 환경에만 주입한다.
+
+```bash
+FULL_JOIN_INTEGRATION_TARGET=staging \
+FULL_JOIN_STAGING_PROJECT_REF=... \
+FULL_JOIN_STAGING_URL=... \
+FULL_JOIN_STAGING_ANON_KEY=... \
+FULL_JOIN_STAGING_SERVICE_ROLE_KEY=... \
+npm run test:integration:staging
+```
+
+이 모드는 synthetic 이메일 Auth 사용자 A/B와 fixture를 생성하고 종료 시 정리한다. 익명 로그인 설정은 변경하지 않는다.
+
 ## 로컬 관리자 대시보드
 
 로컬 Supabase가 실행 중인 상태에서:

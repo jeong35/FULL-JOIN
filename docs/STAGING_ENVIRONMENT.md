@@ -13,10 +13,12 @@ DB 비밀번호는 저장소나 `.env`에 쓰지 않고 macOS Keychain의 servic
 
 ## 2026-11-23 기준 상태
 
-- main 기준 migration 15개(`202611040001`~`202611200003`)를 dry-run 후 적용했다.
+- main 기준 migration 15개에 Auth `202611230001`과 CHAT-02 `202611230003`을 더한 17개를 dry-run 후 적용했다.
 - `supabase/seed.sql`은 local 전용이므로 staging에 적용하지 않았다.
-- Auth migration `202611230001`과 CHAT-02 `202611230003`은 PR 검토 전이라 적용하지 않았다.
-- Edge Function은 아직 배포하지 않았다. 현재 운영 호환 배포 방식인 `--no-verify-jwt`를 staging에서 반복하지 않고, PR #25의 함수 내부 JWT 검증과 모바일 Auth 흐름을 함께 검증한 뒤 배포한다.
+- API Edge Function은 `codex/chat-history@bd70fe4b79f13dd96eb80f4b58d42b01113186a4`로 배포했다. gateway는 공개 health와 사용자 API를 한 함수에서 제공하기 위해 `verify_jwt=false`를 유지하지만, 사용자 경로는 함수 내부 `auth.getUser` 검증을 통과해야 한다.
+- release metadata의 `RELEASE_GIT_SHA`와 `/health` 응답 SHA가 일치함을 `scripts/verify-release.mjs`로 확인했다.
+- synthetic 이메일 Auth 사용자 A/B로 옷장 CRUD, 비교 후보, 챗 저장·pagination·삭제, 이벤트, LLMOps, API 401/403와 RLS 격리를 통과했다. 테스트 사용자·사진·옷장·이벤트는 종료 시 정리하며 유료 OpenAI 호출은 하지 않는다.
+- 익명 로그인은 staging에서 비활성 상태다. 모바일 인증 정책 확정 전 임의로 켜지 않는다.
 - Free 프로젝트는 활동이 적으면 일시정지될 수 있다.
 
 ## GitHub Environment에 필요한 값
@@ -33,10 +35,10 @@ secret 값은 문서·workflow log·모바일 bundle에 넣지 않는다. PR #25
 
 ## 검증 순서
 
-1. `supabase migration list --remote`로 main 15개 이력을 확인한다.
-2. PR #25 Auth migration과 모바일 access token 전달을 함께 적용한다.
-3. synthetic Auth 사용자 A/B를 만들고 401·403·RLS 격리를 확인한다.
-4. CHAT-02 migration/API를 적용하고 사진별 저장·pagination·삭제·A/B 격리를 확인한다.
-5. 테스트 사용자와 데이터만 제거하고 운영 승인을 별도로 받는다.
+1. `supabase migration list --remote`로 17개 이력을 확인한다.
+2. `FULL_JOIN_STAGING_*` 환경변수를 런타임에만 주입하고 `npm run test:integration:staging`을 실행한다.
+3. synthetic Auth 사용자 A/B로 401·403·RLS와 사진별 저장·pagination·삭제를 확인한다.
+4. 테스트 사용자와 fixture만 제거하고 운영 승인을 별도로 받는다.
+5. PR #25·#28 병합 및 모바일 access token 전달 전에는 운영에 적용하지 않는다.
 
 staging에서도 `db reset`, `migration repair`, 운영 데이터 import는 사용하지 않는다.
