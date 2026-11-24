@@ -1,7 +1,7 @@
 # 오딧(FULL-JOIN) 출시 준비 및 전체 작업 현황
 
 > 기준 시각: 2026-11-24 (Asia/Seoul)<br>
-> Git 기준: `origin/main@0cb92639e7fc5a9633be9c32bd263470114a92b0`<br>
+> Git 기준: `origin/main@8cb01a5bd376d00fa430a4cb68acea04d4e038ca`<br>
 > 목적: 이 문서 하나로 완료 기능, 진행 중 작업, 대기열, 출시 차단 사항과 권장 개발 순서를 파악한다.<br>
 > 주의: 운영·staging 상태는 저장소의 마지막 검증 기록을 기준으로 적었다. 이번 조사에서는 원격 DB나 배포 환경을 변경하거나 다시 배포하지 않았다.
 
@@ -62,7 +62,7 @@
 | ID / 기능 | 상태 | 현재 구현 | 테스트 | 남은 작업 |
 |---|---|---|---|---|
 | MATCH-02 코사인 A안 | 부분 완료 | AC9 규칙 후보 버킷을 유지하고 버킷 안에서만 코사인 정렬 | similarity 19/19, local/staging 후보 ID 통합 통과 | 운영 표본 확인, 실제 데이터 shadow 평가 |
-| MATCH-03 후보 ID·한 줄 근거 | UI 구현 완료·표시 개선 로컬 완료 | 실제 앱에 근거 UI가 있으며, 로컬 수정은 프론트 자체 문구 대신 검증된 `match_metadata.reason`을 우선 표시하고 여러 줄·자동 카드 높이를 지원 | 버킷 누수·후보 정합·설명 회귀 + 짧은/긴 한국어·좁은 화면 정적 레이아웃 검사 통과 | 독립 PR·Expo 배포와 실제 작은 기기 확인 |
+| MATCH-03 후보 ID·한 줄 근거 | UI 구현·배포 완료 | 프론트 자체 문구 대신 검증된 `match_metadata.reason`을 우선 표시하고 여러 줄·자동 카드 높이를 지원 | PR #31 CI, 버킷 누수·후보 정합·설명 회귀, 짧은/긴 한국어·좁은 화면 정적 레이아웃 검사 통과 | 실제 작은 기기에서 최종 시각 QA |
 | `대체` 규칙 | 부분 완료 | 승인된 수동 종류 쌍만 허용, 코사인은 tie-breaker로만 사용 | 미승인 데님팬츠↔슬랙스 제외 회귀 통과 | 새 대체 관계는 팀 승인·라벨·회귀 사례 후 추가 |
 | 코사인 B안 | 보류 | 운영 판정에는 미적용 | 없음 | 라벨 데이터와 train/validation/test 분리 후 shadow 실험 |
 | 비교 피드백 학습 | 보류 | 로컬 설계 흔적만 있으며 운영 endpoint로 사용하지 않음 | 없음 | 명시적 동의 문구·버전·철회·보존·삭제 정책 확정 |
@@ -110,7 +110,7 @@
 |---|---|---|---|
 | UX-01 온보딩·빈 상태·저장 안내 | 완료에 가까운 부분 완료 | 3개 추구미 교체 안내, 저장 위치, 빈 상태 | 실제 사용자 퍼널과 실기기 수용 테스트 |
 | UX-02 로딩·삭제·오류·키보드 | 완료에 가까운 부분 완료 | 로딩 상태, 삭제 확인, 한국어 오류, 키보드 개선 | iOS/Android 키보드·딥링크·저속 네트워크 회귀 |
-| 비교 한 줄 근거 UI | 구현 완료·개선 로컬 완료 | 실제 앱에 UI가 표시되며, 로컬에서 `match_metadata.reason` 우선 사용·후보 ID 검증·자연스러운 줄바꿈·자동 높이 적용 | 독립 PR·Expo 배포, 실제 작은 기기 시각 QA; 유사도 점수는 계속 숨김 |
+| 비교 한 줄 근거 UI | 구현·배포 완료 | `match_metadata.reason` 우선 사용·후보 ID 검증·자연스러운 줄바꿈·자동 높이를 production Expo에 반영 | 실제 작은 기기 시각 QA; 유사도 점수는 계속 숨김 |
 | 챗 답변 출처 UI | 대기 | API에 `answer_sections`, `answer_source`, `intents` 존재 | `내 옷장 기준`과 `일반 패션 조언`을 시각적으로 구분 |
 | 401/403/세션 만료 UX | 대기 | 백엔드 오류 계약과 token provider 준비 | 로그인 정책 확정 후 재로그인·복구 흐름 구현 |
 
@@ -131,9 +131,9 @@
 ### 3.1 비교 판정 근거 개선 worktree
 
 - 브랜치: `codex/match-reason-wrap`
-- 기준: `origin/main@0cb9263`
-- 상태: 서버 `match_metadata.reason` 연결, 후보 ID 검증, 여러 줄·자동 카드 높이와 전용 검사 구현을 독립 PR로 준비 중이다.
-- 서버·DB 변경: 없음. 병합 뒤 Expo 배포만 필요하다.
+- 기준: `origin/main@8cb01a5`
+- 상태: PR #31로 main 병합 및 Expo production 배포 완료. deployment `7m12h5ntly`, `https://odit.expo.app` HTTP 200을 확인했다.
+- 서버·DB 변경: 없음. 실제 작은 기기 시각 QA만 남았다.
 
 ### 3.2 보존 중인 홈 피드 worktree
 
@@ -234,7 +234,7 @@
 |---|---|---|---|
 | P1-1 | 홈 피드 검색·필터 마무리 | 현재 로컬 구현 | 실기기 QA, PR CI, staging, 이벤트 확인 |
 | P1-2 | 추천 계측 branch 병합 | 최신 main diff 검토 | 독립 PR, 추천 회귀, staging 이벤트·대시보드 확인 |
-| P1-3 | 비교 한 줄 근거 UI 개선 반영 | 로컬 구현·계약 검사 완료 | 독립 PR, Expo 배포, 작은 기기 시각 QA; 유사도 숫자 미노출 |
+| P1-3 | 비교 한 줄 근거 UI 개선 반영 | **완료**: PR #31·Expo production 반영 | 작은 기기 시각 QA; 유사도 숫자 미노출 유지 |
 | P1-4 | 챗 출처/복합 답변 UI | CHAT-03 계약 | 보유 옷과 일반 조언을 명확히 분리 |
 | P1-5 | PR #30 모바일 챗 기록 | Auth 정책 | A→B→A 복원, pagination, 삭제, 401/403 UX |
 | P1-6 | 사진 등록 안정화 | 원본/삭제 범위 | iOS/Android E2E, 실패 복구, 중복 등록 방지 |
@@ -343,9 +343,9 @@
 
 ### Git
 
-- 최신 원격 main: `0cb92639e7fc5a9633be9c32bd263470114a92b0`
-- 열린 PR: #30 한 건, draft이며 CI 성공; 비교 근거 개선 PR 준비 중
-- 현재 로컬 기능: 비교 근거 개선 독립 worktree, 홈 피드 검색·필터 미커밋 worktree
+- 최신 원격 main: `8cb01a5bd376d00fa430a4cb68acea04d4e038ca`
+- 열린 PR: #30 한 건, draft이며 CI 성공; #31은 CI 성공 후 main 병합 완료
+- 현재 로컬 기능: 홈 피드 검색·필터 미커밋 worktree
 - 원격 후속 기능: 추천 계측 branch 미병합
 - 로컬 `main`: 원격보다 85커밋 뒤, 신규 분기 기준으로 사용 금지
 - stash: 3개, 임의 삭제 금지
@@ -354,7 +354,7 @@
 
 | 환경 | 코드 | DB | 판단 |
 |---|---|---|---|
-| production | Edge Function·Expo `2d0369b` 기준 기록 | `202611200003`까지 15개 | MVP·코사인 A안·CHAT-01/03·추천 포함; 이후 Auth·CHAT-02·사진 등록 UI·운영 자동화는 미반영 |
+| production | Edge Function `2d0369b`; Expo web `8cb01a5`, deployment `7m12h5ntly` | `202611200003`까지 15개 | MATCH-03 줄바꿈·서버 reason과 사진 등록 UI는 Expo 반영; Auth·CHAT-02 backend는 production 미반영 |
 | staging | 추천 계측 `67b922b` API 배포 기록 | Auth·CHAT-02 포함 17개 | synthetic A/B, 401/403·RLS·챗·추천 이벤트 검증 |
 | local | 현재 worktree 코드 | 17개 migration+synthetic seed | 홈 검색 포함 전체 통합 통과 후 종료 |
 

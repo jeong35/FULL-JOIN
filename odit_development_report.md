@@ -26,8 +26,8 @@
 
 ## 최신 상태
 
-- 최신 `origin/main`은 CI 격리 PR #29를 병합한 `0cb92639e7fc5a9633be9c32bd263470114a92b0`다. 사진 옷장 등록, 사용자 API Auth/RLS, 사진별 챗 기록 백엔드가 main에 포함됐지만 Expo·운영 서버·production DB 자동 배포는 발생하지 않았다.
-- 운영 Edge Function과 Expo production은 `2d0369b` 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
+- 최신 `origin/main`은 MATCH-03 UI 개선 PR #31을 병합한 `8cb01a5bd376d00fa430a4cb68acea04d4e038ca`다.
+- 운영 Edge Function은 `2d0369b`, Expo production은 `8cb01a5`(deployment `7m12h5ntly`) 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 - Auth/RLS PR #25는 merge commit `964e8a4`, CHAT-02 PR #28은 merge commit `410f904`로 main에 순차 병합됐다. local/staging A/B 격리와 채팅 기록 통합 테스트를 통과했지만 production 미배포이며 모바일 로그인·복원 UI는 미연동이다.
 - `full-join-staging`에는 migration 17개와 `bd70fe4` API를 적용했다. `/health` release SHA 일치, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
 
@@ -38,7 +38,7 @@
 - 확인: 기존 결과 카드는 서버 `match_metadata.reason`이 아니라 프론트 `describe()` 문구를 표시했고 `numberOfLines={1}` 때문에 긴 문구가 잘렸다.
 - 구현: 서버 reason은 `wardrobe_item_id`가 응답 첫 후보와 실제 옷장에 모두 일치할 때 우선 표시하고, 불일치·구버전 응답은 기존 문구로 fallback한다. 줄 수·말줄임 제한을 제거하고 행 정렬·flex·line height를 조정해 활용/비슷함/구매 공통 카드가 내용 높이만큼 늘어나게 했다.
 - 테스트: 서버 후보 ID 연결, 짧은/긴 한국어, 구매의 null 후보, 불일치 fallback, 작은 화면용 flex와 고정 높이 부재, Expo export를 검증했다. 모바일 typecheck/lint와 전체 check도 통과했으며 유사도 숫자는 노출하지 않는다.
-- Git/배포: `codex/match-reason-wrap`에서 독립 PR과 Expo 반영을 준비하며 서버·DB 변경은 없다.
+- Git/배포: PR #31의 두 CI가 성공한 뒤 merge commit `8cb01a5`로 main에 병합했고 Expo production deployment `7m12h5ntly`로 반영했다. `https://odit.expo.app` HTTP 200을 확인했으며 서버·DB 변경은 없다.
 
 ### 2026-11-23 — PR #25·#28 순차 main 병합과 CI 중복·격리 결함 보완
 
@@ -52,7 +52,7 @@
 - Git: `feat/photo-closet@26863d0`의 4개 커밋을 보존하는 merge commit `22dc9df`로 main에 병합했다. PR은 충돌 없고 draft가 아니었으며 GitHub `check`와 `local-supabase-integration`이 성공했다.
 - 구현: 카메라/앨범, 한 사진의 여러 영역 자르기, 웹 브라우저 u2netp 누끼, 사진 색 기반 칩·아이콘 색, 그림↔사진 전환, 기기별 사진 보관을 모바일에 추가했다.
 - 검증: 별도 worktree에서 `npm run check`(골든 47/47·코사인 19/19 포함)와 mobile typecheck/Expo lint를 재통과했다. npm audit은 기존 Expo 전이 의존성 moderate 5건, high/critical 0건이다.
-- 범위: 사진은 웹 localStorage 또는 앱 문서 폴더에만 저장된다. 서버 Storage, 계정 간 동기화, 서버 누끼/AI 태깅, 원본 보존·삭제 정책은 미구현이다. 운영 Expo 배포도 수행하지 않았다.
+- 범위: 사진은 웹 localStorage 또는 앱 문서 폴더에만 저장된다. 서버 Storage, 계정 간 동기화, 서버 누끼/AI 태깅, 원본 보존·삭제 정책은 미구현이다. PR #31 이후 Expo production에는 해당 모바일 UI도 포함됐다.
 
 ### 2026-11-23 — PR #26 병합·무료 staging 생성·CHAT-02 백엔드
 
@@ -227,7 +227,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 |---|---|---|---|---|---|---|
 | MATCH-01 스키마 동기화 | **완료** | schema/catalog 정합, wardrobe expansion, 골든 및 서버 계약 통과; 운영 smoke 통과 | 완료 | 완료 | 프론트가 종류를 다시 바꾸면 공통 enum·핏 그룹·DB를 함께 변경 | schema, catalog, prompt, API, migrations, mobile catalog |
 | MATCH-02 코사인 유사도 | **부분 완료** | 19/19, AC9 eval 11/11 유지, local/remote staging API 통합 통과 | 응답 후보 순서만 호환 적용, UI 점수 없음 | main 반영, staging 검증, 운영 미배포 | 실제 데이터 shadow 검증 | `garment_similarity.ts`, gap/outfit, tests |
-| MATCH-03 근거·후보 제공 | **UI 구현 완료·표시 개선 PR 준비** | 버킷 누수·근거·후보 ID 정합성, 짧은/긴 한국어·좁은 화면 flex 검사 통과 | 실제 UI 확인; 서버 reason 우선·후보 ID 검증·여러 줄 자동 높이 적용 | 기존 UI 배포, 개선분 PR/Expo 대기 | PR CI·병합·Expo 반영과 실제 작은 기기 시각 QA | gap/API/mobile types, `matchReasonCore.ts`, result UI, check script |
+| MATCH-03 근거·후보 제공 | **UI 구현·Expo 배포 완료** | 버킷 누수·근거·후보 ID 정합성, 짧은/긴 한국어·좁은 화면 flex, PR #31 CI 통과 | 서버 reason 우선·후보 ID 검증·여러 줄 자동 높이 적용 | main `8cb01a5`, Expo deployment `7m12h5ntly` | 실제 작은 기기 최종 시각 QA | gap/API/mobile types, `matchReasonCore.ts`, result UI, check script |
 
 #### CHAT — 신뢰성과 문맥
 
@@ -419,10 +419,10 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 항목 | 확인 값 |
 |---|---|
 | 현재 worktree 브랜치 | `codex/match-reason-wrap` |
-| 현재 브랜치 HEAD | `origin/main@0cb9263` 기준 비교 판정 근거 표시 개선 작업 중 |
-| 기능 병합·검증 기준 `origin/main` | `0cb92639e7fc5a9633be9c32bd263470114a92b0` (PR #29 merge commit) |
+| 현재 브랜치 HEAD | PR #31 병합 main `8cb01a5` 기준 배포 완료 문서 정리 중 |
+| 기능 병합·검증 기준 `origin/main` | `8cb01a5bd376d00fa430a4cb68acea04d4e038ca` (PR #31 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 85커밋 뒤 |
-| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29 main 병합 완료; 비교 근거 개선 PR 준비 중 |
+| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29, #31 main 병합 완료; #30 draft 유지 |
 
 세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
