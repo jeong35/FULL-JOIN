@@ -14,10 +14,13 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { fetchStylePreferences, updateStylePreferences } from '@/data/api';
 import { enterAnalyticsScreen, flushEvents, getHomeAnalyticsScreen, recordAnalyticsBackground, resumeAnalyticsScreen, track } from '@/data/events';
 import { getSession, restoreStyles, useSession } from '@/data/session';
+import { startSocialAuth } from '@/data/socialAuth';
 import { loadFeed, loadWardrobe, resetUserData } from '@/data/store';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
+// 카카오·구글·애플 로그인이 켜져 있으면 저장된 로그인을 확인하기 시작한다(꺼져 있으면 아무것도 안 함).
+startSocialAuth();
 
 const subscribeNothing = () => () => {};
 
@@ -31,6 +34,9 @@ function analyticsScreen(pathname: string): string {
   if (pathname === '/recommend') return 'recommend';
   if (pathname === '/onboarding') return 'intro';
   if (pathname === '/onboarding/login') return 'login';
+  if (pathname === '/onboarding/nickname') return 'nickname';
+  if (pathname === '/onboarding/signup') return 'signup';
+  if (pathname === '/auth/callback') return 'auth_callback';
   if (pathname === '/onboarding/taste') return 'taste';
   if (pathname === '/onboarding/ready') return 'ready';
   if (pathname === '/add-item/kind') return 'wardrobe_add_kind';

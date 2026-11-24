@@ -40,6 +40,40 @@ npx expo start
 | `EXPO_PUBLIC_API_URL` | 배포 서버 주소 | 로컬 서버(`http://127.0.0.1:54321/functions/v1/api`)로 바꿀 때 |
 | `EXPO_PUBLIC_DEMO_USER_ID` | `eunjae-demo` | 앱(시뮬레이터·Expo Go)의 시연용 사용자. 넣은 채로 웹을 만들면 웹도 로그인 없이 모두 이 사용자 하나를 같이 쓴다 |
 | `EXPO_PUBLIC_CHAT_HISTORY_ENABLED` | `false` | Auth access token 공급자가 연결된 staging/출시 빌드에서만 `true`. 사진별 대화 복원·삭제 UI를 켠다 |
+| `EXPO_PUBLIC_SUPABASE_URL` | 없음 | 계정 로그인용. `https://<project-ref>.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | 없음 | 계정 로그인용 Supabase 공개 키(anon). service_role 키 아님 |
+| `EXPO_PUBLIC_AUTH_PROVIDERS` | 없음 | 쓸 로그인 방법. 예: `email,kakao,google` (애플까지면 `,apple`) |
+
+### 계정 로그인 켜기 (이메일 회원가입 + 카카오·구글·애플)
+
+위 세 값(`SUPABASE_URL`·`SUPABASE_ANON_KEY`·`AUTH_PROVIDERS`)이 **모두** 있어야 켜진다. 하나라도 없으면 예전 로그인(닉네임 + 숫자 4자리) 그대로다.
+값은 `mobile/.env.local`에 넣는다(깃에 안 올라감). 예시는 `mobile/.env.example`.
+
+켜지면 이렇게 바뀐다.
+
+- 웹·앱 모두 로그인 화면이 뜬다: 위에 이메일 + 비밀번호 로그인과 '회원가입', 아래에 '또는 간편 로그인' 카카오 → 구글 → 애플.
+- 회원가입(`/onboarding/signup`): 이메일 · 비밀번호(영문 + 숫자 8자 이상) · 비밀번호 확인 · 닉네임. 가입하면 바로 취향 고르기.
+- 카카오·구글·애플로 처음 들어오면 닉네임을 정하고(`/onboarding/nickname`), 그다음 취향 고르기.
+- 사용자 ID는 Supabase가 확인한 ID만 쓴다. 모든 요청에 출입증(`Authorization: Bearer …`)이 붙는다(`src/data/auth.ts` 공급자).
+- 웹은 카카오·구글·애플 페이지에 갔다가 `/auth/callback`으로 돌아온다. 앱은 브라우저 창 → 앱 주소(`…/auth/callback`)로 돌아온다. 아이폰의 애플 로그인은 아이폰 기본 창.
+- 서버가 출입증을 거절하면(401) 로그아웃하고 로그인 화면에 "로그인이 풀렸어요"를 보여 준다.
+- 마이 탭: 로그아웃(이 기기의 출입증까지 지움), 회원 탈퇴(`DELETE /account` → 서버가 계정과 데이터 삭제).
+- 주소의 `?user=`와 시연용 사용자는 쓰지 않는다.
+
+Supabase 대시보드에서 할 것(실서버·연습 서버 둘 다)
+
+- Authentication → Providers: Email 켜기 + **Confirm email 끄기**(아래 메일 이야기), 비밀번호 최소 8자. Kakao(REST API 키·Client Secret, "Allow users without an email" 켜기), Google(클라이언트 ID·보안 비밀번호), Apple(나중에)
+- 메일: Supabase 기본 메일은 프로젝트 팀원 주소로만 간다. 일반 사용자에게 가입 확인·비밀번호 찾기 메일을 보내려면 Authentication → Emails에서 메일 발송(SMTP, 예: Resend·Brevo)을 붙인 뒤 Confirm email을 켠다. 그전에는 꺼 둔다(켜 두면 가입한 사람에게 메일이 안 가서 로그인을 못 함)
+- Authentication → URL Configuration → Redirect URLs: `https://odit.expo.app/**`, `http://localhost:8081/**`, `exp://**`, `mobile://**`
+- 카카오·구글 콘솔의 돌아올 주소: `https://<project-ref>.supabase.co/auth/v1/callback`
+
+출시 전에 남은 것
+
+- 각 회사 공식 로고·버튼 이미지 넣기(지금은 색 + 글자만, `src/components/SocialLogin.tsx`)
+- 앱 주소 이름(`app.json`의 `scheme`, 지금 `mobile`)과 아이폰 앱 고유 ID 정하기 → 애플 로그인
+- 서버 `DELETE /account` (없으면 탈퇴 버튼이 "탈퇴 기능은 곧 열려요"라고 알려 줌)
+- 이용약관·개인정보 처리방침 링크와 가입할 때 동의 칸
+- 비밀번호 찾기(메일 발송을 붙인 뒤)
 
 ## 웹 링크로 나눠 주기 (동료평가)
 
