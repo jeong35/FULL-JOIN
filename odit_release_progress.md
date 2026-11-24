@@ -1,7 +1,7 @@
 # 오딧(FULL-JOIN) 출시 준비 및 전체 작업 현황
 
 > 기준 시각: 2026-11-24 (Asia/Seoul)<br>
-> Git 기준: `origin/main@8cb01a5bd376d00fa430a4cb68acea04d4e038ca`<br>
+> Git 기준: `origin/main@a7024c95e877ac824033f1d7d192220c149df9bb`<br>
 > 목적: 이 문서 하나로 완료 기능, 진행 중 작업, 대기열, 출시 차단 사항과 권장 개발 순서를 파악한다.<br>
 > 주의: 운영·staging 상태는 저장소의 마지막 검증 기록을 기준으로 적었다. 이번 조사에서는 원격 DB나 배포 환경을 변경하거나 다시 배포하지 않았다.
 
@@ -9,9 +9,11 @@
 
 오딧의 기존 MVP 흐름인 **피드 탐색 → 사진 저장 → 내 옷장 비교 → 코디/구매 판단 → 쇼핑 링크 → 챗봇 상담**은 구현돼 있다. 옷 종류 확장, 코사인 A안, 챗봇 grounding과 일반 패션 상담, 사용자 행동 이벤트, LLMOps, 로컬 관리자 대시보드도 코드와 테스트 기준으로 상당 부분 완성됐다.
 
-다만 현재 앱을 불특정 다수에게 정식 출시하기에는 다음 사항이 남아 있다.
+현재 목표는 정식 스토어 출시가 아니라, 이용 권리가 확보된 콘텐츠로 지인이 별도 설명 없이 사용할 수 있는 완제품 수준의 **Private Beta**다. 스토어 출시 요구사항은 삭제하지 않고 출시 재개 백로그로 유지한다.
 
-1. 정식 로그인 방식, 계정 이전과 계정 삭제 정책이 확정되지 않았다.
+다만 Private Beta와 이후 정식 출시까지 다음 사항이 남아 있다.
+
+1. 인증은 Supabase Auth + Kakao·Google로 확정됐지만 provider 설정·실기기 OAuth E2E, 계정 이전과 계정 삭제 정책이 남았다.
 2. main의 Auth/RLS 및 사진별 챗 기록 백엔드가 production에 배포되지 않았다.
 3. 운영 API는 마지막 확인 기준으로 이전 공개 API이고 `verify_jwt=false`이므로 정식 출시 보안 수준이 아니다.
 4. 사진 등록, 추천, 챗 기록, 비교 근거 등 일부 기능은 서버·모바일·운영 중 일부 계층만 연결돼 있다.
@@ -34,12 +36,12 @@
 | 영역 | 현재 판단 | 출시 전 핵심 잔여 작업 |
 |---|---|---|
 | 기존 MVP 핵심 흐름 | 완료 | 최종 회귀·실기기 QA |
-| 비교 정확도/코사인 A안 | 부분 완료 | 한 줄 근거 UI는 구현됨; 서버 reason 연결·줄바꿈 개선의 PR/Expo 반영, 운영 표본·shadow 검증 |
+| 비교 정확도/코사인 A안 | 부분 완료 | 한 줄 근거 UI·서버 reason 연결·줄바꿈은 PR #31과 Expo production에 반영됨; 실제 작은 기기 QA, 운영 표본·shadow 검증 |
 | 챗봇 상담 | 부분 완료 | CHAT-02 production 배포, 모바일 기록 복원/삭제, 실제 기기 검증 |
 | 옷장 등록 | 부분 완료 | 사진 서버 동기화 범위 결정, 실패 복구, 실제 기기 QA |
-| 추천 탭 | 부분 완료 | 후속 계측 branch 정리, Auth 실데이터 E2E, 이유·콜드스타트 조정 |
-| 홈 피드 검색·필터 | 작업 중 | 커밋·PR·CI·staging·실기기 QA |
-| 인증/접근 제어 | 부분 완료이지만 출시 차단 | 로그인 UX, 운영 배포, gateway·RLS, 계정 삭제 |
+| 추천 탭 | 부분 완료 | PR #35의 GitHub local Supabase 실행기 포트 충돌 해결·review, Auth 실데이터 E2E, 이유·콜드스타트·취향 fallback 조정 |
+| 홈 피드 검색·필터 | Draft PR | PR #34 staging·실기기 QA |
+| 인증/접근 제어 | 부분 완료이지만 출시 차단 | PR #30 최신 main 충돌 해결, OAuth staging QA, 운영 배포, gateway·RLS, 계정 삭제 |
 | 분석/LLMOps | 부분 완료 | production 표본, 운영 알림, 최소 권한 운영 조회 |
 | CI/CD | 부분 완료 | CI는 사용 중, CD는 수동 승인형; 환경 secret/reviewer 운영 확인 |
 | 콘텐츠/법무/스토어 | 미완료 | 사진 권리, 개인정보·약관, 스토어 메타데이터와 native build 설정 |
@@ -99,9 +101,9 @@
 |---|---|---|---|---|
 | 추천 탭 기본 기능 | 부분 완료 | 날씨·취향·저장 사진·옷장 기반 추천, 특정 옷 조합 화면 | PR #23가 main 및 마지막 확인 production 기준에 포함 | Auth 실사용자 데이터 E2E, 빈 상태·이유·콜드스타트 보정 |
 | KMA 날씨 연동 | 부분 완료 | 기상청 단기·중기 키와 서버 연동 경로 구현 | production에 키 설정 및 추천 릴리스 수행 기록 | 장애·캐시·지역 권한 실기기 검증, 키 회전 절차 |
-| 추천 계측·회귀 | 작업 중/대기열 | 추천 노출·선택 이벤트, 집계, 결정적 추천 core와 테스트 | `codex/recommendation-observability@8342667`, staging 검증, PR 없음 | 최신 main rebase/cherry-pick 검토 후 독립 PR |
+| 추천 계측·회귀 | PR 검증 중 | 추천 노출·선택 이벤트, 집계, 결정적 추천 core와 테스트 | 최신 main 기반 PR #35, local synthetic E2E와 GitHub `check` 성공; production 미반영 | GitHub 실행기 Supabase 고정 포트 충돌 해결·review 후 staging 최신 SHA 재검증 |
 | 특정 보유 아이템 기반 추천 | 부분 완료 | 조합 화면과 추천 기반은 존재 | 전체 사용자 흐름 검증 부족 | 실제 보유 ID 강제, 후보 이유, 페이지네이션 |
-| FEED-01 홈 피드 검색·필터 | 작업 중 | 스타일·종류·색 검색, 조합 필터, 0건·초기화 UI, feed item 요약 | 현재 worktree 미커밋·미푸시·미배포 | 실기기 QA→커밋→PR→CI→staging |
+| FEED-01 홈 피드 검색·필터 | Draft PR | 스타일·종류·색 검색, 조합 필터, 0건·초기화 UI, feed item 요약 | 최신 main 기반 PR #34, local synthetic E2E와 GitHub Verify 성공; 미배포 | Expo Preview/staging→실기기 QA |
 | 선택한 추구미 설명 | 대기 | 없음 | 없음 | 검색·추천 결과에서 선택 이유를 어떻게 보여줄지 UX 합의 |
 
 ### 2.6 UX와 동료평가 후속
@@ -135,28 +137,30 @@
 - 상태: PR #31로 main 병합 및 Expo production 배포 완료. deployment `7m12h5ntly`, `https://odit.expo.app` HTTP 200을 확인했다.
 - 서버·DB 변경: 없음. 실제 작은 기기 시각 QA만 남았다.
 
-### 3.2 보존 중인 홈 피드 worktree
+### 3.2 보존 중인 홈 피드 원본 worktree와 정리 PR
 
 - 브랜치: `codex/home-feed-search-filter`
 - 기준: `origin/main@0cb9263`
-- 상태: 홈 피드 검색·필터 관련 코드·테스트·문서가 **미커밋** 상태다.
+- 상태: 기능 파일은 `3a017ef`로 선별 커밋해 최신 main 기반 `codex/phase1-feed-search@67638ea`에 포팅했고 Draft PR #34를 만들었다. 원본 worktree에는 구식 진행 문서와 사용자 PDF만 미커밋으로 남아 보존 중이다.
 - 검증: 전체 `npm run check`, 모바일 typecheck/lint, Expo web export, local Supabase 17 migration+API 통합을 통과했다.
 - 테스트 fixture와 synthetic 사용자는 정리됐고 Docker/Supabase는 종료했다.
-- 다음 행동: 실제 기기 UI QA 후 기능 파일만 커밋하고 PR을 만든다.
+- 다음 행동: GitHub Verify가 성공한 PR #34를 staging API/Expo Preview에 연결해 실제 기기 UI QA를 수행한다.
 - 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked이며 작업 커밋에서 제외해야 한다.
 
 ### 3.3 열린 PR
 
 | PR | 상태 | 내용 | CI | 대기 사유 |
 |---|---|---|---|---|
-| #30 `codex/mobile-auth-chat-history` | Draft, mergeable | 모바일 token provider, 사진별 챗 복원·pagination·삭제 | `check`, `local-supabase-integration` 성공 | 인증 공급자와 데모 데이터 이전 정책 미확정, staging 모바일 JWT E2E 필요 |
+| #30 `codex/mobile-auth-chat-history` | Draft, GitHub mergeable=false | token provider, 사진별 챗 복원·pagination·삭제 + 팀원 이메일·Kakao·Google Auth 구현 | 최신 `50ccf76`에 GitHub CI 없음; 로컬 mobile typecheck/lint·Expo export 성공 | `odit_development_report.md` 충돌 해결, provider/redirect 설정, A/B·A→B→A staging 실기기 E2E |
+| #34 `codex/phase1-feed-search` | Draft | 홈 피드 검색·복합 필터·feed item 요약·이벤트 | 로컬 전체 check·mobile·Expo export·17 migration 통합과 GitHub Verify 성공 | 실기기 QA와 staging 검증 |
+| #35 `codex/phase1-recommendation-observability` | Open | 추천 이벤트 5종·결정적 core·관리자 집계·staging Expo 환경 격리 | 로컬 전체 검증 성공, GitHub `check` 성공; local Supabase job은 재실행까지 고정 포트 `54324`/`54322` 충돌로 미완료 | CI 실행기 격리 결함 해결·review 후 최신 SHA staging 재검증 |
 
-### 3.4 PR 없이 남은 활성 기능 브랜치
+### 3.4 후속 정리된 활성 기능 브랜치
 
 | 브랜치 | 판단 | 처리 원칙 |
 |---|---|---|
-| `codex/recommendation-observability@8342667` | 추천 계측·회귀 후속 작업. staging 검증 기록은 있으나 main 미병합 | 최신 main 기준 diff 재검토 후 독립 PR |
-| `codex/home-feed-search-filter` | 현재 작업 중 | 실기기 QA 후 독립 PR |
+| `codex/recommendation-observability@8342667` | 원본 보존. 필요한 변경은 PR #35로 최신 main에 선별 포팅 | 통째 merge 금지; PR #35를 검토 |
+| `codex/home-feed-search-filter@3a017ef` | 원본 보존. 기능은 PR #34로 최신 main에 포팅 | 구식 문서·사용자 PDF를 임의 삭제하지 않음 |
 
 ### 3.5 그대로 병합하면 안 되는 오래된 작업
 
@@ -167,7 +171,7 @@
 | `codex/wardrobe-db-expansion@2c95179` | 오래된 enum/API/user_events와 별도 analytics가 현재 main과 충돌 | 현재 main 구현과 중복 확인 후 보관 또는 archive |
 | `jeong35-patch-1` | PR #12에서 main과 내용 동일해 닫힘 | 재병합 불필요 |
 
-로컬 `main` 포인터는 `fa2129a`로 `origin/main`보다 **85커밋 뒤**다. 새 작업은 로컬 `main`에서 시작하지 말고 최신 `origin/main`을 확인해 분기해야 한다. 기존 stash 3개와 다른 worktree의 미커밋 작업은 작성자 확인 없이 삭제하지 않는다.
+로컬 `main` 포인터는 `fa2129a`로 `origin/main`보다 **90커밋 뒤**다. 새 작업은 로컬 `main`에서 시작하지 말고 최신 `origin/main`을 확인해 분기해야 한다. 기존 stash 3개와 다른 worktree의 미커밋 작업은 작성자 확인 없이 삭제하지 않는다.
 
 ## 4. 출시 전 필수 작업(P0)
 
@@ -175,7 +179,7 @@
 
 ### P0-1. 인증·사용자 격리·계정 생명주기
 
-- [ ] Supabase Auth 또는 외부 포털 연동 구조를 확정한다. 외부 포털을 쓰더라도 서버가 검증 가능한 identity를 Supabase JWT/RLS와 매핑해야 한다.
+- [x] 인증 정본을 Supabase Auth로 확정하고 Kakao·Google provider를 지원한다. 외부 포털 인증은 제외한다.
 - [ ] 로그인 UI, 로그아웃, 세션 갱신, 만료·변조 토큰, 401/403 복구 UX를 구현한다.
 - [ ] 요청 body/query의 `user_id`를 신뢰하지 않고 검증된 JWT subject를 정본으로 사용한다.
 - [ ] 사용자 함수와 공개/관리 함수를 분리하고 사용자 경로의 gateway JWT 검증 전환을 검토한다.
@@ -232,8 +236,8 @@
 
 | 우선순위 | 작업 | 선행 조건 | 완료 기준 |
 |---|---|---|---|
-| P1-1 | 홈 피드 검색·필터 마무리 | 현재 로컬 구현 | 실기기 QA, PR CI, staging, 이벤트 확인 |
-| P1-2 | 추천 계측 branch 병합 | 최신 main diff 검토 | 독립 PR, 추천 회귀, staging 이벤트·대시보드 확인 |
+| P1-1 | 홈 피드 검색·필터 마무리 | Draft PR #34 | staging API/Expo Preview, 실기기 QA, 이벤트 확인 |
+| P1-2 | 추천 계측 branch 병합 | PR #35 | Supabase CI 실행기 격리·review, 최신 SHA staging 이벤트·대시보드 확인 |
 | P1-3 | 비교 한 줄 근거 UI 개선 반영 | **완료**: PR #31·Expo production 반영 | 작은 기기 시각 QA; 유사도 숫자 미노출 유지 |
 | P1-4 | 챗 출처/복합 답변 UI | CHAT-03 계약 | 보유 옷과 일반 조언을 명확히 분리 |
 | P1-5 | PR #30 모바일 챗 기록 | Auth 정책 | A→B→A 복원, pagination, 삭제, 401/403 UX |
@@ -280,12 +284,13 @@
 - 챗봇은 유형 선택 없이 의도를 자동 분류하고 일반 패션 상담을 허용한다.
 - 실제 보유 의류와 일반 조언을 답변에서 구분한다.
 - 사진별 챗 기록의 저장·삭제를 지원한다.
-- 출시 인증은 Supabase Auth를 우선 검토하되 외부 포털 identity 연동 가능성을 열어 둔다.
+- 출시 인증은 Supabase Auth 단독으로 하고 Kakao·Google 소셜 로그인을 지원한다. 외부 포털 인증은 제외한다.
 - 콘텐츠는 허락받은 사진 또는 직접 제작한 콘텐츠만 사용한다.
 
 ### 미확정
 
-- 외부 포털과 Supabase Auth를 연결하는 최종 로그인 방식
+- 이메일 로그인을 Private Beta에 함께 제공할지 여부와 메일 확인/SMTP 정책
+- Kakao·Google provider key·redirect URI·앱 scheme의 운영 설정
 - 데모 계정 데이터 이전 여부와 종료일
 - 계정 삭제 유예·복구와 이벤트/챗/사진 보존 기간
 - 비교 피드백의 동의 문구·철회·보존 정책
@@ -297,11 +302,11 @@
 ## 9. 의존성 및 권장 실행 순서
 
 ```text
-홈 검색 현재 작업
-  → 실기기 QA → 커밋/PR → CI → staging
+홈 검색 PR #34
+  → CI → staging API/Expo Preview → 실기기 QA
 
-인증 방식·데모 이전 결정
-  → PR #30 마무리
+Supabase Auth + Kakao·Google 결정
+  → PR #30 문서 충돌·provider 설정·실기기 OAuth QA
   → 모바일 로그인/세션 UX
   → Auth/RLS/CHAT-02 production 배포
   → 계정·Storage·챗 삭제
@@ -330,10 +335,10 @@
 
 ### 바로 다음 권장 대기열
 
-1. 현재 홈 피드 검색·필터를 실제 기기에서 확인하고 독립 PR로 만든다.
-2. `codex/recommendation-observability`를 최신 main 기준으로 재검토해 별도 PR로 만든다.
-3. 팀이 로그인 공급자, 데모 이전, 계정 삭제·보존 정책을 결정한다.
-4. 결정 후 PR #30을 staging 모바일 JWT E2E까지 마치고 병합한다.
+1. PR #34·#35의 GitHub CI와 review를 확인한다.
+2. PR #34를 staging API/Expo Preview에 연결해 홈 검색을 실제 기기에서 QA한다.
+3. PR #35 최신 SHA의 추천 이벤트·대시보드 집계를 staging에서 재검증한다.
+4. PR #30의 구식 보고서 충돌을 해결하고 Kakao·Google provider/redirect를 설정한 뒤 staging 모바일 JWT E2E를 수행한다.
 5. 비교 한 줄 근거와 챗 답변 출처 UI를 프론트 담당자와 연결한다.
 6. 출시 후보 SHA에서 production migration/API/Expo 배포 rehearsal을 staging에서 수행한다.
 7. 개인정보·약관·콘텐츠 권리·스토어 메타데이터와 native build 설정을 완료한다.
@@ -343,11 +348,10 @@
 
 ### Git
 
-- 최신 원격 main: `8cb01a5bd376d00fa430a4cb68acea04d4e038ca`
-- 열린 PR: #30 한 건, draft이며 CI 성공; #31은 CI 성공 후 main 병합 완료
-- 현재 로컬 기능: 홈 피드 검색·필터 미커밋 worktree
-- 원격 후속 기능: 추천 계측 branch 미병합
-- 로컬 `main`: 원격보다 85커밋 뒤, 신규 분기 기준으로 사용 금지
+- 최신 원격 main: `a7024c95e877ac824033f1d7d192220c149df9bb` (PR #32 문서 병합)
+- 열린 PR: #30 Draft, #34 Draft, #35 Open. #31·#32는 main 병합 완료
+- 신규 브랜치: `codex/phase1-feed-search@67638ea`, `codex/phase1-recommendation-observability@5c41900`
+- 로컬 `main`: 원격보다 90커밋 뒤, 신규 분기 기준으로 사용 금지
 - stash: 3개, 임의 삭제 금지
 
 ### 마지막 문서화된 배포
@@ -356,7 +360,7 @@
 |---|---|---|---|
 | production | Edge Function `2d0369b`; Expo web `8cb01a5`, deployment `7m12h5ntly` | `202611200003`까지 15개 | MATCH-03 줄바꿈·서버 reason과 사진 등록 UI는 Expo 반영; Auth·CHAT-02 backend는 production 미반영 |
 | staging | 추천 계측 `67b922b` API 배포 기록 | Auth·CHAT-02 포함 17개 | synthetic A/B, 401/403·RLS·챗·추천 이벤트 검증 |
-| local | 현재 worktree 코드 | 17개 migration+synthetic seed | 홈 검색 포함 전체 통합 통과 후 종료 |
+| local | PR #34·#35 각 head | 17개 migration+synthetic seed | 두 브랜치 전체 통합 통과 후 Supabase 종료 |
 
 배포 상태는 “GitHub main에 병합됨”과 동일하지 않다. release workflow는 수동 `workflow_dispatch`이고, exact SHA 입력과 GitHub Environment 승인이 있어야 한다. main merge만으로 production 배포는 발생하지 않는다.
 
