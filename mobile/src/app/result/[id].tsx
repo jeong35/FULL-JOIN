@@ -15,6 +15,7 @@ import { errorMessage, postItemDecision } from '@/data/api';
 import { kindLabel, type Kind } from '@/data/catalog';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
+import { resolveMatchReason } from '@/data/matchReasonCore';
 import { buildOutfits, substitutesFor, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
 import { shoppingLinksFor } from '@/data/shopping';
 import { heartStyleImage, unheartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
@@ -434,6 +435,12 @@ function ResultCard({
   const fit = item.visual_fit ?? null;
   const name = fit === null ? kindLabel(item.kind) : `${kindLabel(item.kind)} (${fit})`;
   const hasSubstitute = item.gap_status === '구매' && substitutes.length > 0;
+  const fallbackReason = describe(
+    item,
+    wardrobe,
+    [...new Set(substitutes.map((substitute) => kindLabel(substitute.kind)))],
+  );
+  const matchReason = resolveMatchReason(item, wardrobe, fallbackReason);
   return (
     <GlassView radius={16} style={styles.card}>
       <View style={styles.cardRow}>
@@ -444,9 +451,7 @@ function ResultCard({
           <Text style={styles.cardName} numberOfLines={1}>
             {name}
           </Text>
-          <Text style={styles.cardMeta} numberOfLines={1}>
-            {describe(item, wardrobe, [...new Set(substitutes.map((substitute) => kindLabel(substitute.kind)))])}
-          </Text>
+          <Text style={styles.cardMeta}>{matchReason.text}</Text>
         </View>
         {item.gap_status !== null && <GapTag status={item.gap_status} substitute={hasSubstitute} />}
       </View>
@@ -879,12 +884,13 @@ const styles = StyleSheet.create({
   },
   cardRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
   },
   thumb: {
     width: 40,
     height: 48,
+    flexShrink: 0,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -902,10 +908,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: fonts.regular,
     fontSize: 12,
+    lineHeight: 17,
     color: colors.textSecondary,
   },
   tag: {
     height: 26,
+    flexShrink: 0,
+    marginTop: 11,
     paddingHorizontal: 11,
     borderRadius: 7,
     alignItems: 'center',
