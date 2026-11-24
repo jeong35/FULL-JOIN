@@ -4,17 +4,24 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/GlassView';
+import { AccountLoginScreen } from '@/components/AccountLogin';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { accountHasData, fetchStylePreferences } from '@/data/api';
+import { ACCOUNT_LOGIN_ENABLED } from '@/data/authConfig';
 import { track } from '@/data/events';
 import { NICKNAME_MAX, login, nicknameProblem, pinProblem, userIdFor } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
-// 튜토리얼 ②: 로그인. 닉네임 + 숫자 4자리.
-// 처음이면 새 옷장이 생기고 취향 고르기로 간다. 이미 저장한 사진이나 옷장 옷이 있는 계정이면(다른 기기·로그아웃 뒤)
-// 취향 고르기를 건너뛰고 바로 홈으로 간다.
+// 튜토리얼 ②: 로그인.
+// - 계정 로그인이 켜져 있으면(authConfig.ts) AccountLoginScreen: 이메일 로그인·회원가입 + 카카오·구글·애플.
+// - 아니면 예전 방식: 닉네임 + 숫자 4자리. 처음이면 새 옷장이 생기고 취향 고르기로 간다.
+//   이미 저장한 사진이나 옷장 옷이 있는 계정이면(다른 기기·로그아웃 뒤) 취향 고르기를 건너뛰고 바로 홈으로 간다.
 
 export default function LoginScreen() {
+  return ACCOUNT_LOGIN_ENABLED ? <AccountLoginScreen /> : <PinLoginScreen />;
+}
+
+function PinLoginScreen() {
   const insets = useSafeAreaInsets();
   const [nickname, setNickname] = useState('');
   const [pin, setPin] = useState('');

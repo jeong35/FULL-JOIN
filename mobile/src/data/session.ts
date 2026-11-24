@@ -3,9 +3,13 @@
 //   주소 끝에 ?user=eunjae-demo 를 붙이면 로그인 없이 그 사용자로 들어간다(웹으로 시연할 때).
 // - 앱(시뮬레이터·Expo Go): 시연용 사용자로 바로 들어간다. 튜토리얼은 마이 탭에서 다시 볼 수 있다.
 // 익명 로그인(Supabase Auth)이 붙으면 이 파일만 바꾼다. 서버는 지금 user_id를 그대로 믿으니 진짜 계정 보안은 아니다.
+// - 카카오·구글·애플 로그인(authConfig.ts의 ACCOUNT_LOGIN_ENABLED)이 켜지면: 웹·앱 모두 로그인 화면을 띄우고,
+//   사용자 ID는 Supabase가 확인한 ID만 쓴다(socialAuth.ts가 loginWithAuthSession으로 넣는다).
+//   주소의 ?user= 와 예전 닉네임·숫자 세션은 쓰지 않는다.
 import { useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
 
+import { ACCOUNT_LOGIN_ENABLED } from './authConfig';
 import { STYLES, type Style } from './catalog';
 
 export type Session = {
@@ -25,7 +29,8 @@ const EVER_LOGGED_IN_KEY = 'odit-ever-logged-in-v1';
 const DEMO_USER_ID = process.env.EXPO_PUBLIC_DEMO_USER_ID ?? 'eunjae-demo';
 
 // 로그인 화면은 웹에서만 띄운다. EXPO_PUBLIC_DEMO_USER_ID를 넣으면 웹도 시연용 사용자로 고정된다.
-export const LOGIN_ENABLED = Platform.OS === 'web' && !process.env.EXPO_PUBLIC_DEMO_USER_ID;
+// 카카오·구글·애플 로그인이 켜지면 앱(아이폰·안드로이드)에서도 로그인 화면을 띄운다.
+export const LOGIN_ENABLED = ACCOUNT_LOGIN_ENABLED || (Platform.OS === 'web' && !process.env.EXPO_PUBLIC_DEMO_USER_ID);
 
 export const NICKNAME_MIN = 2;
 export const NICKNAME_MAX = 12;
@@ -98,6 +103,8 @@ function writeStored(session: Session | null) {
 }
 
 function initialSession(): Session | null {
+  // 카카오·구글·애플 로그인: Supabase가 저장해 둔 로그인을 확인한 뒤(socialAuth.ts) 세션을 넣는다.
+  if (ACCOUNT_LOGIN_ENABLED) return null;
   if (!LOGIN_ENABLED) {
     return { userId: DEMO_USER_ID, nickname: '시연용 계정', styles: [], onboarded: true };
   }
@@ -168,11 +175,21 @@ export function markIntroSeen() {
 }
 const listeners = new Set<() => void>();
 
+// 카카오·구글·애플 로그인이 켜져 있으면, 저장된 로그인을 확인하기 전(authReady=false)에는 로그인 화면으로 보내지 않는다.
+let authReady = !ACCOUNT_LOGIN_ENABLED;
+// 로그인 화면에 한 번 보여 줄 안내. 'expired' = 서버가 출입증을 거절해서(401) 로그인이 풀림.
+let authNotice: 'expired' | null = null;
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
 function setSession(next: Session | null) {
   session = next;
   if (next !== null) markEverLoggedIn();
-  if (LOGIN_ENABLED) writeStored(next);
-  for (const listener of listeners) listener();
+  // 카카오·구글·애플 로그인은 Supabase가 로그인을 보관하므로 예전 세션 칸은 쓰지 않는다.
+  if (LOGIN_ENABLED && !ACCOUNT_LOGIN_ENABLED) writeStored(next);
+  emit();
 }
 
 function subscribe(listener: () => void) {
@@ -186,6 +203,41 @@ export function getSession(): Session | null {
 
 export function useSession(): Session | null {
   return useSyncExternalStore(subscribe, getSession, getSession);
+}
+
+function getAuthReady(): boolean {
+  return authReady;
+}
+
+export function useAuthReady(): boolean {
+  return useSyncExternalStore(subscribe, getAuthReady, getAuthReady);
+}
+
+export function markAuthReady() {
+  if (authReady) return;
+  authReady = true;
+  emit();
+}
+
+export function getAuthNotice(): 'expired' | null {
+  return authNotice;
+}
+
+export function setAuthNotice(notice: 'expired' | null) {
+  authNotice = notice;
+  emit();
+}
+
+// 카카오·구글·애플 로그인에서 로그아웃(또는 출입증 만료)되면 앱 세션을 비운다.
+export function clearAuthSession() {
+  if (session === null) return;
+  setSession(null);
+}
+
+// 처음 로그인한 사람이 오딧에서 쓸 닉네임을 정했을 때.
+export function setSessionNickname(nickname: string) {
+  if (session === null) return;
+  setSession({ ...session, nickname: normalizeNickname(nickname) });
 }
 
 // returning: 이 계정으로 저장한 사진이나 옷장 옷이 이미 있으면(이미 쓰던 사람) 취향 고르기를 건너뛴다.

@@ -3,7 +3,7 @@
 // 키(service_role, OpenAI 등)는 절대 앱에 넣지 않는다 — 키는 서버(Supabase Secrets)에만 둔다.
 import { Platform } from 'react-native';
 
-import { getAccessToken } from './auth';
+import { getAccessToken, notifyUnauthorized } from './auth';
 import { colorsForKind, fitsForKind, isKindOfSlot, isSlot, type Color, type Kind, type Slot, type Style, type VisualFit } from './catalog';
 import { getSession } from './session';
 import type { ArchiveImage, ChatHistoryResult, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
@@ -42,8 +42,10 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
+  let sentToken = false;
   try {
     const accessToken = await getAccessToken();
+    sentToken = accessToken !== null;
     const headers: Record<string, string> = {};
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (accessToken !== null) headers.authorization = `Bearer ${accessToken}`;
@@ -67,6 +69,8 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
   }
   if (!response.ok) {
     const error = (data as ErrorBody | null)?.error;
+    // 출입증을 보냈는데 서버가 거절하면(만료·탈퇴한 계정) 로그인을 풀고 로그인 화면으로 보낸다.
+    if (response.status === 401 && sentToken) notifyUnauthorized();
     throw new ApiError(
       response.status,
       error?.code ?? 'http_error',
@@ -293,4 +297,18 @@ export function fetchChatHistory(styleImageId: string, before?: number): Promise
 export function deleteChatHistory(styleImageId: string): Promise<{ style_image_id: string; deleted: true }> {
   const params = new URLSearchParams({ style_image_id: styleImageId });
   return request('DELETE', `/chat/history?${params.toString()}`);
+}
+
+// 회원 탈퇴: 서버가 출입증의 사용자 계정과 그 사람의 옷장·사진·챗·저장·취향을 모두 지운다.
+// 서버 경로는 정인과 맞출 것: DELETE /account → 200 { deleted: true } (출입증 없으면 401).
+// 서버에 아직 없으면(404·405) 'account_delete_unavailable'로 알려 준다.
+export async function deleteAccount(): Promise<void> {
+  try {
+    await request<{ deleted: true }>('DELETE', '/account');
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 405)) {
+      throw new ApiError(error.status, 'account_delete_unavailable', '탈퇴 기능은 곧 열려요. 지금은 팀에 문의해 주세요');
+    }
+    throw error;
+  }
 }
