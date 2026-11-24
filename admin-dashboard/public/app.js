@@ -51,6 +51,10 @@ function renderProduct(product) {
     ["사진 저장", `${count(product.activity.photo_saves)}회`], ["코디 비교", `${count(product.activity.comparisons)}회`],
     ["쇼핑 클릭", `${count(product.activity.shopping_link_clicks)}회 · 사용자 CTR ${pct(product.activity.shopping_click_user_rate_pct)}`],
     ["챗봇", `${count(product.activity.chat_messages)}회 · 이용률 ${pct(product.activity.chatbot_user_rate_pct)}`],
+    ["추천 탭", `${count(product.recommendation.views)}회 · 이용률 ${pct(product.activity.recommendation_user_rate_pct)}`],
+    ["추천 클릭", `${count(product.recommendation.item_clicks)}회 · 방문자 클릭률 ${pct(product.recommendation.viewer_click_rate_pct)}`],
+    ["특정 옷 조합", `${count(product.recommendation.combo_views)}회 · 도달률 ${pct(product.recommendation.specific_item_combo_user_rate_pct)}`],
+    ["추천 선택", `${count(product.recommendation.choices)}회 · 방문자 선택률 ${pct(product.recommendation.viewer_choice_rate_pct)}`],
   ].map(([label, value]) => `<div class="metric-row"><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join("");
   $("#screens").innerHTML = table(["화면", "표본", "평균", "p95"], product.screen_duration.map((row) => [row.screen, count(row.samples), `${row.average_seconds}s`, `${row.p95_seconds}s`]));
   $("#features").innerHTML = table(["기능", "이벤트", "사용자", "이용률"], product.feature_usage.map((row) => [row.label, count(row.events), count(row.users), pct(row.user_rate_pct)]));

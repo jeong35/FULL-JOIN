@@ -3,7 +3,7 @@
 // 사용자가 옷을 더하거나 빼면 고른 옷들로 만들 수 있는 조합을 전부 다시 보여 준다(combosFromSet). 옷장 옷만 쓴다.
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -15,6 +15,7 @@ import { kindLabel } from '@/data/catalog';
 import { BackButton } from '@/components/ui';
 import { combosFromSet, itemName, setGap, sortItems, suggestSet, type Combo } from '@/data/combos';
 import { dayOfMonth, todayKey, weekday } from '@/data/dates';
+import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
@@ -26,7 +27,7 @@ const FIRST_SHOWN = 6;
 const HINT_WIDTH = 270;
 
 export default function ComboScreen() {
-  const { id, date: dateParam } = useLocalSearchParams<{ id: string; date?: string }>();
+  const { id, date: dateParam, source } = useLocalSearchParams<{ id: string; date?: string; source?: string }>();
   const date = typeof dateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayKey();
   const view = useRecommendation(date);
   const anchor = view.wardrobe.find((item) => item.id === id);
@@ -42,6 +43,7 @@ export default function ComboScreen() {
   };
   const [showAll, setShowAll] = useState(false);
   const [chosen, setChosen] = useState<string | null>(null);
+  const recordedRecommendationView = useRef<string | null>(null);
   const back = () => (router.canGoBack() ? router.back() : router.navigate('/recommend'));
 
   useEffect(() => {
@@ -63,6 +65,20 @@ export default function ComboScreen() {
   const gap = combos.length === 0 ? setGap(selected) : null;
   // 저장한 사진 룩 중에 고른 옷만으로 입을 수 있는 것.
   const photoLooks = view.looks.filter((look) => look.pieces.every((piece) => selectedIds.includes(piece.wardrobeItem.id)));
+  useEffect(() => {
+    if (source !== 'recommendation' || anchor === undefined || view.wardrobeStatus !== 'ready') return;
+    const signature = `${date}:${anchor.id}:${combos.length}`;
+    if (recordedRecommendationView.current === signature) return;
+    recordedRecommendationView.current = signature;
+    track('recommendation_combo_view', {
+      wardrobe_item_id: anchor.id,
+      kind: anchor.kind,
+      slot: anchor.slot,
+      suggested_count: suggested.length,
+      combo_count: combos.length,
+      weather_available: view.day !== undefined,
+    });
+  }, [anchor, combos.length, date, source, suggested.length, view.day, view.wardrobeStatus]);
   const toggle = (itemId: string) => {
     setEdited((prev) => {
       const base = prev ?? suggested.map((item) => item.id);
@@ -168,7 +184,24 @@ export default function ComboScreen() {
             ) : (
               <>
                 {shown.map((combo, index) => (
-                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor.id} chosen={chosen === combo.id} onChoose={() => setChosen(combo.id)} />
+                  <ComboCard
+                    key={combo.id}
+                    combo={combo}
+                    index={index}
+                    anchorId={anchor.id}
+                    chosen={chosen === combo.id}
+                    onChoose={() => {
+                      if (source === 'recommendation') {
+                        track('recommendation_choice', {
+                          recommendation_type: 'wardrobe_combo',
+                          wardrobe_item_id: anchor.id,
+                          combo_id: combo.id,
+                          item_count: combo.items.length,
+                        });
+                      }
+                      setChosen(combo.id);
+                    }}
+                  />
                 ))}
                 {combos.length > FIRST_SHOWN && (
                   <Pressable onPress={() => setShowAll((open) => !open)} accessibilityRole="button" style={styles.more}>

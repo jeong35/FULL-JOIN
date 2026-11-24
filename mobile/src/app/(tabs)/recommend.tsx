@@ -4,7 +4,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -16,8 +16,10 @@ import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
+import { track } from '@/data/events';
 import { nextPlan, plansOn, timeLabel, usePlans, type Plan } from '@/data/plans';
 import { clothesForWeather, lookTips, matchOf, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
+import { recommendationEmptyState } from '@/data/recommendCore';
 import { shoppingLinksFor } from '@/data/shopping';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import { nextTrip, nightsLabel, tripOn, useTrips, type Trip } from '@/data/trips';
@@ -38,12 +40,14 @@ export default function RecommendScreen() {
   const [almostIndex, setAlmostIndex] = useState(0);
   const [regionOpen, setRegionOpen] = useState(false);
   const [chosen, setChosen] = useState<Record<string, string>>({});
+  const recordedImpressions = useRef(new Set<string>());
   const plans = usePlans();
   const trips = useTrips();
   const view = useRecommendation(selected);
   const { region, weather, day, plan } = view;
 
   useFocusEffect(useCallback(() => {
+    track('recommendation_view');
     void loadWardrobe();
     void loadArchive();
   }, []));
@@ -61,6 +65,45 @@ export default function RecommendScreen() {
   const look = view.looks.length > 0 ? view.looks[lookIndex % view.looks.length] : undefined;
   const almost = view.almost.length > 0 ? view.almost[almostIndex % view.almost.length] : undefined;
   const clothes = clothesForWeather(view.wardrobe, day);
+
+  useEffect(() => {
+    const record = (key: string, props: Parameters<typeof track>[1]) => {
+      if (recordedImpressions.current.has(key)) return;
+      recordedImpressions.current.add(key);
+      track('recommendation_item_impression', props);
+    };
+    if (look !== undefined) {
+      record(`look:${selected}:${look.image.id}:${lookIndex % Math.max(1, view.looks.length)}`, {
+        recommendation_type: 'complete_look',
+        style_image_id: look.image.id,
+        position: (lookIndex % Math.max(1, view.looks.length)) + 1,
+        owned_count: look.pieces.length,
+        weather_fit: look.weatherFit,
+        style_match: look.styleMatch,
+      });
+    }
+    if (almost !== undefined) {
+      record(`almost:${selected}:${almost.image.id}:${almostIndex % Math.max(1, view.almost.length)}`, {
+        recommendation_type: 'almost_look',
+        style_image_id: almost.image.id,
+        position: (almostIndex % Math.max(1, view.almost.length)) + 1,
+        owned_count: almost.owned.length,
+        missing_count: 1,
+        style_match: almost.styleMatch,
+      });
+    }
+    if (day !== undefined) {
+      for (const [index, item] of clothes.entries()) {
+        record(`weather:${selected}:${item.id}`, {
+          recommendation_type: 'weather_wardrobe',
+          wardrobe_item_id: item.id,
+          position: index + 1,
+          kind: item.kind,
+          slot: item.slot,
+        });
+      }
+    }
+  }, [almost, almostIndex, clothes, day, look, lookIndex, selected, view.almost.length, view.looks.length]);
 
   return (
     <TabScreen
@@ -150,7 +193,11 @@ export default function RecommendScreen() {
             index={lookIndex}
             date={selected}
             chosen={look !== undefined && chosen[selected] === look.image.id}
-            onChoose={() => look !== undefined && setChosen((prev) => ({ ...prev, [selected]: look.image.id }))}
+            onChoose={() => {
+              if (look === undefined) return;
+              track('recommendation_choice', { recommendation_type: 'complete_look', style_image_id: look.image.id });
+              setChosen((prev) => ({ ...prev, [selected]: look.image.id }));
+            }}
             onNext={() => setLookIndex((i) => i + 1)}
           />
 
@@ -164,7 +211,16 @@ export default function RecommendScreen() {
                 {clothes.map((item) => (
                   <Pressable
                     key={item.id}
-                    onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date: selected } })}
+                    onPress={() => {
+                      track('recommendation_item_click', {
+                        recommendation_type: 'weather_wardrobe',
+                        action: 'combo',
+                        wardrobe_item_id: item.id,
+                        kind: item.kind,
+                        slot: item.slot,
+                      });
+                      router.push({ pathname: '/combo/[id]', params: { id: item.id, date: selected, source: 'recommendation' } });
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={`${kindLabel(item.kind)} 조합 보기`}
                     style={styles.clothesItem}>
@@ -372,12 +428,20 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
   const hasPhoto = look !== undefined && look.pieces.some((piece) => photos[piece.wardrobeItem.id] !== undefined);
   let empty: { text: string; action?: { label: string; onPress: () => void } } | null = null;
   if (look === undefined) {
-    if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') empty = { text: '불러오는 중이에요' };
-    else if (view.wardrobe.length === 0) {
+    const state = recommendationEmptyState({
+      wardrobeReady: view.wardrobeStatus === 'ready',
+      archiveReady: view.archiveStatus === 'ready',
+      wardrobeCount: view.wardrobe.length,
+      archiveCount: view.archiveCount,
+      pending: view.pending,
+      completeLookCount: view.looks.length,
+    });
+    if (state === 'loading') empty = { text: '불러오는 중이에요' };
+    else if (state === 'empty_wardrobe') {
       empty = { text: '옷장에 옷을 넣으면 저장한 사진으로 룩을 골라 드려요', action: { label: '옷장에 옷 넣기', onPress: () => router.push('/add-item/kind') } };
-    } else if (view.archiveCount === 0) {
+    } else if (state === 'empty_archive') {
       empty = { text: '피드에서 마음에 드는 코디 사진을 저장하면 내 옷으로 똑같이 입는 룩을 골라 드려요', action: { label: '피드 보러 가기', onPress: () => router.navigate('/') } };
-    } else if (view.pending > 0) empty = { text: '저장한 사진을 내 옷장과 맞춰 보는 중이에요' };
+    } else if (state === 'pending_comparison') empty = { text: '저장한 사진을 내 옷장과 맞춰 보는 중이에요' };
     else empty = { text: '지금 옷장으로 다 갖춰지는 룩은 아직 없어요. 아래 \'하나만 더하면 완성\'을 봐 주세요' };
   }
   return (
@@ -406,7 +470,12 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
                 <Text style={styles.lookTitle}>가진 옷 {look.pieces.length}벌로 완성</Text>
               </View>
               <Pressable
-                onPress={() => router.push({ pathname: '/look/[id]', params: { id: look.image.id, date } })}
+                onPress={() => {
+                  track('recommendation_item_click', {
+                    recommendation_type: 'complete_look', action: 'detail', style_image_id: look.image.id,
+                  });
+                  router.push({ pathname: '/look/[id]', params: { id: look.image.id, date } });
+                }}
                 accessibilityRole="button"
                 style={styles.moreButton}>
                 <Text style={styles.moreText}>자세히</Text>
@@ -506,7 +575,16 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
         {shown.map(({ item, gap }) => (
           <Pressable
             key={item.id}
-            onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date } })}
+            onPress={() => {
+              track('recommendation_item_click', {
+                recommendation_type: 'wardrobe_seed',
+                action: 'combo',
+                wardrobe_item_id: item.id,
+                kind: item.kind,
+                slot: item.slot,
+              });
+              router.push({ pathname: '/combo/[id]', params: { id: item.id, date, source: 'recommendation' } });
+            }}
             accessibilityRole="button"
             accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 조합 만들기`}
             style={styles.clothesItem}>
@@ -525,6 +603,23 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
 function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; index: number; total: number; onNext: () => void }) {
   const missing = almost.missing;
   const links = shoppingLinksFor(missing, []);
+  const open = (link: (typeof links)[number]) => {
+    track('recommendation_item_click', {
+      recommendation_type: 'almost_look',
+      action: 'shop',
+      style_image_id: almost.image.id,
+      platform: link.platform,
+      kind: missing.kind ?? null,
+    });
+    track('shop_link_click', {
+      place: 'recommendation',
+      platform: link.platform,
+      match_type: link.match_type,
+      kind: missing.kind ?? null,
+      style_image_id: almost.image.id,
+    });
+    void WebBrowser.openBrowserAsync(link.url);
+  };
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -568,7 +663,7 @@ function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; i
           })}
         </View>
         <Pressable
-          onPress={() => links[0] !== undefined && void WebBrowser.openBrowserAsync(links[0].url)}
+          onPress={() => links[0] !== undefined && open(links[0])}
           accessibilityRole="link"
           style={styles.shopButton}>
           <Text style={styles.chooseText}>{links[0]?.platform ?? '쇼핑몰'}에서 비슷한 {missing.kind !== undefined ? kindLabel(missing.kind) : '옷'} 찾기</Text>
@@ -576,7 +671,7 @@ function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; i
         </Pressable>
         <View style={styles.shopRow}>
           {links.slice(1, 3).map((link) => (
-            <Pressable key={link.url} onPress={() => void WebBrowser.openBrowserAsync(link.url)} accessibilityRole="link" hitSlop={6}>
+            <Pressable key={link.url} onPress={() => open(link)} accessibilityRole="link" hitSlop={6}>
               <Text style={styles.shopLink}>{link.platform}에서 찾기</Text>
             </Pressable>
           ))}
