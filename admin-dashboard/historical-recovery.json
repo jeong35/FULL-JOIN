@@ -1,0 +1,22 @@
+{
+  "period": "[2026-11-12 00:00, 2026-11-19 00:00) Asia/Seoul",
+  "source": "persisted_action",
+  "cohort_status": "unclassified_pseudonymous_identifiers",
+  "identified_actors": 14,
+  "wardrobe_rows": 71,
+  "wardrobe_users": 12,
+  "heart_rows": 38,
+  "heart_users": 12,
+  "both_users": 10,
+  "wardrobe_milestones": { "one": 12, "three": 8, "five": 7, "ten": 3 },
+  "first_to_fifth_median_seconds": 424.444401,
+  "multi_day_users": 3,
+  "observed_real_user_events": 0,
+  "observed_synthetic_events": 1,
+  "limitations": [
+    "11월 11일까지의 팀 내부 테스트를 기간에서 제외함",
+    "평가자 명단과 가명 식별자를 연결할 roster가 없어 확정 코호트가 아님",
+    "삭제된 옷과 저장 취소 이력을 포함하지 않는 현재 잔존 기록",
+    "result_view 이벤트가 없어 완전 Activation과 전환율은 확인 불가"
+  ]
+}

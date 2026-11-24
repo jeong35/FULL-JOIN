@@ -1,5 +1,5 @@
 -- ODIT peer-evaluation recovery (read-only)
--- Window: [2026-11-11 00:00, 2026-11-19 00:00) Asia/Seoul
+-- Window: [2026-11-12 00:00, 2026-11-19 00:00) Asia/Seoul
 --
 -- Run in the Supabase SQL editor with a role that can SELECT the listed tables.
 -- This file never inserts reconstructed rows into user_events. Every statement is
@@ -34,7 +34,7 @@ order by wanted.table_name;
 -- never treated as peer activity.
 with bounds as (
   select
-    timestamptz '2026-11-11 00:00:00+09' as from_ts,
+    timestamptz '2026-11-12 00:00:00+09' as from_ts,
     timestamptz '2026-11-19 00:00:00+09' as to_ts
 ), classified as (
   select *,
@@ -73,7 +73,7 @@ from classified cross join bounds;
 
 -- 3. Provisional identifiable actors and surviving persisted actions.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible_wardrobe as (
@@ -103,11 +103,11 @@ select
 -- 4. Daily persisted activity. This is not DAU: a user who did neither surviving
 -- action can still have used the app.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 days as (
-  select generate_series(date '2026-11-11', date '2026-11-18', interval '1 day')::date day
+  select generate_series(date '2026-11-12', date '2026-11-18', interval '1 day')::date day
 ), actions as (
   select user_id, created_at ts, 'wardrobe' action from public.wardrobe_items, bounds b
   where created_at >= b.from_ts and created_at < b.to_ts
@@ -131,7 +131,7 @@ group by d.day order by d.day;
 
 -- 5. Hour-of-day distribution for surviving persisted actions.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 actions as (
@@ -151,7 +151,7 @@ from eligible group by 1 order by 1;
 
 -- 6. Wardrobe counts, milestones, and first-to-fifth surviving-row time.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible as (
@@ -179,7 +179,7 @@ select
 from per_user;
 
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 counts as (
@@ -193,7 +193,7 @@ select item_count, count(*) users from counts group by item_count order by item_
 
 -- 7. Wardrobe attribute distributions. visual_fit null is retained as its own value.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible as (
@@ -209,7 +209,7 @@ order by dimension, rows desc, value;
 
 -- 8. Saved photos, popular surviving catalogue images, and style distribution.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible as (
@@ -223,7 +223,7 @@ eligible as (
 select saved_count, count(*) users from counts group by saved_count order by saved_count;
 
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible as (
@@ -237,7 +237,7 @@ from eligible e group by e.style_image_id
 order by surviving_saves desc, style_image_id limit 20;
 
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible as (
@@ -253,7 +253,7 @@ group by style order by surviving_saves desc, style;
 
 -- 9. Cross-action order and distinct-day persistence.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 w as (
@@ -284,7 +284,7 @@ from actors a left join w using (user_id) left join h using (user_id);
 
 -- Exact users active on >=2 distinct dates across either action.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 actions as (
@@ -303,7 +303,7 @@ from (select user_id from eligible group by user_id having count(distinct day) >
 
 -- 10. Partial activation proxy. result_view is intentionally not fabricated.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 w as (
@@ -325,7 +325,7 @@ from w join h using (user_id) where w.n >= 5;
 -- 11. Current preference snapshot and overlap with surviving saved image styles.
 -- Preferences have no created_at/updated_at; never label them as period preferences.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 actors as (
@@ -344,7 +344,7 @@ from public.user_style_preferences p join eligible_actors a using (user_id)
 group by p.style order by current_rows desc, p.style;
 
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 ), excluded_exact(user_id) as (values (''::text)),
 eligible_hearts as (
@@ -362,7 +362,7 @@ from eligible_hearts h join public.style_images i on i.id = h.style_image_id;
 
 -- 12. Sources introduced after the period or without user-level linkage.
 with bounds as (
-  select timestamptz '2026-11-11 00:00:00+09' from_ts,
+  select timestamptz '2026-11-12 00:00:00+09' from_ts,
          timestamptz '2026-11-19 00:00:00+09' to_ts
 )
 select

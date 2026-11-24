@@ -33,6 +33,14 @@
 
 ## 변경 이력
 
+### 2026-11-25 — TASK 1 기간 보정 및 TASK 2 행동 분석 대시보드
+
+- 동료평가 복원 기간을 팀 내부 테스트가 끝난 뒤인 `[2026-11-12 00:00, 2026-11-19 00:00) Asia/Seoul`로 보정했다. 잔존 기록은 미분류 식별자 14명, 옷장 71행/12명, 사진 저장 38행/12명, 두 행동 모두 10명이다. 원시 이벤트로 역삽입하지 않았다.
+- production `POST /events`에 `is_test=true` synthetic batch 2건을 보내 HTTP 200/accepted 2를 확인하고, `user_events`에서 user/device/session, client/received 시각, app/analytics version 저장을 읽기 전용 조회로 검증했다.
+- 시간순 Journey 집계, 사용자/세션 Sankey, 30분 세션 분할, client clock 보정, client event 중복 제거, 시간순 퍼널, D1/D7 Retention, 공통 필터, 가명 상세 패널, Historical Recovery 탭을 추가했다. 기존 LLMOps는 유지했다.
+- 웹 이벤트 전송에 최대 200건·7일 제한 localStorage outbox, batch ack, 지수 backoff, 온라인 복귀 재시도와 `client_event_id`를 추가했다. 네이티브는 아직 메모리 fallback이다.
+- fixture 브라우저에서 노드·연결선 상세, 전 탭, N/A, 복원 지표와 콘솔 무오류를 확인했다. 관련 집계·outbox 테스트와 모바일 typecheck/lint를 통과시켰다.
+
 ### 2026-11-24 — 비교 판정 근거 줄바꿈 및 서버 계약 연결
 
 - 확인: 기존 결과 카드는 서버 `match_metadata.reason`이 아니라 프론트 `describe()` 문구를 표시했고 `numberOfLines={1}` 때문에 긴 문구가 잘렸다.
