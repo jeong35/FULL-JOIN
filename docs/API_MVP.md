@@ -20,7 +20,7 @@
 | `GET` | `/wardrobe?user_id=` | 사용자의 옷장 조회 |
 | `GET` | `/style-preferences?user_id=` | 사용자의 추구미 조회 |
 | `PUT` | `/style-preferences` | 사용자의 추구미를 0~3개로 교체 저장 |
-| `GET` | `/feed?user_id=` | AC15 홈 피드 순서 |
+| `GET` | `/feed?user_id=` | AC15 홈 피드 순서와 검색·필터용 아이템 요약 |
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
 | `POST` | `/chat` | 베타 기능. 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변(MVP 필수 평가 제외) |
@@ -35,6 +35,10 @@
 | `POST` | `/style-images/{id}/heart` | 하트 저장과 갭 분석 |
 | `DELETE` | `/style-images/{id}/heart` | 하트 취소 |
 | `POST` | `/style-images/{id}/items/{item_id}/decision` | `비슷함` 아이템의 활용·구매 선택에 따른 코디·상품 응답 |
+
+## 홈 피드 검색·필터
+
+`GET /feed?user_id=`의 기존 순서와 필드는 유지한다. 각 `style_images[]`에 검색·필터용 `items: [{ slot, kind, color }]` 요약을 추가하며 `item_id` 오름차순으로 고정한다. 모바일은 전체 피드를 받은 뒤 스타일·종류·색과 검색어를 로컬에서 적용하므로 필터 결과에서도 AC15의 취향→이웃→기타 순서를 바꾸지 않는다. 브랜드·상품명·사진 원문은 검색 색인이나 행동 이벤트에 넣지 않는다.
 
 ## 옷장 등록 예시
 
