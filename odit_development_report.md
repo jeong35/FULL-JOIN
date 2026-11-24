@@ -1,8 +1,8 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
-- 기준 시각: 2026-11-23 KST
+- 기준 시각: 2026-11-24 KST
 - 조사 대상 저장소: `jeong35/FULL-JOIN`
-- 조사 worktree: `/Users/choijeong-in/.codex/worktrees/kind-expansion-main/FULL-JOIN`
+- 조사 기준: `origin/main@a7024c9` 및 1단계 독립 브랜치/PR #30·#34·#35
 - 작성 목적: 다른 개발 세션과 팀원이 이전 대화 없이도 현재 구현·테스트·Git·배포·의사결정 상태를 이어받을 수 있게 한다.
 
 ## 문서 읽는 법과 조사 범위
@@ -26,12 +26,28 @@
 
 ## 최신 상태
 
-- 최신 `origin/main`은 MATCH-03 UI 개선 PR #31을 병합한 `8cb01a5bd376d00fa430a4cb68acea04d4e038ca`다.
+> 이 절과 아래 변경 이력이 최신 정본이다. 뒤의 장별 표에는 과거 마일스톤 당시 상태가 남을 수 있으며, 최신 작업 대기열은 `odit_release_progress.md`를 우선한다.
+
+- 최신 `origin/main`은 MATCH-03 문서 PR #32까지 병합한 `a7024c95e877ac824033f1d7d192220c149df9bb`다.
 - 운영 Edge Function은 `2d0369b`, Expo production은 `8cb01a5`(deployment `7m12h5ntly`) 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 - Auth/RLS PR #25는 merge commit `964e8a4`, CHAT-02 PR #28은 merge commit `410f904`로 main에 순차 병합됐다. local/staging A/B 격리와 채팅 기록 통합 테스트를 통과했지만 production 미배포이며 모바일 로그인·복원 UI는 미연동이다.
-- `full-join-staging`에는 migration 17개와 `bd70fe4` API를 적용했다. `/health` release SHA 일치, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
+- `full-join-staging`에는 migration 17개와 추천 계측 원본 `67b922b` API를 적용한 기록이 있다. `/health` release SHA, 추천 이벤트, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영 데이터는 복제하지 않았다. 이번 1단계에서는 staging·production을 변경하지 않았다.
+- 홈 검색·필터는 최신 main 기반 `codex/phase1-feed-search@67638ea` / Draft PR #34로, 추천 계측은 `codex/phase1-recommendation-observability@5c41900` / PR #35로 분리했다.
+- PR #30 최신 head `50ccf76`에는 팀원의 이메일·Kakao·Google Supabase Auth 구현이 합쳐졌다. 로컬 mobile typecheck/lint·Expo export는 성공했으나 최신 head GitHub CI가 없고 개발 보고서 한 파일에서 main과 충돌하므로 2단계 전 해결이 필요하다.
 
 ## 변경 이력
+
+### 2026-11-24 — Private Beta 1단계 기존 작업 정리
+
+- Git: 최신 `origin/main@a7024c9`에서 기능을 재분리했다. 기존 미커밋 worktree, stash 3개, 다른 worktree와 사용자 PDF는 삭제하거나 덮어쓰지 않았다.
+- FEED-01: 원본 worktree의 기능 파일만 선별해 `67638ea`로 포팅하고 Draft PR #34를 생성했다. 스타일·종류·색 검색/복합 필터, 초기화·0건, 하위 호환 feed item 요약과 원문 없는 이벤트가 범위다.
+- 추천 계측: 원본 `67b922b`·`8342667`에서 추천 이벤트 5종, 결정적 추천 core, 관리자 집계, staging Expo API 격리만 `18999a7`·`5c41900`으로 포팅하고 PR #35를 생성했다. 취향 fallback 신규 구현은 제외했다.
+- 검증: 두 브랜치 모두 전체 `npm run check`(골든 47/47, 코사인 19/19 포함), 모바일 typecheck/lint, Expo web export를 통과했다. local Supabase 17 migration+synthetic seed 재적용 후 각 브랜치 DB/API 통합도 통과했고 유료 LLM 호출은 없었다.
+- GitHub CI: PR #34 Verify는 성공했다. PR #35는 `check`가 성공했으나 local Supabase job이 최초 `54324`, 실패 job 재실행에서 `54322` 포트 선점으로 두 번 기동 단계에서 종료됐다. 동일 SHA의 로컬 통합은 통과했으므로 기능 실패로 판정하지 않되, 실행기 격리 결함을 해결하기 전 PR #35의 CI 전체 성공으로 기록하지 않는다.
+- MATCH-03: PR #31·#32 및 Expo production 반영 상태를 확인했다. 서버 `match_metadata.reason`, 후보 ID, 여러 줄 자동 높이 구현은 완료됐고 실제 작은 기기 시각 QA만 남았다.
+- PR #30: token/JWT, 챗 복원·pagination·삭제와 신규 Supabase Auth 구현 범위를 검토했다. 로그인 취소·앱 복귀·재로그인, A/B 격리, A→B→A 사진 전환은 staging 실기기 후속 테스트다. 병합·운영 배포는 하지 않았다.
+- 문서: Private Beta 목표, Supabase Auth+Kakao·Google 결정, 콘텐츠 권리 경계, 계정 삭제·보존 미확정 사항을 SPEC/Auth/후속 명세/출시 현황에 반영했다.
+- 운영 영향: production DB/API/Expo, staging, 사용자 데이터 변경 없음.
 
 ### 2026-11-24 — 비교 판정 근거 줄바꿈 및 서버 계약 연결
 
@@ -241,15 +257,15 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| WARD-01 사진 기반 단일 등록 | **부분 완료** | GitHub CI 및 별도 mobile typecheck/lint 성공, 실제 기기 E2E 없음 | 촬영/앨범→영역 자르기→칩 수정→옷장 등록·그림/사진 전환 구현 | main 반영, Expo 운영 미배포 | 서버 Storage·계정 동기화·서버 누끼/AI 태깅·원본 삭제 정책 | PR #27 mobile photo flow, `wardrobePhotos.ts` |
+| WARD-01 사진 기반 단일 등록 | **부분 완료** | GitHub CI 및 별도 mobile typecheck/lint 성공, 실제 기기 E2E 없음 | 촬영/앨범→영역 자르기→칩 수정→옷장 등록·그림/사진 전환 구현 | PR #27로 main 반영; 후속 PR #31의 Expo production `8cb01a5`/deployment `7m12h5ntly`에 포함 | 서버 Storage·계정 동기화·서버 누끼/AI 태깅·원본 삭제 정책 | PR #27 mobile photo flow, `wardrobePhotos.ts` |
 | WARD-02 일괄 등록·샘플 옷장 | **부분 완료** | 정적 검증만 | 한 사진의 여러 영역을 각각 확인·등록 가능; 여러 사진 batch·샘플 옷장은 없음 | main 반영, Expo 운영 미배포 | 부분 실패 복구, 여러 사진 batch, 샘플 격리/삭제 | `photo-crop.tsx`, `photo-confirm.tsx` |
 
 #### REC / FEED — 추천과 탐색
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| REC-01 사용자별 코디 추천 | **미구현**(취향 홈 정렬만 기존 완료) | 홈 피드 정렬 계약 통과 | 홈만, 추천 탭 없음 | 홈만 배포 | 취향+재현 가능성 결합, 특정 옷 기반 추천, 이유, 콜드스타트·페이지네이션 | feed/gap, recommend tab |
-| FEED-01 검색·필터 | **부분 완료** | archive 필터 check 통과 | 저장 아카이브 필터와 취향 정렬 있음 | 해당 부분 배포 | 홈의 종류·색·스타일 키워드 검색, 필터 UI, 선택 추구미 설명 | feed/archive API, home UI |
+| REC-01 사용자별 코디 추천 | **부분 완료 / PR #35 검증 중** | 추천 정렬·빈 상태 3/3, 관리자·이벤트·local API/DB 통합, GitHub `check` 성공; Supabase CI 포트 충돌 | 날씨·취향·저장 사진·옷장 룩, 특정 옷 조합과 추천 계측 | 기본 추천 production; 신규 계측은 PR·미배포 | CI 실행기 격리·review, 최신 SHA staging, Auth 실데이터·fallback·이유 QA | `recommend.ts`, `recommendCore.ts`, recommend/combo, events/admin |
+| FEED-01 검색·필터 | **Draft PR #34** | 검색·복합 필터 3/3, 전체 check·local API/DB 통합, GitHub Verify 성공 | 스타일·종류·색 검색, 필터, 초기화·0건 UI | 미배포 | staging API/Expo Preview, 실기기 QA | feed API, `feedFilterCore.ts`, home UI, events |
 
 #### UX — 모바일 사용성
 
@@ -418,17 +434,18 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 | 항목 | 확인 값 |
 |---|---|
-| 현재 worktree 브랜치 | `codex/match-reason-wrap` |
-| 현재 브랜치 HEAD | PR #31 병합 main `8cb01a5` 기준 배포 완료 문서 정리 중 |
-| 기능 병합·검증 기준 `origin/main` | `8cb01a5bd376d00fa430a4cb68acea04d4e038ca` (PR #31 merge commit) |
-| 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 85커밋 뒤 |
-| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29, #31 main 병합 완료; #30 draft 유지 |
+| 현재 작업 기준 | `origin/main@a7024c9`에서 1단계 기능·문서 브랜치 분리 |
+| 홈 검색 | `codex/phase1-feed-search@67638ea`, Draft PR #34 |
+| 추천 계측 | `codex/phase1-recommendation-observability@5c41900`, PR #35 |
+| 기능 병합 기준 `origin/main` | `a7024c95e877ac824033f1d7d192220c149df9bb` (PR #32 merge commit) |
+| 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 90커밋 뒤 |
+| PR 상태 | #31·#32 main 병합 완료; #30 Draft·충돌, #34 Draft, #35 Open |
 
-세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
+PR #34·#35는 아직 main에 반영되지 않았다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 최신 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 시점의 CI 변경은 PR #29에서 관리한다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
+기존 홈 검색 원본 worktree에는 최신 main으로 포팅하지 않은 구식 진행 문서와 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`가 untracked 상태로 남아 있다. 기능 변경은 PR #34로 분리했고 사용자 파일·stash·타 worktree는 수정하거나 삭제하지 않았다. Auth/CHAT-02 백엔드는 main·staging에 반영됐고 production에는 미배포다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 

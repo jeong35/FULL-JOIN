@@ -1,5 +1,7 @@
 # Supabase Auth 전환 및 사용자 격리 계획
 
+> 2026-11-24 팀 결정: 출시 인증은 Supabase Auth 단독으로 하고 Kakao·Google 로그인을 지원한다. 외부 포털 인증은 제외한다. 이메일 로그인 포함 여부, 데모 계정 이전, 계정 삭제 유예·보존 기간은 별도 확정이 필요하다.
+
 ## 현재 상태와 위험
 
 운영 API는 아직 이전 공개 버전이다. 개발 브랜치에서는 함수 내부 JWT 검증, subject 기반 요청 검증과 owner RLS를 구현해 로컬 A/B 격리를 통과했다. 정식 로그인 UI와 운영 배포는 별도 승인 대상이다.
@@ -13,6 +15,8 @@
 5. 사용자 데이터는 `auth.uid() = user_id` RLS를 적용한다. service role은 관리 작업과 서버 전용 원자적 RPC로 제한한다.
 
 `verify_jwt=true` 전환과 기존 데모 사용자 이전은 동시에 운영 영향이 있으므로 별도 승인·staging 검증 후 실행한다.
+
+현재 draft PR #30에는 access token provider, Bearer 전달, 세션 만료 처리, 사진별 챗 복원·pagination·삭제와 함께 팀원이 추가한 이메일·Kakao·Google 로그인 UI/PKCE callback 구현이 있다. 이 코드는 production 설정이 아니며, 최신 main과의 문서 충돌 해결, OAuth provider/redirect 설정, staging 실기기 JWT E2E를 마친 뒤 병합한다.
 
 ## 리소스별 권한
 
@@ -71,7 +75,8 @@ FK `on delete cascade`만으로 Storage 파일은 지워지지 않으므로 priv
 
 ## 아직 결정할 사항
 
-- 이메일 magic link, OAuth, 전화번호 등 로그인 방식과 UI
+- 이메일 로그인을 Private Beta에 함께 제공할지 여부와 메일 확인/SMTP 정책
+- Kakao·Google provider key, redirect URI, 앱 scheme과 취소·복귀 UX의 실제 기기 검증
 - 데모 데이터 이전 방식과 이전 종료일
 - 익명 행동 이벤트의 허용 범위
 - 계정 삭제 유예·복구 기간
