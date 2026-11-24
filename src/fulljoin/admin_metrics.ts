@@ -81,6 +81,10 @@ function percent(numerator: number, denominator: number): number | null {
   return denominator === 0 ? null : Number(((numerator / denominator) * 100).toFixed(1));
 }
 
+function intersectionSize(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
+  return [...left].filter((value) => right.has(value)).length;
+}
+
 function percentile(values: readonly number[], percentileValue: number): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((left, right) => left - right);
@@ -172,6 +176,17 @@ export function summarizeProductAnalytics(
   const resultUsers = eventUsers(events, ["result_view"]);
   const shopUsers = eventUsers(events, ["shop_link_click"]);
   const chatUsers = eventUsers(events, ["chat_send"]);
+  const recommendationViewUsers = eventUsers(events, ["recommendation_view"]);
+  const recommendationImpressionUsers = eventUsers(events, ["recommendation_item_impression"]);
+  const recommendationClickUsers = eventUsers(events, ["recommendation_item_click"]);
+  const recommendationComboUsers = eventUsers(events, ["recommendation_combo_view"]);
+  const recommendationChoiceUsers = eventUsers(events, ["recommendation_choice"]);
+  const specificItemClickEvents = events.filter((event) =>
+    event.name === "recommendation_item_click" &&
+    ["weather_wardrobe", "wardrobe_seed"].includes(
+      typeof event.props.recommendation_type === "string" ? event.props.recommendation_type : "",
+    ));
+  const specificItemClickUsers = uniqueUsers(specificItemClickEvents);
 
   const screenDurations = new Map<string, number[]>();
   for (const event of events.filter((candidate) => candidate.name === "screen_leave")) {
@@ -189,6 +204,7 @@ export function summarizeProductAnalytics(
     ["comparison_reopened", "재비교"],
     ["item_choice", "비슷함 선택"],
     ["tutorial_replay_start", "튜토리얼 다시 보기"],
+    ["recommendation_view", "추천 탭"],
   ] as const;
 
   return {
@@ -220,6 +236,34 @@ export function summarizeProductAnalytics(
       shopping_click_user_rate_pct: percent([...shopUsers].filter((userId) => resultUsers.has(userId)).length, resultUsers.size),
       chat_messages: eventCount(events, "chat_send"),
       chatbot_user_rate_pct: percent(chatUsers.size, activeUsers.size),
+      recommendation_views: eventCount(events, "recommendation_view"),
+      recommendation_user_rate_pct: percent(recommendationViewUsers.size, activeUsers.size),
+    },
+    recommendation: {
+      views: eventCount(events, "recommendation_view"),
+      viewers: recommendationViewUsers.size,
+      impressions: eventCount(events, "recommendation_item_impression"),
+      impression_users: recommendationImpressionUsers.size,
+      item_clicks: eventCount(events, "recommendation_item_click"),
+      click_users: recommendationClickUsers.size,
+      viewer_click_rate_pct: percent(
+        intersectionSize(recommendationClickUsers, recommendationViewUsers),
+        recommendationViewUsers.size,
+      ),
+      specific_item_clicks: specificItemClickEvents.length,
+      specific_item_click_users: specificItemClickUsers.size,
+      combo_views: eventCount(events, "recommendation_combo_view"),
+      combo_users: recommendationComboUsers.size,
+      specific_item_combo_user_rate_pct: percent(
+        intersectionSize(recommendationComboUsers, specificItemClickUsers),
+        specificItemClickUsers.size,
+      ),
+      choices: eventCount(events, "recommendation_choice"),
+      choice_users: recommendationChoiceUsers.size,
+      viewer_choice_rate_pct: percent(
+        intersectionSize(recommendationChoiceUsers, recommendationViewUsers),
+        recommendationViewUsers.size,
+      ),
     },
     screen_duration: [...screenDurations].map(([screen, values]) => ({
       screen,
@@ -235,11 +279,6 @@ export function summarizeProductAnalytics(
       user_rate_pct: percent(eventUsers(events, [name]).size, activeUsers.size),
     })),
     unavailable: [
-      {
-        metric: "추천 탭 이용률 및 특정 아이템 기반 추천 전환",
-        reason: "현재 EVENTS.md에 추천 탭/추천 노출·클릭 이벤트가 정의되어 있지 않음",
-        required_events: ["recommendation_view", "recommendation_item_impression", "recommendation_item_click"],
-      },
       {
         metric: "사진 기반 옷장 등록 전환율",
         reason: "사진 등록 서버 흐름과 전용 이벤트가 아직 연결되지 않음",

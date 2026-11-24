@@ -48,6 +48,10 @@ npm run dashboard:production
 | 코디 비교 | `result_view` 횟수 | 이벤트 횟수 | 선택 기간 |
 | 쇼핑 클릭 사용자 CTR | `result_view` 사용자 중 `shop_link_click` 사용자 | `result_view` distinct user_id | 선택 기간 |
 | 챗봇 이용률 | `chat_send` distinct user_id | 활성 distinct user_id | 선택 기간 |
+| 추천 탭 이용률 | `recommendation_view` distinct user_id | 활성 distinct user_id | 선택 기간 |
+| 추천 방문자 클릭률 | 추천 방문자 중 `recommendation_item_click` 사용자 | `recommendation_view` distinct user_id | 선택 기간 |
+| 특정 아이템 조합 도달률 | 날씨 옷·옷장 seed 클릭 사용자 중 `recommendation_combo_view` 사용자 | 해당 `recommendation_item_click` distinct user_id | 선택 기간 |
+| 추천 선택률 | 추천 방문자 중 `recommendation_choice` 사용자 | `recommendation_view` distinct user_id | 선택 기간 |
 | 화면 체류 | `screen_leave.props.duration_ms` 평균/p95 | 화면별 유효 표본 | 선택 기간 |
 | 신규 기능 이용 | 각 기능 이벤트 distinct user_id | 활성 distinct user_id | 선택 기간 |
 
@@ -62,12 +66,7 @@ npm run dashboard:production
 
 전환율은 `다음 단계 사용자 / 이전 단계 사용자`, 이탈률은 `1 - 전환율`이다. 현재 구현은 `docs/EVENTS.md`의 승인된 사용자 단위 boolean 퍼널을 재사용한다.
 
-현재 이벤트로 계산할 수 없는 항목:
-
-- 추천 탭/특정 아이템 기반 추천 이용률: `recommendation_view`, `recommendation_item_impression`, `recommendation_item_click`이 필요하다.
-- 사진 기반 옷 등록 전환: `wardrobe_photo_start`, `wardrobe_photo_analysis_done`, `wardrobe_photo_add_done`이 필요하다.
-
-이 이벤트는 제품 흐름이 확정되기 전에 임의 추가하지 않는다.
+현재 이벤트로 계산할 수 없는 항목은 사진 기반 옷 등록 전환이다. `wardrobe_photo_start`, `wardrobe_photo_analysis_done`, `wardrobe_photo_add_done`이 필요하며 사진 저장 정책이 확정되기 전에 임의 추가하지 않는다.
 
 ## LLMOps
 
@@ -96,4 +95,4 @@ npm run dashboard:production
 - UI: `admin-dashboard/public/`
 - synthetic seed: `supabase/seed.sql`
 
-`npm run test:admin-metrics`는 KST 날짜, distinct user, sequential funnel, 테스트 제외, 분모 없음, LLM 성공/fallback/grounded/비용/p95를 검증한다. `npm run test:integration:local`은 실제 로컬 DB에 LLMOps와 사용자 이벤트가 저장되는 것을 검증한다.
+`npm run test:admin-metrics`는 KST 날짜, distinct user, sequential funnel, 테스트 제외, 분모 없음, 추천 노출→클릭→특정 옷 조합→선택 전환, LLM 성공/fallback/grounded/비용/p95를 검증한다. `npm run test:recommendation`은 추천 순서와 빈 상태 우선순위를 검증한다. `npm run test:integration:local`은 실제 로컬 DB에 LLMOps와 사용자 이벤트가 저장되는 것을 검증한다.
