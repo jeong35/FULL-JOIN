@@ -1,6 +1,6 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
-- 기준 시각: 2026-11-23 KST
+- 기준 시각: 2026-11-24 KST
 - 조사 대상 저장소: `jeong35/FULL-JOIN`
 - 조사 worktree: `/Users/choijeong-in/.codex/worktrees/kind-expansion-main/FULL-JOIN`
 - 작성 목적: 다른 개발 세션과 팀원이 이전 대화 없이도 현재 구현·테스트·Git·배포·의사결정 상태를 이어받을 수 있게 한다.
@@ -26,12 +26,21 @@
 
 ## 최신 상태
 
-- 최신 `origin/main`은 PR #28을 병합한 `410f904cfad4f6d4cc5ccae76a4be8f4b1d020a2`다. 사진 옷장 등록, 사용자 API Auth/RLS, 사진별 챗 기록 백엔드가 main에 포함됐지만 Expo·운영 서버·production DB 자동 배포는 발생하지 않았다.
+- 최신 `origin/main`은 CI 격리 PR #29를 병합한 `0cb92639e7fc5a9633be9c32bd263470114a92b0`다. 사진 옷장 등록, 사용자 API Auth/RLS, 사진별 챗 기록 백엔드가 main에 포함됐지만 Expo·운영 서버·production DB 자동 배포는 발생하지 않았다.
 - 운영 Edge Function과 Expo production은 `2d0369b` 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 - Auth/RLS PR #25는 merge commit `964e8a4`, CHAT-02 PR #28은 merge commit `410f904`로 main에 순차 병합됐다. local/staging A/B 격리와 채팅 기록 통합 테스트를 통과했지만 production 미배포이며 모바일 로그인·복원 UI는 미연동이다.
 - `full-join-staging`에는 migration 17개와 `bd70fe4` API를 적용했다. `/health` release SHA 일치, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
 
 ## 변경 이력
+
+### 2026-11-24 — 추천 탭 회귀 테스트·행동 계측·관리자 지표
+
+- 구현(브랜치): 기존 추천 탭의 날씨·취향·매칭 품질·최근 저장·ID 순서를 바꾸지 않고 순수 정렬 모듈로 분리했다. 빈 옷장, 저장 사진 없음, 비교 대기, 완성 룩 없음의 상태 우선순위도 같은 모듈을 화면에서 사용한다.
+- 계측: 추천 탭 방문, 룩/날씨 옷 노출, 상세·쇼핑·특정 옷 클릭, 특정 옷 조합 도달, 최종 룩/조합 선택 이벤트를 추가했다. 원문 대화·사진·브랜드 추정값은 수집하지 않는다.
+- 관리자 지표: 활성 사용자 대비 추천 이용률, 방문자 클릭률, 특정 아이템 조합 도달률, 추천 선택률을 distinct user 기준으로 계산하며 분모가 없으면 `확인 불가`로 유지한다.
+- 테스트: 추천 순서·최대 개수·원본 불변·빈 상태 3/3, 관리자 집계, 이벤트 목록, 모바일 typecheck·lint를 통과했다. 로그인/Auth, DB migration, 운영 배포는 범위에서 제외했다.
+- staging QA: 기존 `bd70fe4` API를 대상으로 옷장 CRUD, 사진 비교와 후보 ID, CHAT-01/02/03, 이벤트 배치, LLMOps, 401/403와 A/B RLS 격리를 재검증해 모두 통과했다. 유료 LLM 호출은 없었고 synthetic 사용자·fixture는 종료 시 삭제했다.
+- staging 미반영 확인: 새 추천 이벤트 5종 probe는 `400 invalid_request`였고 DB 저장 건수는 0이었다. 이는 staging 함수가 추천 계측 이전 SHA이기 때문이며, 추적 가능한 신규 커밋·배포 전에는 추천 이벤트의 staging E2E가 완료된 것으로 보지 않는다. production은 변경하지 않았다.
 
 ### 2026-11-23 — PR #25·#28 순차 main 병합과 CI 중복·격리 결함 보완
 
@@ -190,7 +199,7 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 | 챗봇 기본형 | 완료 | 운영 beta |
 | 챗봇 의도 분리·강한 grounding | 부분 완료 | main 반영·검증 완료, 프론트의 optional 진단 필드 활용·운영 배포 미완료 |
 | 취향 기반 홈 정렬 | 완료 | 운영 사용 중 |
-| 별도 추천 탭/옷장 기반 추천 | 미구현 | 추천 탭은 Coming Soon |
+| 별도 추천 탭/옷장 기반 추천 | 부분 완료 | 날씨·약속·취향·저장 사진과 실제 옷장을 이용한 룩, 하나만 더하면 완성, 특정 옷 조합 UI 구현; 회귀·계측 브랜치 검증 중 |
 | 사진 기반 옷장 등록 | 부분 완료 | main 모바일에 촬영/앨범·다중 자르기·기기 로컬 사진 저장 구현; Expo 운영 미배포, 서버 저장·AI 태깅 미구현 |
 | 사진별 챗 기록 저장 | 미구현 | 클라이언트 메모리의 현재 대화만 유지 |
 | 출시용 인증/탈퇴 | 미구현 | 닉네임+PIN 데모 세션 |
@@ -206,7 +215,7 @@ Edge Function 한 개가 health, 옷장, 취향, 피드, 아카이브, 상세, �
 |---|---|---|---|---|---|---|
 | P0 옷 종류 확장 서버 통합 | **완료** | main `npm run check` 통과, wardrobe 확장 check 통과, 운영 POST/GET/DELETE smoke 통과 | 완료 | 완료 | 구형 레코드의 유실 세부값은 복구 불가임을 UX/문서에 명시 | schema, catalog, API, `202611160002`, `202611200001`, mobile catalog/add-item |
 | P1 코사인 코디 비교 | **부분 완료** | cosine·통합 19/19, 전체 check와 local/remote staging API 통합 통과 | UI 미연동, 구버전은 optional 필드 무시 가능 | main 반영, staging 검증, 운영 미배포 | 프론트 이유 표시, 실제 데이터 shadow 평가 | `garment_similarity.ts`, gap/outfit/API, docs/tests |
-| P2 취향·옷장 추천 고도화 | **미구현** | 없음 | 추천 탭 미연동 | 미배포 | 추천 정책·점수·콜드스타트 합의 후 구현 | `mobile/src/app/(tabs)/recommend.tsx`, feed/gap 모듈 예정 |
+| P2 취향·옷장 추천 고도화 | **부분 완료** | 추천 순위·빈 상태 3/3, 모바일 typecheck/lint | 날씨·약속·취향·저장 사진과 옷장 기반 추천, 특정 옷 조합 구현 | Expo 운영 반영 여부 별도 확인 필요 | 실제 기기 QA, 이벤트 표본 기반 품질 조정 | `recommend.ts`, `recommendCore.ts`, recommend/combo 화면 |
 | P3 챗봇 보충 | **부분 완료** | CHAT-01/03 및 CHAT-02 단위·Docker·remote staging 실제 API/RLS 통합 통과 | 기록 API 문서화, 모바일 복원 UI·Auth 미연동 | CHAT-01/02/03 main, CHAT-02 staging, 운영 미배포 | 모바일 Auth·복원/삭제 UI | `chat.ts`, API, `202611230003`, `FRONTEND_MATCH_CHAT_HANDOFF.md` |
 | P4 LLMOps·품질 평가 | **부분 완료** | 계측 단위·local DB/API 통합·대시보드 집계 테스트, CI, 골든, 11/17 baseline 존재 | 사용자 행동과 분리 | 운영 migration/계측 미배포 | 실제 운영 표본, alert, live eval 12건 | `llm_observability.ts`, `admin_metrics.ts`, `202611200003`, dashboard/eval/docs |
 
@@ -241,7 +250,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| REC-01 사용자별 코디 추천 | **미구현**(취향 홈 정렬만 기존 완료) | 홈 피드 정렬 계약 통과 | 홈만, 추천 탭 없음 | 홈만 배포 | 취향+재현 가능성 결합, 특정 옷 기반 추천, 이유, 콜드스타트·페이지네이션 | feed/gap, recommend tab |
+| REC-01 사용자별 코디 추천 | **부분 완료** | 순위·최대 개수·빈 상태 3/3, 이벤트·관리자 집계 회귀 | 날씨·약속·취향·저장 사진+옷장 룩, 하나만 더하면 완성, 특정 옷 기반 조합 구현 | 계측 변경 미배포 | 실제 기기 QA와 운영 표본, 추천 이유 문구·콜드스타트 조정 | `recommend.ts`, `recommendCore.ts`, recommend/combo, events/admin |
 | FEED-01 검색·필터 | **부분 완료** | archive 필터 check 통과 | 저장 아카이브 필터와 취향 정렬 있음 | 해당 부분 배포 | 홈의 종류·색·스타일 키워드 검색, 필터 UI, 선택 추구미 설명 | feed/archive API, home UI |
 
 #### UX — 모바일 사용성
@@ -264,7 +273,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버, LLMOps 단위+local 통합, dashboard 집계, 11/17 baseline; live 12건 미실행 | 행동 이벤트 연결 | 이벤트만 운영 배포 | 운영 migration, 실제 표본/alert, CHAT-03 eval v2 승인 | `evals/`, events, LLMOps/admin 코드·docs, workflow |
+| OPS-01 Evals·LLMOps·행동 이벤트 | **부분 완료** | 골든/서버, LLMOps 단위+local 통합, 추천 전환 포함 dashboard 집계, 11/17 baseline; live 12건 미실행 | 행동 이벤트 연결 | 기존 이벤트만 운영 배포, 추천 이벤트 미배포 | 운영 표본/alert, CHAT-03 eval v2 승인 | `evals/`, events, LLMOps/admin 코드·docs, workflow |
 
 ### 2.3 명시적 제외 항목 준수
 
@@ -412,16 +421,16 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 | 항목 | 확인 값 |
 |---|---|
 | 현재 worktree 브랜치 | `codex/ci-dedupe` |
-| 현재 브랜치 HEAD | `c7d6ff5` 이후 PR #29의 CI 중복·Supabase job 직렬화 변경 작업 중 |
-| 기능 병합·검증 기준 `origin/main` | `410f904cfad4f6d4cc5ccae76a4be8f4b1d020a2` (PR #28 merge commit) |
+| 현재 브랜치 HEAD | `origin/main@0cb9263`에서 추천 탭 안정화·계측 작업 중 |
+| 기능 병합·검증 기준 `origin/main` | `0cb92639e7fc5a9633be9c32bd263470114a92b0` (PR #29 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
-| PR 상태 | #20, #21, #22, #25, #26, #27, #28 main 병합 완료; CI 중복·포트 충돌 방지 PR #29 검증 중 |
+| PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29 main 병합 완료; #24는 후속 PR로 대체되어 닫힘; 추천 안정화 브랜치 작업 중 |
 
 세 PR의 기능 변경은 main에 반영됐다. 로컬 `main` 포인터는 의도적으로 건드리지 않았으므로 새 작업은 계속 `origin/main` SHA를 직접 확인해 분기해야 한다.
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 시점의 CI 변경은 PR #29에서 관리한다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
+보고서 갱신 시점의 추적 파일 변경은 추천 회귀·이벤트·관리자 지표와 관련 문서뿐이다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -879,4 +888,4 @@ LLMOps·최신 eval
 
 현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/02/03·Auth/RLS·LLMOps·사진 옷장 등록 UI·local 통합 테스트·local 관리자 대시보드·승인형 release/alert**가 병합돼 있다. Auth와 사진별 영구 대화는 staging에서 실제 API/RLS 검증을 통과했지만 production에는 미배포다. 비교 학습 데이터와 추천 고도화는 아직 구현하지 않았다.
 
-다음 단계는 PR #29의 CI 중복·Supabase job 격리 검증, 모바일 Auth 토큰 전달과 대화 복원/삭제 UI다. production migration과 Edge Function 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
+로그인 관련 기능은 출시 준비 단계까지 보류한다. 다음 단계는 추천 안정화 변경을 CI로 검증하고 실제 기기에서 빈 옷장·저장 사진 없음·날씨 실패·특정 옷 조합 흐름을 확인한 뒤, 홈 검색·필터와 비교 화면 한 줄 근거 표시를 진행하는 것이다. production migration과 Edge Function·Expo 배포는 별도 승인 전 수행하지 않는다. 비교 피드백과 B안·새 대체 관계·임계값 변경도 계속 보류한다.

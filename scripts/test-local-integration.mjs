@@ -228,16 +228,31 @@ async function run() {
       events: [
         { name: "photo_save_done", user_id: owner, props: { style_image_id: styleImageId, place: "compare" } },
         { name: "result_view", user_id: owner, props: { style_image_id: styleImageId, items: 2 } },
+        { name: "recommendation_view", user_id: owner, props: {} },
+        { name: "recommendation_item_impression", user_id: owner, props: { recommendation_type: "complete_look", position: 1 } },
+        { name: "recommendation_item_click", user_id: owner, props: { recommendation_type: "wardrobe_seed", action: "combo" } },
+        { name: "recommendation_combo_view", user_id: owner, props: { combo_count: 1 } },
+        { name: "recommendation_choice", user_id: owner, props: { recommendation_type: "wardrobe_combo", item_count: 2 } },
       ],
     }),
   });
   assert.equal(events.status, 200);
-  assert.equal(events.body.accepted, 2);
-  const { count: storedEvents, error: eventsError } = await db.from("user_events")
-    .select("id", { count: "exact", head: true }).eq("user_id", owner);
+  assert.equal(events.body.accepted, 7);
+  const { data: storedEvents, error: eventsError } = await db.from("user_events")
+    .select("name").eq("user_id", owner);
   assert.equal(eventsError, null);
-  assert.equal(storedEvents, 2);
-  ok("사용자 이벤트 배치", "2건 수락 및 DB 2건 저장");
+  assert.equal(storedEvents?.length, 7);
+  assert.deepEqual(
+    storedEvents?.filter((event) => event.name.startsWith("recommendation_")).map((event) => event.name).sort(),
+    [
+      "recommendation_choice",
+      "recommendation_combo_view",
+      "recommendation_item_click",
+      "recommendation_item_impression",
+      "recommendation_view",
+    ],
+  );
+  ok("사용자 이벤트 배치", "기존 2건과 추천 5종을 수락하고 DB에 동일하게 저장");
 
   const { data: metrics, error: metricError } = await db.from("llm_operation_metrics")
     .select("response_mode,status,error_type,fallback_used,input_tokens,output_tokens")

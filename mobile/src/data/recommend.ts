@@ -5,6 +5,7 @@
 import { kindLabel, type Slot, type Style } from './catalog';
 import { buildOutfits, type OutfitPiece } from './outfits';
 import type { Plan } from './plans';
+import { compareSaved, rankAlmostLooks, rankCompleteLooks } from './recommendCore';
 import { heartStyleImage, type HeartState } from './store';
 import type { ArchiveImage, HeartItem, WardrobeItem } from './types';
 import { fitsTemp, needsOuter, type DayWeather } from './weather';
@@ -54,15 +55,6 @@ function styleMatches(image: ArchiveImage, styles: readonly Style[]): boolean {
   return styles.length > 0 && image.style.some((style) => styles.includes(style));
 }
 
-function count(pieces: readonly OwnedPiece[], match: Match): number {
-  return pieces.filter((piece) => matchOf(piece) === match).length;
-}
-
-// 같은 입력에 같은 순서: 동률은 saved_at 내림차순, 그다음 id 오름차순(AGENTS.md 5절).
-function bySaved(a: ArchiveImage, b: ArchiveImage): number {
-  return b.saved_at.localeCompare(a.saved_at) || a.id.localeCompare(b.id);
-}
-
 export function recommend(input: {
   archive: readonly ArchiveImage[];
   hearts: Readonly<Record<string, HeartState>>;
@@ -77,7 +69,7 @@ export function recommend(input: {
   const looks: Look[] = [];
   const almost: AlmostLook[] = [];
   let pending = 0;
-  for (const image of [...archive].sort(bySaved)) {
+  for (const image of [...archive].sort(compareSaved)) {
     const heart = hearts[image.id];
     const result = heart?.result ?? null;
     if (result === null) {
@@ -95,14 +87,11 @@ export function recommend(input: {
       almost.push({ image, owned, missing: missing[0].item, pieces: outfit.pieces, styleMatch });
     }
   }
-  looks.sort((a, b) =>
-    Number(b.weatherFit) - Number(a.weatherFit)
-    || Number(b.styleMatch) - Number(a.styleMatch)
-    || count(a.pieces, '대신 입기') - count(b.pieces, '대신 입기')
-    || count(a.pieces, '비슷한 옷') - count(b.pieces, '비슷한 옷')
-    || bySaved(a.image, b.image));
-  almost.sort((a, b) => Number(b.styleMatch) - Number(a.styleMatch) || bySaved(a.image, b.image));
-  return { looks: looks.slice(0, MAX_LOOKS), almost: almost.slice(0, MAX_LOOKS), pending };
+  return {
+    looks: rankCompleteLooks(looks, MAX_LOOKS),
+    almost: rankAlmostLooks(almost, MAX_LOOKS),
+    pending,
+  };
 }
 
 // 추천 탭을 열 때 최근 저장 사진의 옷장 대조 결과가 없으면 받아 온다(한 장씩 차례로).
@@ -111,7 +100,7 @@ export async function ensureHearts(archive: readonly ArchiveImage[], hearts: Rea
   if (ensuring) return;
   ensuring = true;
   try {
-    const targets = [...archive].sort(bySaved).slice(0, RECENT_PHOTOS).filter((image) => hearts[image.id] === undefined);
+    const targets = [...archive].sort(compareSaved).slice(0, RECENT_PHOTOS).filter((image) => hearts[image.id] === undefined);
     for (const image of targets) await heartStyleImage(image.id);
   } finally {
     ensuring = false;

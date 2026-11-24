@@ -181,6 +181,18 @@
 | `tutorial_replay_start` | 튜토리얼 다시 보기 | |
 | `logout_click` | 로그아웃 | |
 
+## 추천 탭
+
+| 이름 | 발생 시점 | 주요 속성 |
+|---|---|---|
+| `recommendation_view` | 추천 탭에 진입 | |
+| `recommendation_item_impression` | 현재 추천 룩·하나만 더하면 완성·날씨 옷이 화면에 표시 | `recommendation_type`, `position`, `style_image_id` 또는 `wardrobe_item_id`, `owned_count`, `missing_count`, `weather_fit`, `style_match` |
+| `recommendation_item_click` | 추천 룩 상세·쇼핑·특정 옷 조합을 선택 | `recommendation_type`, `action`, `style_image_id` 또는 `wardrobe_item_id`, `kind`, `slot`, `platform` |
+| `recommendation_combo_view` | 추천 탭의 특정 옷에서 조합 만들기 결과에 도달 | `wardrobe_item_id`, `kind`, `slot`, `suggested_count`, `combo_count`, `weather_available` |
+| `recommendation_choice` | 추천 룩 또는 옷장 조합을 최종 선택 | `recommendation_type`, `style_image_id` 또는 `wardrobe_item_id`, `combo_id`, `item_count` |
+
+추천 탭 이용률의 분모는 선택 기간 활성 사용자, 분자는 `recommendation_view` 사용자다. 추천 클릭률은 추천 탭 방문 사용자 중 `recommendation_item_click` 사용자, 특정 아이템 조합 도달률은 `recommendation_type`이 `weather_wardrobe` 또는 `wardrobe_seed`인 클릭 사용자 중 `recommendation_combo_view` 사용자다. 선택률은 추천 탭 방문 사용자 중 `recommendation_choice` 사용자로 계산한다. 모두 `user_id` 중복을 제거하며 이벤트 수와 사용자 수를 함께 표시한다.
+
 # 파생지표
 
 파생지표는 앱에서 중복 이벤트로 보내지 않고 위 원시 이벤트로 계산한다.

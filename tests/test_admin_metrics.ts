@@ -30,7 +30,11 @@ describe("admin product metrics", () => {
       event("user-a", "taste_done", 2), event("user-a", "wardrobe_add_done", 2),
       event("user-a", "photo_save_done", 3), event("user-a", "result_view", 3), event("user-a", "shop_link_click", 3),
       event("user-a", "chat_send", 3), event("user-a", "screen_leave", 3, { screen: "result", duration_ms: 12_000 }),
-      event("user-b", "login_success", 3), event("user-b", "intro_view", 3),
+      event("user-a", "recommendation_view", 3),
+      event("user-a", "recommendation_item_impression", 3, { recommendation_type: "complete_look" }),
+      event("user-a", "recommendation_item_click", 3, { recommendation_type: "wardrobe_seed", action: "combo" }),
+      event("user-a", "recommendation_combo_view", 3), event("user-a", "recommendation_choice", 3),
+      event("user-b", "login_success", 3), event("user-b", "intro_view", 3), event("user-b", "recommendation_view", 3),
       event("test-bot", "login_success", 3, { smoke_test: true }),
     ];
     const wardrobe = Array.from({ length: 5 }, () => ({ user_id: "user-a" }));
@@ -43,6 +47,12 @@ describe("admin product metrics", () => {
     assert.equal(result.tutorial.completion_rate_pct, 50);
     assert.equal(result.activity.shopping_click_user_rate_pct, 100);
     assert.equal(result.activity.chatbot_user_rate_pct, 50);
+    assert.equal(result.activity.recommendation_user_rate_pct, 100);
+    assert.equal(result.recommendation.views, 2);
+    assert.equal(result.recommendation.viewer_click_rate_pct, 50);
+    assert.equal(result.recommendation.specific_item_combo_user_rate_pct, 100);
+    assert.equal(result.recommendation.viewer_choice_rate_pct, 50);
+    assert.equal(result.unavailable.some((entry) => entry.metric.includes("추천 탭")), false);
     assert.equal(result.screen_duration[0]?.average_seconds, 12);
     assert.deepEqual(result.funnel.map((step) => step.users), [2, 1, 1, 1, 1, 1]);
     assert.deepEqual(result.dau.map((entry) => entry.users), [1, 2]);
@@ -53,6 +63,8 @@ describe("admin product metrics", () => {
     assert.equal(result.wardrobe.average_items_per_active_user, null);
     assert.equal(result.wardrobe.new_user_five_item_rate_pct, null);
     assert.equal(result.tutorial.completion_rate_pct, null);
+    assert.equal(result.recommendation.viewer_click_rate_pct, null);
+    assert.equal(result.recommendation.specific_item_combo_user_rate_pct, null);
   });
 });
 
