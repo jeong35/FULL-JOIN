@@ -29,7 +29,7 @@
 - 최신 `origin/main`은 CI 격리 PR #29를 병합한 `0cb92639e7fc5a9633be9c32bd263470114a92b0`다. 사진 옷장 등록, 사용자 API Auth/RLS, 사진별 챗 기록 백엔드가 main에 포함됐지만 Expo·운영 서버·production DB 자동 배포는 발생하지 않았다.
 - 운영 Edge Function과 Expo production은 `2d0369b` 기준이며 운영 DB는 `202611200003_llm_operation_metrics.sql`까지 적용됐다.
 - Auth/RLS PR #25는 merge commit `964e8a4`, CHAT-02 PR #28은 merge commit `410f904`로 main에 순차 병합됐다. local/staging A/B 격리와 채팅 기록 통합 테스트를 통과했지만 production 미배포이며 모바일 로그인·복원 UI는 미연동이다.
-- `full-join-staging`에는 migration 17개와 `bd70fe4` API를 적용했다. `/health` release SHA 일치, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
+- `full-join-staging`에는 migration 17개와 추천 계측 커밋 `67b922b` API를 적용했다. `/health` release SHA 일치, 추천 이벤트 5종 저장, 401/403·RLS·채팅 저장/삭제를 확인했으며 운영/로컬 seed와 운영 사용자 데이터는 복제하지 않았다. production은 변경하지 않았다.
 
 ## 변경 이력
 
@@ -40,7 +40,9 @@
 - 관리자 지표: 활성 사용자 대비 추천 이용률, 방문자 클릭률, 특정 아이템 조합 도달률, 추천 선택률을 distinct user 기준으로 계산하며 분모가 없으면 `확인 불가`로 유지한다.
 - 테스트: 추천 순서·최대 개수·원본 불변·빈 상태 3/3, 관리자 집계, 이벤트 목록, 모바일 typecheck·lint를 통과했다. 로그인/Auth, DB migration, 운영 배포는 범위에서 제외했다.
 - staging QA: 기존 `bd70fe4` API를 대상으로 옷장 CRUD, 사진 비교와 후보 ID, CHAT-01/02/03, 이벤트 배치, LLMOps, 401/403와 A/B RLS 격리를 재검증해 모두 통과했다. 유료 LLM 호출은 없었고 synthetic 사용자·fixture는 종료 시 삭제했다.
-- staging 미반영 확인: 새 추천 이벤트 5종 probe는 `400 invalid_request`였고 DB 저장 건수는 0이었다. 이는 staging 함수가 추천 계측 이전 SHA이기 때문이며, 추적 가능한 신규 커밋·배포 전에는 추천 이벤트의 staging E2E가 완료된 것으로 보지 않는다. production은 변경하지 않았다.
+- staging 배포: 첫 probe에서 이전 `bd70fe4` 함수가 새 이벤트를 `400 invalid_request`로 거부하는 것을 확인한 뒤, 추적 가능한 `67b922b`를 배포했다. `/health` SHA 검증과 기존 2종+추천 5종 이벤트의 API 수락·DB 저장을 포함한 전체 통합 테스트가 통과했다.
+- Expo staging: `https://odit--staging.expo.app`을 staging API URL로 고정해 배포하고 HTTP 200·온보딩 렌더를 확인했다. 단, 모바일이 아직 Supabase access token을 보내지 않아 보호 API는 “로그인이 필요해요”로 종료된다. 로그인/Auth 프론트 연동을 보류한 상태이므로 실제 데이터 기반 추천 화면 E2E는 미완료다.
+- 배포 안전성: 승인형 release workflow의 Expo export에 환경별 Supabase API URL과 release SHA 기반 analytics version 주입을 추가했다. staging 번들이 기본값인 production API를 참조하는 교차 환경 위험을 막는다.
 
 ### 2026-11-23 — PR #25·#28 순차 main 병합과 CI 중복·격리 결함 보완
 
@@ -250,7 +252,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| REC-01 사용자별 코디 추천 | **부분 완료** | 순위·최대 개수·빈 상태 3/3, 이벤트·관리자 집계 회귀 | 날씨·약속·취향·저장 사진+옷장 룩, 하나만 더하면 완성, 특정 옷 기반 조합 구현 | 계측 변경 미배포 | 실제 기기 QA와 운영 표본, 추천 이유 문구·콜드스타트 조정 | `recommend.ts`, `recommendCore.ts`, recommend/combo, events/admin |
+| REC-01 사용자별 코디 추천 | **부분 완료** | 순위·최대 개수·빈 상태 3/3, 이벤트·관리자 집계 회귀, staging API/DB 이벤트 E2E | 날씨·약속·취향·저장 사진+옷장 룩, 하나만 더하면 완성, 특정 옷 기반 조합 구현 | branch·staging API/Expo 반영, main·production 미반영 | 모바일 Auth 연동 후 실제 데이터 UI E2E, 운영 표본, 추천 이유·콜드스타트 조정 | `recommend.ts`, `recommendCore.ts`, recommend/combo, events/admin |
 | FEED-01 검색·필터 | **부분 완료** | archive 필터 check 통과 | 저장 아카이브 필터와 취향 정렬 있음 | 해당 부분 배포 | 홈의 종류·색·스타일 키워드 검색, 필터 UI, 선택 추구미 설명 | feed/archive API, home UI |
 
 #### UX — 모바일 사용성
@@ -420,8 +422,8 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 | 항목 | 확인 값 |
 |---|---|
-| 현재 worktree 브랜치 | `codex/ci-dedupe` |
-| 현재 브랜치 HEAD | `origin/main@0cb9263`에서 추천 탭 안정화·계측 작업 중 |
+| 현재 worktree 브랜치 | `codex/recommendation-observability` |
+| 추천 기능 커밋 | `67b922b0df352cfb7a985ee739c68cc29af1313d` — 원격 push 및 staging API/Expo 반영 |
 | 기능 병합·검증 기준 `origin/main` | `0cb92639e7fc5a9633be9c32bd263470114a92b0` (PR #29 merge commit) |
 | 로컬 이름 `main` | `fa2129a35f5de6c195951c464b55a368346759bf`, origin/main보다 37커밋 뒤 |
 | PR 상태 | #20, #21, #22, #25, #26, #27, #28, #29 main 병합 완료; #24는 후속 PR로 대체되어 닫힘; 추천 안정화 브랜치 작업 중 |
@@ -430,7 +432,7 @@ evidence는 종류·색·핏별로 `same/similar/different/unknown`, source 값,
 
 ### 4.2 로컬 미커밋·미푸시 상태
 
-보고서 갱신 시점의 추적 파일 변경은 추천 회귀·이벤트·관리자 지표와 관련 문서뿐이다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. Auth/CHAT-02는 main·staging에 반영됐고 production에는 미배포다.
+추천 회귀·이벤트·관리자 지표는 기능 커밋으로 원격 branch와 staging에 반영했다. 후속 변경은 release workflow의 환경 격리와 이 보고서뿐이다. 기존 사용자 파일 `presentation/AI캡스톤디자인-중간평가.pdf`는 untracked 상태로 보존했고 수정·커밋하지 않았다. production에는 배포하지 않았다.
 
 별도 cosine worktree에는 다음 미커밋 작업이 있다.
 
@@ -505,9 +507,10 @@ production에는 아래 15개 버전(`202611040001`~`202611200003`)이 적용돼
 별도 staging 반영:
 
 - migration `202611230001`, `202611230003`
-- Edge Function `api`: Git SHA `bd70fe4b79f13dd96eb80f4b58d42b01113186a4`
+- Edge Function `api`: Git SHA `67b922b0df352cfb7a985ee739c68cc29af1313d`
 - `/health` release SHA 일치 확인
-- synthetic A/B API·RLS 통합 테스트 통과; 운영 데이터 복제 없음
+- synthetic A/B API·RLS 및 추천 이벤트 5종 통합 테스트 통과; 운영 데이터 복제 없음
+- Expo staging alias: `https://odit--staging.expo.app` (staging API 고정, 모바일 JWT 미연동으로 보호 API UI E2E 제한)
 
 운영 프로젝트:
 
@@ -599,8 +602,9 @@ main의 `.github/workflows/verify.yml`은 push와 pull request에서 Node 22.18,
 | `npm run test:chat-history` | `codex/chat-history` | **2/2 성공** | pagination 경계와 저장 메시지 외부 경계 zod 검증 |
 | `supabase db reset --local` | CHAT-02 local Docker | **성공** | 17개 migration과 synthetic seed 적용 |
 | `npm run test:integration:local` | CHAT-02 local Edge Function/DB/Auth | **성공** | 사진별 저장·복원·pagination, 타 사용자 API/RLS 격리, 삭제 cascade |
-| `npm run test:integration:staging` | `full-join-staging` Edge Function/DB/Auth | **성공** | 옷장 CRUD, 코사인 후보 ID, CHAT-01/02/03, events, LLMOps, 401/403, A/B RLS; 유료 LLM 호출 없음 |
-| `scripts/verify-release.mjs` | staging `/health` | **성공** | 배포 release SHA가 `bd70fe4b…`와 일치 |
+| `npm run test:integration:staging` | `full-join-staging` Edge Function/DB/Auth | **성공** | 옷장 CRUD, 코사인 후보 ID, CHAT-01/02/03, 기존 2종+추천 5종 events 저장, LLMOps, 401/403, A/B RLS; 유료 LLM 호출 없음 |
+| `scripts/verify-release.mjs` | staging `/health` | **성공** | 배포 release SHA가 `67b922b…`와 일치 |
+| Expo staging smoke | `https://odit--staging.expo.app` | **부분 성공** | HTTP 200·온보딩 렌더·staging API 번들 고정 통과; 모바일 JWT 미연동으로 보호 API는 401 안내 |
 
 ### 5.2 골든 케이스 해석
 
