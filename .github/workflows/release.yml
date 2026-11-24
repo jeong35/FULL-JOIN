@@ -149,6 +149,9 @@ jobs:
       - name: Export Expo web
         if: inputs.deploy_web
         working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/api
+          EXPO_PUBLIC_ANALYTICS_VERSION: ${{ needs.verify.outputs.target_sha }}
         run: npx expo export --platform web
       - name: Deploy Expo web
         if: inputs.deploy_web
