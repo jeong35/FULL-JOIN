@@ -2,7 +2,8 @@
 // 화면은 이 파일의 use…() 훅으로 읽고, load…()/add…()/heart…() 함수로 서버를 부른다.
 import { useSyncExternalStore } from 'react';
 
-import { createWardrobeItem, deleteHeart, deleteWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart } from './api';
+import { createWardrobeItem, deleteHeart, deleteWardrobeItem, errorMessage, fetchArchive, fetchFeed, fetchWardrobe, postHeart, type NewWardrobeItem } from './api';
+import { findRecoveredBatchValue } from './photoBatchCore';
 import type { ArchiveImage, HeartResult, StyleImage, WardrobeItem } from './types';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -88,6 +89,35 @@ export async function addWardrobeItem(input: Omit<WardrobeItem, 'id'>): Promise<
   const item = await createWardrobeItem(input);
   setState({ wardrobe: { ...state.wardrobe, data: [item, ...state.wardrobe.data] }, hearts: {} });
   return item;
+}
+
+function sameWardrobeInput(item: WardrobeItem, input: NewWardrobeItem): boolean {
+  return item.slot === input.slot && item.kind === input.kind && item.color === input.color &&
+    item.visual_fit === input.visual_fit &&
+    JSON.stringify(item.seasons ?? []) === JSON.stringify(input.seasons ?? []);
+}
+
+// POST 응답만 유실됐을 수 있으므로 재시도 전에 서버 옷장을 다시 읽는다.
+// 요청 전부터 알던 id는 제외하고 같은 입력의 새 항목이 있으면 첫 요청의 성공으로 복구한다.
+export async function addWardrobeItemRecovering(
+  input: NewWardrobeItem,
+  knownIds: ReadonlySet<string>,
+): Promise<WardrobeItem> {
+  try {
+    return await addWardrobeItem(input);
+  } catch (originalError) {
+    try {
+      const current = await fetchWardrobe();
+      const recovered = findRecoveredBatchValue(current, knownIds, (item) => sameWardrobeInput(item, input));
+      if (recovered !== undefined) {
+        setState({ wardrobe: { status: 'ready', data: current, error: null, loadedAt: Date.now() }, hearts: {} });
+        return recovered;
+      }
+    } catch {
+      // 원래 저장 오류를 유지한다.
+    }
+    throw originalError;
+  }
 }
 
 // 옷장 편집에서 고른 옷 여러 벌을 한 번에 지운다. 화면에서 먼저 빼고,

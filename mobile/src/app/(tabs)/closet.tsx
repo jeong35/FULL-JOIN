@@ -13,7 +13,7 @@ import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { kindLabel, SEASONS, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
-import { pickPhoto, startPhotoDraft } from '@/data/photoAdd';
+import { pickPhotos, startPhotoBatch } from '@/data/photoAdd';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
 import type { Season, WardrobeItem } from '@/data/types';
 import { removeWardrobePhotos, setClosetView, useClosetView, useWardrobePhotos, type ClosetView, type WardrobePhoto } from '@/data/wardrobePhotos';
@@ -94,11 +94,11 @@ export default function ClosetScreen() {
   async function addFromPhoto(from: 'camera' | 'album') {
     setSheetError(null);
     try {
-      const source = await pickPhoto(from);
-      if (source === null) return;
+      const sources = await pickPhotos(from);
+      if (sources.length === 0) return;
       setSheetOpen(false);
-      track('wardrobe_add_start', { via: 'photo', source: from });
-      startPhotoDraft(source);
+      track('wardrobe_add_start', { via: 'photo', source: from, photo_count: sources.length, batch: sources.length > 1 });
+      startPhotoBatch(sources);
       router.push('/add-item/photo-crop');
     } catch (error) {
       setSheetError(error instanceof Error ? error.message : '사진을 불러오지 못했어요');

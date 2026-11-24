@@ -41,6 +41,8 @@ const MAX_TIMELINES_PER_NODE = 12;
 const DETAIL_PROPERTY_KEYS = new Set([
   "screen", "place", "via", "recommendation_type", "action", "error_code",
   "platform", "app_version", "analytics_version", "returning", "logged_in",
+  "step", "source", "batch", "photo_count", "item_count", "success_count",
+  "failure_count", "cutout_count", "tagged_count", "duration_ms", "retry",
 ]);
 
 const FUNNELS: readonly FunnelDefinition[] = [

@@ -129,7 +129,7 @@ function readDeviceId(): string {
 const deviceId = typeof window === 'undefined' ? 'server-render' : readDeviceId();
 const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
 const appVersion = Constants.expoConfig?.version ?? 'unknown';
-const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v4';
+const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-25-v1';
 let queue: QueuedEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
