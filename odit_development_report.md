@@ -257,7 +257,7 @@ RAG는 해당 문서에서 필수 구현이 아니며 현재도 설계 수준으
 
 | ID / 기능 | 상태 | 테스트 | 프론트 연동 | 배포 | 남은 작업 | 관련 파일 |
 |---|---|---|---|---|---|---|
-| WARD-01 사진 기반 단일 등록 | **부분 완료** | GitHub CI 및 별도 mobile typecheck/lint 성공, 실제 기기 E2E 없음 | 촬영/앨범→영역 자르기→칩 수정→옷장 등록·그림/사진 전환 구현 | main 반영, Expo 운영 미배포 | 서버 Storage·계정 동기화·서버 누끼/AI 태깅·원본 삭제 정책 | PR #27 mobile photo flow, `wardrobePhotos.ts` |
+| WARD-01 사진 기반 단일 등록 | **부분 완료** | GitHub CI 및 별도 mobile typecheck/lint 성공, 실제 기기 E2E 없음 | 촬영/앨범→영역 자르기→칩 수정→옷장 등록·그림/사진 전환 구현 | PR #27로 main 반영; 후속 PR #31의 Expo production `8cb01a5`/deployment `7m12h5ntly`에 포함 | 서버 Storage·계정 동기화·서버 누끼/AI 태깅·원본 삭제 정책 | PR #27 mobile photo flow, `wardrobePhotos.ts` |
 | WARD-02 일괄 등록·샘플 옷장 | **부분 완료** | 정적 검증만 | 한 사진의 여러 영역을 각각 확인·등록 가능; 여러 사진 batch·샘플 옷장은 없음 | main 반영, Expo 운영 미배포 | 부분 실패 복구, 여러 사진 batch, 샘플 격리/삭제 | `photo-crop.tsx`, `photo-confirm.tsx` |
 
 #### REC / FEED — 추천과 탐색
