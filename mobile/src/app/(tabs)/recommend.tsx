@@ -142,7 +142,9 @@ export default function RecommendScreen() {
   const anchorLooks = useMemo(() => {
     if (anchor === undefined) return [];
     const fitting = buildCombos({ wardrobe: view.wardrobe, day, anchor, max: MAX_LOOKS });
-    return fitting.length > 0 ? fitting : buildCombos({ wardrobe: view.wardrobe, anchor, max: MAX_LOOKS });
+    const combos = fitting.length > 0 ? fitting : buildCombos({ wardrobe: view.wardrobe, anchor, max: MAX_LOOKS });
+    // 고른 옷을 큰 칸(첫 칸)에 보여 준다.
+    return combos.map((combo) => ({ ...combo, items: [anchor, ...combo.items.filter((item) => item.id !== anchor.id)] }));
   }, [anchor, view.wardrobe, day]);
   // 11/25 팀 결정(오늘의 룩은 어떻게든 보여 준다): 기온에 딱 맞는 조합이 없으면 기온에서 가장 덜 벗어난 조합을 고르고 안내를 붙인다.
   const nearLooks = useMemo(() => {
