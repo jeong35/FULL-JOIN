@@ -35,6 +35,9 @@ type Props = {
   onPress?: () => void;
   // false면 말풍선을 눌러도 닫지 않는다(옷장 5벌까지 진행 상황을 계속 보여 줄 때). ×는 늘 닫는다.
   doneOnPress?: boolean;
+  // false면 눌러도 ×로 닫아도 '다시 안 띄움'으로 기억하지 않는다(추구미 제안처럼 매번 내용이 다른 말풍선). 기본 true.
+  remember?: boolean;
+  onClose?: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -70,7 +73,7 @@ const webBlur = (Platform.OS === 'web'
   ? { backdropFilter: 'blur(14px) saturate(160%)', WebkitBackdropFilter: 'blur(14px) saturate(160%)' }
   : {}) as unknown as ViewStyle;
 
-export function HintBubble({ id, text, actionLabel, tail, tailX = 28, onPress, doneOnPress = true, style }: Props) {
+export function HintBubble({ id, text, actionLabel, tail, tailX = 28, onPress, doneOnPress = true, remember = true, onClose, style }: Props) {
   const [appear] = useState(() => new Animated.Value(0));
   const [size, setSize] = useState({ width: 0, height: 0 });
   const gradientId = `hint-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`;
@@ -83,13 +86,14 @@ export function HintBubble({ id, text, actionLabel, tail, tailX = 28, onPress, d
 
   function press() {
     track('hint_click', { hint: id });
-    if (doneOnPress) markHintDone(id);
+    if (doneOnPress && remember) markHintDone(id);
     onPress?.();
   }
 
   function close() {
     track('hint_close', { hint: id });
-    markHintDone(id);
+    if (remember) markHintDone(id);
+    onClose?.();
   }
 
   const extra = tail === 'none' ? 0 : TAIL_HEIGHT;

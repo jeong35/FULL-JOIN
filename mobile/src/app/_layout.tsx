@@ -15,6 +15,7 @@ import { fetchStylePreferences, updateStylePreferences } from '@/data/api';
 import { enterAnalyticsScreen, flushEvents, getHomeAnalyticsScreen, recordAnalyticsBackground, resumeAnalyticsScreen, track } from '@/data/events';
 import { getSession, restoreStyles, useSession } from '@/data/session';
 import { loadFeed, loadWardrobe, resetUserData } from '@/data/store';
+import { PurchaseCheck } from '@/components/PurchaseCheck';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -25,6 +26,7 @@ function analyticsScreen(pathname: string): string {
   if (/^\/style\/[^/]+$/.test(pathname)) return 'style_detail';
   if (/^\/result\/[^/]+$/.test(pathname)) return 'result';
   if (pathname === '/') return getHomeAnalyticsScreen();
+  if (pathname === '/saved') return 'archive';
   if (pathname === '/closet') return 'wardrobe';
   if (pathname === '/chat') return 'chat';
   if (pathname === '/my') return 'my';
@@ -145,6 +147,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.background },
         }}
       />
+      <PurchaseCheck />
     </>
   );
 }

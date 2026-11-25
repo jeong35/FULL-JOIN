@@ -11,7 +11,11 @@ export type HintId =
   | 'archive_open' // '모든 저장'에 사진 있음: 사진 눌러 비교 결과 보기
   | 'result_chat' // 비교 결과를 끝까지 봄: 챗봇에 물어보기
   | 'set_edit' // 여행 짐·조합 만들기 처음: '수정'으로 옷을 빼고 더할 수 있다고 알려 주기(두 화면이 같이 씀)
-  | 'closet_swipe'; // 사진 넣은 옷이 생김: 옷장 칸을 옆으로 밀면 내 옷 사진이 나온다고 알려 주기
+  | 'closet_swipe' // 사진 넣은 옷이 생김: 옷장 칸을 옆으로 밀면 내 옷 사진이 나온다고 알려 주기
+  | 'feed_taste' // 홈 피드 처음: 고른 추구미에 맞춰 피드 순서를 바꿨다고 한 번 알려 주기(11/24)
+  | 'taste_suggest' // 추구미 아닌 스타일 사진 저장: 그 스타일을 추구미로 저장할지 묻기(매번 다름, 기억 안 함)
+  | 'purchase_check' // 쇼핑몰에 갔다 오면: 샀는지 묻고 옷장에 넣기(매번 다름, 기억 안 함)
+  | 'chat_button'; // 챗봇이 탭에서 동그란 버튼으로 바뀜: 여기서 물어볼 수 있다고 한 번 알려 주기(11/24)
 
 const STORAGE_KEY = 'odit-hints-v1';
 type DoneStore = Record<string, HintId[]>;

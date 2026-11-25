@@ -43,7 +43,7 @@ export default function ItemDetailScreen() {
   const pageWidth = width - layout.screenPaddingX * 2;
   const pageHeight = Math.min(pageWidth, 340);
   const pages: Page[] = photo === undefined ? ['icon'] : view === 'photo' ? ['photo', 'icon'] : ['icon', 'photo'];
-  const meta = [item.slot, item.pattern ? `${item.color} ${item.pattern}` : item.color, item.visual_fit, item.seasons?.length ? item.seasons.join('·') : '사계절']
+  const meta = [item.slot, item.pattern ? `${item.color} ${item.pattern}` : item.color, item.visual_fit]
     .filter(Boolean)
     .join(' · ');
 

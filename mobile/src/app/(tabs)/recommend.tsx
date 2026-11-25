@@ -1,33 +1,55 @@
-// 추천 탭(11/20 확정 시안: 기본 디자인 + 반반 약속 + 매치 + 하나만 더하면 ①).
-// 날짜 줄(7일 + 약속 칸) → 다가오는 약속 한 줄(약속 있는 날은 약속 카드) → 날씨(누르면 시간별) →
-// 오늘의 룩(매치 표시) → 오늘 기온에 맞는 내 옷 → 하나만 더하면 완성 → 내 옷으로 조합 만들기(11/22).
+// 코디 탭(전 추천 탭, 11/24 멘토 피드백 후 팀 결정으로 정리).
+// 위에 붙은 날짜 줄 + 날씨(누르면 시간별, 스크롤을 내리면 한 줄로 접힘) →
+// 오늘의 룩(저장한 사진으로 다 갖춰지는 룩, 없으면 옷장 옷만으로 기온에 맞게) → 내 옷으로 조합 만들기 → 하나만 더하면 완성.
+// 약속·여행은 뺐다(파일은 남겨 둠).
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { ArtPager, ViewToggle } from '@/components/ArtPager';
 import { GlassView } from '@/components/GlassView';
 import { KindIcon } from '@/components/KindIcon';
+import { LookChosenSheet } from '@/components/LookChosenSheet';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
+import { ShopButtons } from '@/components/ShopButtons';
+import { TabIcon } from '@/components/TabIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
-import { nextPlan, plansOn, timeLabel, usePlans, type Plan } from '@/data/plans';
-import { clothesForWeather, lookTips, matchOf, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
+import type { Plan } from '@/data/plans';
+import { buildCombos, type Combo } from '@/data/combos';
+import { lookTips, matchOf, MAX_LOOKS, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
 import { shoppingLinksFor } from '@/data/shopping';
 import { loadArchive, loadWardrobe } from '@/data/store';
-import { nextTrip, nightsLabel, tripOn, useTrips, type Trip } from '@/data/trips';
 import type { WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
 import { setClosetView, useClosetView, useWardrobePhotos, type ClosetView, type WardrobePhoto } from '@/data/wardrobePhotos';
-import { loadWeather, REGIONS, setRegion, tempGap, tempRangeLabel, weatherTip, type DayWeather } from '@/data/weather';
+import { SIDO_LIST, type Sido } from '@/data/regions';
+import {
+  canLocate,
+  choicesOf,
+  METRO_SIDO,
+  hasPickedRegion,
+  loadWeather,
+  locateCurrentRegion,
+  regionFor,
+  setRegion,
+  sidoOfRegion,
+  tempGap,
+  tempRangeLabel,
+  weatherTip,
+  type DayWeather,
+  type Region,
+  type RegionChoice,
+} from '@/data/weather';
 import { colors, fonts, glass, layout } from '@/theme';
 
 const DAYS = 7;
+// 스크롤을 이만큼 내리면 날씨를 한 줄로 접는다.
+const COLLAPSE_AT = 24;
 
 export default function RecommendScreen() {
   const today = todayKey();
@@ -38,10 +60,19 @@ export default function RecommendScreen() {
   const [almostIndex, setAlmostIndex] = useState(0);
   const [regionOpen, setRegionOpen] = useState(false);
   const [chosen, setChosen] = useState<Record<string, string>>({});
-  const plans = usePlans();
-  const trips = useTrips();
+  // '이 룩으로 입을래요'를 누르면 아래에서 '결정!' 창이 올라온다(11/25, LookChosenSheet).
+  const [chosenSheet, setChosenSheet] = useState(false);
+  // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다.
+  // 다시 맨 위로 올라와도 작은 채로 두고, 한 줄을 누르면 다시 커진다.
+  const [weatherSmall, setWeatherSmall] = useState(false);
+  const lastY = useRef(0);
+  const expandedAt = useRef(0);
+  const [locating, setLocating] = useState(false);
+  // 지역 고르기에서 지금 보고 있는 단계: null = 도·시 고르기, sido만 = 시·군(또는 구·군) 고르기, group까지 = 구 고르기.
+  const [regionPath, setRegionPath] = useState<{ sido: Sido; group: RegionChoice | null } | null>(null);
+  const [locateFailed, setLocateFailed] = useState(false);
   const view = useRecommendation(selected);
-  const { region, weather, day, plan } = view;
+  const { region, weather, day } = view;
 
   useFocusEffect(useCallback(() => {
     void loadWardrobe();
@@ -51,177 +82,231 @@ export default function RecommendScreen() {
     void loadWeather(region);
   }, [region]));
 
+  // 11/24 팀 결정 10번: 처음 열면 현재 위치로 날씨를 맞춘다. 못 받으면 목록 첫 지역 그대로, 지역 버튼으로 직접 고른다.
+  useEffect(() => {
+    if (hasPickedRegion()) return;
+    void locate();
+  }, []);
+
+  async function locate() {
+    setLocating(true);
+    const ok = await locateCurrentRegion();
+    setLocating(false);
+    setLocateFailed(!ok);
+  }
+
+  function closeRegion() {
+    setRegionOpen(false);
+    setRegionPath(null);
+  }
+
+  function pickRegion(next: Region) {
+    setRegion(next);
+    setLocateFailed(false);
+    closeRegion();
+  }
+
   const pick = (date: string) => {
     setSelected(date);
     setLookIndex(0);
     setAlmostIndex(0);
   };
-  const upcoming = nextPlan(plans, today);
-  const trip = nextTrip(trips, today);
   const look = view.looks.length > 0 ? view.looks[lookIndex % view.looks.length] : undefined;
   const almost = view.almost.length > 0 ? view.almost[almostIndex % view.almost.length] : undefined;
-  const clothes = clothesForWeather(view.wardrobe, day);
+  // 11/24 팀 결정 8번: 저장한 사진으로 다 갖춰지는 룩이 없으면 옷장 옷만으로 고른다 —
+  // 고른 날 기온에 맞는 옷만 추려서(기온별 옷차림 표) 상의+하의(또는 원피스), 쌀쌀하면 겉옷까지.
+  const closetLooks = useMemo(
+    () => (view.looks.length > 0 || view.pending > 0 || view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready'
+      ? []
+      : buildCombos({ wardrobe: view.wardrobe, day, max: MAX_LOOKS })),
+    [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day],
+  );
+
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    lastY.current = contentOffset.y;
+    if (weatherSmall) return;
+    // 내용이 짧아 접을 필요가 없으면 접지 않는다.
+    if (contentSize.height - layoutMeasurement.height < 120) return;
+    if (contentOffset.y > expandedAt.current + COLLAPSE_AT) {
+      setWeatherSmall(true);
+      setHourlyOpen(false);
+    }
+  }
 
   return (
     <TabScreen
-      title="추천"
+      title="코디"
       headerRight={
         <Pressable onPress={() => setRegionOpen(true)} accessibilityRole="button" accessibilityLabel={`위치 바꾸기, 지금 ${region.name}`}>
           <GlassView radius={9} style={styles.regionButton}>
             <PinIcon />
-            <Text style={styles.regionText}>{region.name}</Text>
+            <Text style={styles.regionText}>{locating ? '위치 찾는 중' : region.name}</Text>
             <ChevronDown />
           </GlassView>
         </Pressable>
       }>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.dateRow} accessibilityRole="tablist" accessibilityLabel="날짜 고르기">
-          {days.map((date, index) => {
-            const isSelected = date === selected;
-            const dayPlan = plansOn(plans, date)[0];
-            const dayWeather = weather.days.find((item) => item.date === date);
-            const dayTrip = tripOn(trips, date);
-            const bottom = dayPlan?.title ?? (dayTrip !== undefined ? '여행' : weatherWord(dayWeather));
-            const accent = dayPlan !== undefined || dayTrip !== undefined || bottom === '비' || bottom === '눈';
-            return (
-              <Pressable
-                key={date}
-                onPress={() => pick(date)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isSelected }}
-                style={[styles.dateCell, isSelected && styles.dateCellSelected]}>
-                <Text style={[styles.dateLabel, isSelected && styles.dateLabelSelected]}>{index === 0 ? '오늘' : weekday(date)}</Text>
-                <Text style={[styles.dateNum, isSelected && styles.dateNumSelected]}>{dayOfMonth(date)}</Text>
-                <Text style={[styles.dateBottom, accent && styles.dateBottomAccent]} numberOfLines={1}>{bottom}</Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
-            onPress={() => router.push({ pathname: '/plan/edit', params: { date: selected } })}
-            accessibilityRole="button"
-            accessibilityLabel="약속 추가"
-            style={[styles.dateCell, styles.addCell]}>
-            <PlusIcon />
-            <Text style={styles.addText}>약속</Text>
-          </Pressable>
-        </View>
-
-        {plan !== undefined ? (
-          <PlanCard plan={plan} />
-        ) : upcoming !== undefined && upcoming.date !== selected ? (
-          <Pressable onPress={() => pick(upcoming.date)} accessibilityRole="button" accessibilityLabel={`다가오는 약속, ${upcomingText(upcoming)} 보기`}>
-            <GlassView radius={12} style={styles.upcoming}>
-              <HeartIcon size={15} />
-              <Text style={styles.upcomingTitle}>다가오는 약속</Text>
-              <Text style={styles.upcomingText} numberOfLines={1}>{upcomingText(upcoming)}</Text>
-              <ChevronRight />
-            </GlassView>
-          </Pressable>
-        ) : null}
-
-        {trip !== undefined && (
-          <Pressable onPress={() => router.push({ pathname: '/trip/[id]', params: { id: trip.id } })} accessibilityRole="button" accessibilityLabel={`여행 ${tripText(trip)} 보기`}>
-            <GlassView radius={12} style={styles.upcoming}>
-              <SuitcaseIcon />
-              <Text style={styles.upcomingTitle}>{trip.start <= today ? '여행 중' : '다가오는 여행'}</Text>
-              <Text style={styles.upcomingText} numberOfLines={1}>{tripText(trip)}</Text>
-              <ChevronRight />
-            </GlassView>
-          </Pressable>
-        )}
-
-        <View style={styles.main}>
+      {weatherSmall ? (
+        <CompactWeather
+          date={selected}
+          isToday={selected === today}
+          day={day}
+          status={weather.status}
+          onPress={() => {
+            expandedAt.current = lastY.current;
+            setWeatherSmall(false);
+          }}
+        />
+      ) : (
+        <View style={styles.top}>
+          <View style={styles.dateRow} accessibilityRole="tablist" accessibilityLabel="날짜 고르기">
+            {days.map((date, index) => {
+              const isSelected = date === selected;
+              const dayWeather = weather.days.find((item) => item.date === date);
+              const bottom = weatherWord(dayWeather);
+              const accent = bottom === '비' || bottom === '눈';
+              return (
+                <Pressable
+                  key={date}
+                  onPress={() => pick(date)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isSelected }}
+                  style={[styles.dateCell, isSelected && styles.dateCellSelected]}>
+                  <Text style={[styles.dateLabel, isSelected && styles.dateLabelSelected]}>{index === 0 ? '오늘' : weekday(date)}</Text>
+                  <Text style={[styles.dateNum, isSelected && styles.dateNumSelected]}>{dayOfMonth(date)}</Text>
+                  <Text style={[styles.dateBottom, accent && styles.dateBottomAccent]} numberOfLines={1}>{bottom}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {locateFailed && (
+            <Text style={styles.locateNote}>위치를 받지 못해 {region.name} 날씨를 보여 드려요. 오른쪽 위 지역 버튼으로 고를 수 있어요</Text>
+          )}
           <WeatherCard
             date={selected}
             isToday={selected === today}
             status={weather.status}
             source={weather.source}
             day={day}
-            plan={plan}
+            plan={undefined}
             hourlyOpen={hourlyOpen}
             onToggle={() => setHourlyOpen((open) => !open)}
             onRetry={() => void loadWeather(region, { force: true })}
           />
+        </View>
+      )}
 
+      <ScrollView contentContainerStyle={styles.scroll} onScroll={onScroll} scrollEventThrottle={32}>
+        <View style={styles.main}>
           <LookSection
-            title={plan !== undefined ? `${weekday(selected)}요일 ${plan.title} 룩` : '오늘의 룩'}
+            title={selected === today ? '오늘의 룩' : `${weekday(selected)}요일 룩`}
             view={view}
             look={look}
+            closetLooks={closetLooks}
             index={lookIndex}
             date={selected}
-            chosen={look !== undefined && chosen[selected] === look.image.id}
-            onChoose={() => look !== undefined && setChosen((prev) => ({ ...prev, [selected]: look.image.id }))}
+            chosenId={chosen[selected]}
+            onChoose={(id) => {
+              setChosen((prev) => ({ ...prev, [selected]: id }));
+              setChosenSheet(true);
+            }}
             onNext={() => setLookIndex((i) => i + 1)}
           />
 
-          {day !== undefined && clothes.length > 0 && (
-            <View style={styles.section}>
-              <View>
-                <Text style={styles.h2}>오늘 기온에 맞는 내 옷</Text>
-                <Text style={styles.sub}>기온별 옷차림 {tempRangeLabel(day)} · 내 옷장에서 {clothes.length}벌</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.clothesRow}>
-                {clothes.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date: selected } })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${kindLabel(item.kind)} 조합 보기`}
-                    style={styles.clothesItem}>
-                    <View style={styles.clothesTile}>
-                      <ItemIcon item={item} size={60} />
-                    </View>
-                    <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+          {/* 11/24 팀 결정 7번: '오늘 기온에 맞는 내 옷'은 빼고, 내 옷으로 조합 만들기를 오늘의 룩 바로 아래로 올렸다. */}
+          {view.wardrobe.length > 0 && <ComboMaker wardrobe={view.wardrobe} day={day} date={selected} />}
 
           {almost !== undefined && (
             <AlmostSection almost={almost} index={almostIndex} total={view.almost.length} onNext={() => setAlmostIndex((i) => i + 1)} />
           )}
-
-          {view.wardrobe.length > 0 && <ComboMaker wardrobe={view.wardrobe} day={day} date={selected} />}
-
-          {trip === undefined && (
-            <Pressable onPress={() => router.push({ pathname: '/trip/edit', params: { start: selected } })} accessibilityRole="button" style={styles.tripEntry}>
-              <SuitcaseIcon />
-              <View style={styles.flex}>
-                <Text style={styles.tripEntryTitle}>여행 가요? <Text style={styles.tripEntryBeta}>시험판</Text></Text>
-                <Text style={styles.sub}>MT·워크숍도 돼요. 날마다 코디와 챙길 짐을 내 옷장에서 골라 드려요</Text>
-              </View>
-              <ChevronRight />
-            </Pressable>
-          )}
         </View>
       </ScrollView>
 
-      <Modal visible={regionOpen} transparent animationType="fade" onRequestClose={() => setRegionOpen(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setRegionOpen(false)} accessibilityLabel="닫기">
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>날씨를 볼 지역</Text>
-            <ScrollView style={styles.sheetList}>
-              {REGIONS.map((item) => {
-                const isCurrent = item.name === region.name;
-                return (
+      {/* 11/24: 지역 고르기 — 현재 위치, 또는 시·도를 먼저 고르고 그 안에서 시·군·구를 고른다. */}
+      <Modal visible={regionOpen} transparent animationType="fade" onRequestClose={closeRegion}>
+        <Pressable style={styles.sheetBackdrop} onPress={closeRegion} accessibilityLabel="닫기">
+          <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
+            {regionPath === null ? (
+              <>
+                <Text style={styles.sheetTitle}>날씨를 볼 지역</Text>
+                <Pressable
+                  onPress={() => {
+                    closeRegion();
+                    void locate();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: region.current === true }}
+                  style={[styles.sheetRow, styles.sheetRowLocate]}>
+                  <PinIcon />
+                  <View style={styles.flex}>
+                    <Text style={[styles.sheetRowText, region.current === true && styles.sheetRowTextCurrent]}>현재 위치로 보기</Text>
+                    {!canLocate() && <Text style={styles.sub}>이 기기에서는 아직 위치를 받을 수 없어요</Text>}
+                  </View>
+                </Pressable>
+                <Text style={styles.sheetLabel}>도·시를 골라 주세요</Text>
+                <View style={styles.sidoGrid}>
+                  {SIDO_LIST.map((sido) => {
+                    const on = sidoOfRegion(region) === sido.name;
+                    return (
+                      <Pressable
+                        key={sido.name}
+                        onPress={() => (sido.list.length === 1 ? pickRegion(regionFor(sido, sido.list[0])) : setRegionPath({ sido, group: null }))}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        style={[styles.sidoChip, on && styles.sidoChipOn]}>
+                        <Text style={[styles.sidoChipText, on && styles.sidoChipTextOn]}>{sido.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.sheetHead}>
                   <Pressable
-                    key={item.name}
-                    onPress={() => {
-                      setRegion(item);
-                      setRegionOpen(false);
-                    }}
+                    onPress={() => setRegionPath(regionPath.group === null ? null : { sido: regionPath.sido, group: null })}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: isCurrent }}
-                    style={styles.sheetRow}>
-                    <Text style={[styles.sheetRowText, isCurrent && styles.sheetRowTextCurrent]}>{item.name}</Text>
+                    accessibilityLabel="한 단계 돌아가기"
+                    hitSlop={10}
+                    style={styles.sheetBack}>
+                    <ChevronLeft />
                   </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+                  <Text style={styles.sheetHeadTitle}>
+                    {regionPath.sido.name}
+                    {regionPath.group !== null && <Text style={styles.sheetHeadPath}>{`  ›  ${regionPath.group.name}`}</Text>}
+                  </Text>
+                </View>
+                <Text style={styles.sheetLabel}>
+                  {regionPath.group !== null ? '구를 골라 주세요' : METRO_SIDO.has(regionPath.sido.name) ? '구·군을 골라 주세요' : '시·군을 골라 주세요'}
+                </Text>
+                <ScrollView style={styles.sheetList} contentContainerStyle={styles.choiceGrid}>
+                  {(regionPath.group?.children ?? choicesOf(regionPath.sido)).map((choice) => {
+                    const on = choice.region !== undefined
+                      ? choice.region.name === region.name
+                      : (choice.children ?? []).some((child) => child.region?.name === region.name);
+                    return (
+                      <Pressable
+                        key={choice.name}
+                        onPress={() => {
+                          if (choice.region !== undefined) pickRegion(choice.region);
+                          else setRegionPath({ sido: regionPath.sido, group: choice });
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        style={[styles.choiceChip, on && styles.sidoChipOn]}>
+                        <Text style={[styles.sidoChipText, on && styles.sidoChipTextOn]} numberOfLines={1}>{choice.name}</Text>
+                        {choice.children !== undefined && <Text style={styles.choiceMore}>›</Text>}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
+          </Pressable>
         </Pressable>
       </Modal>
+
+      <LookChosenSheet visible={chosenSheet} onClose={() => setChosenSheet(false)} />
     </TabScreen>
   );
 }
@@ -233,29 +318,31 @@ function weatherWord(day: DayWeather | undefined): string {
   return `${day.max}°`;
 }
 
-function tripText(trip: Trip): string {
-  return `${trip.region.split(' ')[0] ?? trip.region} ${nightsLabel(trip.start, trip.end)} · ${weekday(trip.start)} ${dayOfMonth(trip.start)}일부터`;
-}
-
-function upcomingText(plan: Plan): string {
-  const place = plan.place ? ` ${plan.place}` : '';
-  return `${weekday(plan.date)} ${dayOfMonth(plan.date)} ${plan.title} · ${timeLabel(plan.time)}${place}`;
-}
-
-function PlanCard({ plan }: { plan: Plan }) {
-  const mood = plan.styles.length > 0 ? `${plan.styles.join('·')} 무드로 골랐어요` : '무드를 넣으면 그 스타일로 골라 드려요';
+// 접힌 날씨 한 줄. 누르면 날짜 줄과 큰 날씨가 다시 나온다.
+function CompactWeather({ date, isToday, day, status, onPress }: {
+  date: string;
+  isToday: boolean;
+  day: DayWeather | undefined;
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  onPress: () => void;
+}) {
+  const label = isToday ? '오늘' : `${weekday(date)} ${dayOfMonth(date)}일`;
   return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/plan/edit', params: { id: plan.id } })}
-      accessibilityRole="button"
-      accessibilityLabel={`${plan.title} 약속 고치기`}
-      style={styles.planCard}>
-      <View style={styles.planIcon}><HeartIcon size={18} /></View>
-      <View style={styles.flex}>
-        <Text style={styles.planTitle} numberOfLines={1}>{plan.title} · {timeLabel(plan.time)}{plan.place ? ` ${plan.place}` : ''}</Text>
-        <Text style={styles.planMood} numberOfLines={1}>{mood}</Text>
-      </View>
-      <Text style={styles.planEdit}>고치기</Text>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="날씨 크게 보기" style={styles.compactWrap}>
+      <GlassView radius={12} style={styles.compact}>
+        {day !== undefined ? (
+          <>
+            <WeatherIcon sky={day.sky} size={30} />
+            <Text style={styles.compactTemp}>{isToday ? currentTemp(day) : day.max}°</Text>
+            <Text style={[styles.compactText, styles.flex]} numberOfLines={1}>{label} · {day.sky} · 아침 {day.min}° 낮 {day.max}°</Text>
+          </>
+        ) : (
+          <Text style={[styles.compactText, styles.flex]} numberOfLines={1}>
+            {label} · {status === 'error' ? '날씨를 불러오지 못했어요' : status === 'ready' ? '예보가 아직 없어요' : '날씨를 불러오는 중이에요'}
+          </Text>
+        )}
+        <ChevronDown color={colors.textPurple} />
+      </GlassView>
     </Pressable>
   );
 }
@@ -355,31 +442,39 @@ function currentTemp(day: DayWeather): number {
   return match?.temp ?? day.min;
 }
 
-function LookSection({ title, view, look, index, date, chosen, onChoose, onNext }: {
+function LookSection({ title, view, look, closetLooks, index, date, chosenId, onChoose, onNext }: {
   title: string;
   view: ReturnType<typeof useRecommendation>;
   look: Look | undefined;
+  closetLooks: readonly Combo[];
   index: number;
   date: string;
-  chosen: boolean;
-  onChoose: () => void;
+  chosenId: string | undefined;
+  onChoose: (id: string) => void;
   onNext: () => void;
 }) {
-  const total = view.looks.length;
+  const closet = look === undefined && closetLooks.length > 0 ? closetLooks[index % closetLooks.length] : undefined;
+  const total = look !== undefined ? view.looks.length : closetLooks.length;
   const photos = useWardrobePhotos();
   const artView = useClosetView();
   // 이 룩에 사진 넣은 옷이 있으면 그림 | 사진 보기를 고를 수 있다(옷장과 같은 설정).
   const hasPhoto = look !== undefined && look.pieces.some((piece) => photos[piece.wardrobeItem.id] !== undefined);
+  const addClothes = { label: '옷장에 옷 넣기', onPress: () => router.push('/add-item/kind') };
   let empty: { text: string; action?: { label: string; onPress: () => void } } | null = null;
-  if (look === undefined) {
+  if (look === undefined && closet === undefined) {
     if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') empty = { text: '불러오는 중이에요' };
-    else if (view.wardrobe.length === 0) {
-      empty = { text: '옷장에 옷을 넣으면 저장한 사진으로 룩을 골라 드려요', action: { label: '옷장에 옷 넣기', onPress: () => router.push('/add-item/kind') } };
-    } else if (view.archiveCount === 0) {
-      empty = { text: '피드에서 마음에 드는 코디 사진을 저장하면 내 옷으로 똑같이 입는 룩을 골라 드려요', action: { label: '피드 보러 가기', onPress: () => router.navigate('/') } };
-    } else if (view.pending > 0) empty = { text: '저장한 사진을 내 옷장과 맞춰 보는 중이에요' };
-    else empty = { text: '지금 옷장으로 다 갖춰지는 룩은 아직 없어요. 아래 \'하나만 더하면 완성\'을 봐 주세요' };
+    else if (view.wardrobe.length === 0) empty = { text: '옷장에 옷을 넣으면 그날 기온에 맞는 룩을 골라 드려요', action: addClothes };
+    else if (view.pending > 0) empty = { text: '저장한 사진을 내 옷장과 맞춰 보는 중이에요' };
+    else {
+      empty = {
+        text: view.day !== undefined
+          ? '이 날 기온에 맞는 상의·하의(또는 원피스)가 옷장에 아직 없어요'
+          : '상의와 하의(또는 원피스)를 옷장에 넣으면 룩을 골라 드려요',
+        action: addClothes,
+      };
+    }
   }
+  const chosen = look !== undefined && chosenId === look.image.id;
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -387,16 +482,7 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
         {hasPhoto && <ViewToggle value={artView} onChange={setClosetView} label="룩 옷 보기" />}
         {total > 0 && <Text style={styles.sub}>{(index % total) + 1} / {total}</Text>}
       </View>
-      {look === undefined ? (
-        <GlassView radius={16} style={styles.emptyCard}>
-          <Text style={styles.emptyText}>{empty?.text}</Text>
-          {empty?.action !== undefined && (
-            <Pressable onPress={empty.action.onPress} accessibilityRole="button" style={styles.retry}>
-              <Text style={styles.retryText}>{empty.action.label}</Text>
-            </Pressable>
-          )}
-        </GlassView>
-      ) : (
+      {look !== undefined ? (
         <>
           <GlassView radius={16} style={styles.lookCard}>
             <View style={styles.lookHead}>
@@ -421,20 +507,104 @@ function LookSection({ title, view, look, index, date, chosen, onChoose, onNext 
                 <Text style={styles.tipRowText}>{tip.text}</Text>
               </View>
             ))}
-            <View style={styles.actions}>
-              <Pressable onPress={onChoose} disabled={chosen} accessibilityRole="button" accessibilityState={{ disabled: chosen }} style={[styles.choose, chosen && styles.chooseDone]}>
-                <Text style={styles.chooseText}>{chosen ? '이 룩으로 입기로 했어요' : '이 룩으로 입을래요'}</Text>
-              </Pressable>
-              {total > 1 && (
-                <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel="다른 조합 보기" style={styles.iconButton}>
-                  <RefreshIcon />
-                </Pressable>
-              )}
-            </View>
+            <ChooseRow chosen={chosen} onChoose={() => onChoose(look.image.id)} onNext={total > 1 ? onNext : undefined} />
           </GlassView>
           {total > 1 && <Dots total={total} index={index % total} />}
         </>
+      ) : closet !== undefined ? (
+        <>
+          <ClosetLookCard combo={closet} date={date} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
+          {total > 1 && <Dots total={total} index={index % total} />}
+        </>
+      ) : (
+        <GlassView radius={16} style={styles.emptyCard}>
+          <Text style={styles.emptyText}>{empty?.text}</Text>
+          {empty?.action !== undefined && (
+            <Pressable onPress={empty.action.onPress} accessibilityRole="button" style={styles.retry}>
+              <Text style={styles.retryText}>{empty.action.label}</Text>
+            </Pressable>
+          )}
+        </GlassView>
       )}
+    </View>
+  );
+}
+
+function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: () => void; onNext?: () => void }) {
+  return (
+    <View style={styles.actions}>
+      <Pressable onPress={onChoose} disabled={chosen} accessibilityRole="button" accessibilityState={{ disabled: chosen }} style={[styles.choose, chosen && styles.chooseDone]}>
+        <Text style={styles.chooseText}>{chosen ? '이 룩으로 입기로 했어요' : '이 룩으로 입을래요'}</Text>
+      </Pressable>
+      {onNext !== undefined && (
+        <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel="다른 조합 보기" style={styles.iconButton}>
+          <RefreshIcon />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 옷은 모두 그날 기온에 맞는 옷이다.
+function ClosetLookCard({ combo, date, chosen, onChoose, onNext }: {
+  combo: Combo;
+  date: string;
+  chosen: boolean;
+  onChoose: () => void;
+  onNext?: () => void;
+}) {
+  const anchor = combo.items.find((item) => item.slot === '상의' || item.slot === '원피스') ?? combo.items[0];
+  return (
+    <GlassView radius={16} style={styles.lookCard}>
+      <View style={styles.lookHead}>
+        <View style={[styles.thumb, styles.closetThumb]}>
+          <TabIcon name="closet" color={colors.textPurple} size={22} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.sub} numberOfLines={1}>내 옷장에서 골랐어요{combo.tags.includes('기온 맞춤') ? ' · 기온 맞춤' : ''}</Text>
+          <Text style={styles.lookTitle}>가진 옷 {combo.items.length}벌로 완성</Text>
+        </View>
+        {anchor !== undefined && (
+          <Pressable
+            onPress={() => router.push({ pathname: '/combo/[id]', params: { id: anchor.id, date } })}
+            accessibilityRole="button"
+            style={styles.moreButton}>
+            <Text style={styles.moreText}>조합 더</Text>
+            <ChevronRight color={colors.textPurple} />
+          </Pressable>
+        )}
+      </View>
+      <ComboGrid items={combo.items} />
+      <ChooseRow chosen={chosen} onChoose={onChoose} onNext={onNext} />
+    </GlassView>
+  );
+}
+
+// 오늘의 룩과 같은 칸 배치(큰 칸 + 오른쪽 두 칸 + 아래 줄), 매치 딱지 없이.
+function ComboGrid({ items }: { items: readonly WardrobeItem[] }) {
+  const tile = (item: WardrobeItem, size: number, style: object) => (
+    <View key={item.id} style={[styles.tile, style]}>
+      <ItemIcon item={item} size={size} />
+      <View style={styles.tileName}>
+        <Text style={styles.tileKind}>{kindLabel(item.kind)}</Text>
+        <Text style={styles.tileColor}>{item.color}</Text>
+      </View>
+    </View>
+  );
+  if (items.length <= 2) {
+    return <View style={[styles.grid, styles.gridRow]}>{items.map((item) => tile(item, 96, styles.tileHalf))}</View>;
+  }
+  const bottom = items.slice(3);
+  return (
+    <View style={styles.grid}>
+      <View style={styles.gridRow}>
+        {tile(items[0], 140, styles.tileBig)}
+        <View style={styles.gridColumn}>
+          {tile(items[1], 84, styles.tileSmall)}
+          {tile(items[2], 84, styles.tileSmall)}
+        </View>
+      </View>
+      {bottom.length > 0 && <View style={styles.gridRow}>{bottom.map((item) => tile(item, 66, styles.tileBottom))}</View>}
     </View>
   );
 }
@@ -475,22 +645,25 @@ function LookGrid({ look, photos, artView }: { look: Look; photos: Readonly<Reco
   );
 }
 
-// 내 옷으로 조합 만들기: 옷장 옷 아무거나 하나를 고르면 조합 만들기(/combo/[id])로 간다.
-// 카테고리 칩으로 거르고, 고른 날 기온에 맞는 옷을 앞에 둔다. 안 맞는 옷도 고를 수 있게 두고 작게 알려 준다.
+// 내 옷으로 조합 만들기: 옷장 옷 하나를 고르면 조합 만들기(/combo/[id])로 간다.
+// 11/24 팀 결정 8번: 고른 날 기온에 맞는 옷만 먼저 보여 주고, 안 맞는 옷은 '기온에 안 맞는 옷도 보기'를 눌러야 나온다.
 function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]; day: DayWeather | undefined; date: string }) {
   const [slot, setSlot] = useState<Slot | '전체'>('전체');
+  const [showAll, setShowAll] = useState(false);
   const slots = SLOTS.filter((item) => wardrobe.some((piece) => piece.slot === item));
-  const shown = wardrobe
+  const inSlot = wardrobe
     .filter((item) => slot === '전체' || item.slot === slot)
     .map((item) => ({ item, gap: day === undefined ? null : tempGap(item.kind, day) }))
     .sort((a, b) => Number(a.gap !== null) - Number(b.gap !== null)
       || SLOTS.indexOf(a.item.slot) - SLOTS.indexOf(b.item.slot)
       || a.item.id.localeCompare(b.item.id));
+  const hidden = inSlot.filter(({ gap }) => gap !== null).length;
+  const shown = showAll ? inSlot : inSlot.filter(({ gap }) => gap === null);
   return (
     <View style={styles.section}>
       <View>
         <Text style={styles.h2}>내 옷으로 조합 만들기</Text>
-        <Text style={styles.sub}>옷 하나를 고르면 같이 입을 조합을 보여 드려요</Text>
+        <Text style={styles.sub}>{day !== undefined ? `${tempRangeLabel(day)} 기온에 맞는 옷이에요. ` : ''}옷 하나를 고르면 같이 입을 조합을 보여 드려요</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.makerChips}>
         {(['전체', ...slots] as const).map((item) => {
@@ -502,22 +675,31 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
           );
         })}
       </ScrollView>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.clothesRow}>
-        {shown.map(({ item, gap }) => (
-          <Pressable
-            key={item.id}
-            onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date } })}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 조합 만들기`}
-            style={styles.clothesItem}>
-            <View style={styles.clothesTile}>
-              <ItemIcon item={item} size={60} />
-            </View>
-            <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
-            {gap !== null && <Text style={styles.makerGap}>{gap === '추움' ? '추울 수도' : '더울 수도'}</Text>}
-          </Pressable>
-        ))}
-      </ScrollView>
+      {shown.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.clothesRow}>
+          {shown.map(({ item, gap }) => (
+            <Pressable
+              key={item.id}
+              onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date } })}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 조합 만들기`}
+              style={styles.clothesItem}>
+              <View style={styles.clothesTile}>
+                <ItemIcon item={item} size={60} />
+              </View>
+              <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
+              {gap !== null && <Text style={styles.makerGap}>{gap === '추움' ? '추울 수도' : '더울 수도'}</Text>}
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : (
+        <Text style={styles.sub}>이 날 기온에 맞는 {slot === '전체' ? '옷' : slot}이 아직 없어요</Text>
+      )}
+      {hidden > 0 && (
+        <Pressable onPress={() => setShowAll((value) => !value)} accessibilityRole="button" hitSlop={6} style={styles.showAll}>
+          <Text style={styles.showAllText}>{showAll ? '기온에 맞는 옷만 보기' : `기온에 안 맞는 옷 ${hidden}벌도 보기`}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -567,20 +749,17 @@ function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; i
             );
           })}
         </View>
-        <Pressable
-          onPress={() => links[0] !== undefined && void WebBrowser.openBrowserAsync(links[0].url)}
-          accessibilityRole="link"
-          style={styles.shopButton}>
-          <Text style={styles.chooseText}>{links[0]?.platform ?? '쇼핑몰'}에서 비슷한 {missing.kind !== undefined ? kindLabel(missing.kind) : '옷'} 찾기</Text>
-          <ArrowRight />
-        </Pressable>
-        <View style={styles.shopRow}>
-          {links.slice(1, 3).map((link) => (
-            <Pressable key={link.url} onPress={() => void WebBrowser.openBrowserAsync(link.url)} accessibilityRole="link" hitSlop={6}>
-              <Text style={styles.shopLink}>{link.platform}에서 찾기</Text>
-            </Pressable>
-          ))}
-        </View>
+        {/* 11/25: 무신사·에이블리·지그재그 세 버튼을 한 줄에. 갔다 오면 샀는지 묻는다(11/24 팀 결정 15번). */}
+        {missing.kind !== undefined && (
+          <ShopButtons
+            size="big"
+            target={{ slot: missing.slot, kind: missing.kind, color: missing.color, visual_fit: missing.visual_fit }}
+            links={links}
+            title={`비슷한 ${kindLabel(missing.kind)} 찾기`}
+            place="recommend_almost"
+            styleImageId={almost.image.id}
+          />
+        )}
       </GlassView>
       {total > 1 && <Dots total={total} index={index % total} />}
     </View>
@@ -602,14 +781,11 @@ function PinIcon() {
 function ChevronDown({ color = colors.textSecondary }: { color?: string }) {
   return <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M7 10l5 5 5-5" /></Svg>;
 }
+function ChevronLeft() {
+  return <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M15 6l-6 6 6 6" /></Svg>;
+}
 function ChevronRight({ color = colors.textSecondary }: { color?: string }) {
   return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M9 6l6 6-6 6" /></Svg>;
-}
-function PlusIcon() {
-  return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2.2} strokeLinecap="round"><Path d="M12 5v14M5 12h14" /></Svg>;
-}
-function HeartIcon({ size }: { size: number }) {
-  return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z" fill={colors.purpleStrong} /></Svg>;
 }
 function TempIcon() {
   return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M8 4v12M5 13l3 3 3-3M16 20V8M13 11l3-3 3 3" /></Svg>;
@@ -617,17 +793,11 @@ function TempIcon() {
 function RefreshIcon({ size = 20 }: { size?: number }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><Path d="M20 11a8 8 0 1 0-2.3 5.7" /><Path d="M20 4v7h-7" /></Svg>;
 }
-function SuitcaseIcon() {
-  return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.purpleStrong} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M4 8h16v11H4z" /><Path d="M9 8V5h6v3M9 12v3M15 12v3" /></Svg>;
-}
-function ArrowRight() {
-  return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.onPurpleFill} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 12h14M13 6l6 6-6 6" /></Svg>;
-}
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   flip: { transform: [{ rotate: '180deg' }] },
-  scroll: { paddingBottom: 32 },
+  scroll: { paddingBottom: 96 }, // 챗봇 버튼에 가리지 않게(11/25)
   regionButton: { height: 32, paddingLeft: 8, paddingRight: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
   regionText: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
 
@@ -653,12 +823,22 @@ const styles = StyleSheet.create({
   planEdit: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
 
   main: { paddingHorizontal: layout.screenPaddingX, paddingTop: 14, gap: 24 },
+  top: { gap: 12, paddingBottom: 4 },
+  locateNote: { marginTop: -4, paddingHorizontal: layout.screenPaddingX, fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary },
+  compactWrap: { paddingHorizontal: layout.screenPaddingX, paddingBottom: 4 },
+  compact: { height: 48, paddingLeft: 8, paddingRight: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  compactTemp: { fontFamily: fonts.extraBold, fontSize: 20, letterSpacing: -0.5, color: colors.text },
+  compactText: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
+  closetThumb: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.purpleTint },
+  showAll: { alignSelf: 'flex-start' },
+  showAllText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
+  sheetRowLocate: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 56 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   h2: { fontFamily: fonts.bold, fontSize: 16, color: colors.text },
   sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary },
 
-  weather: { padding: 14, gap: 12 },
+  weather: { marginHorizontal: layout.screenPaddingX, padding: 14, gap: 12 },
   weatherHeading: { fontFamily: fonts.bold, fontSize: 13, color: colors.textSecondary },
   weatherRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   weatherTemp: { fontFamily: fonts.extraBold, fontSize: 48, letterSpacing: -2, lineHeight: 52, color: colors.text },
@@ -747,6 +927,19 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '70%', paddingTop: 18, paddingBottom: 30, borderTopLeftRadius: 20, borderTopRightRadius: 20, backgroundColor: colors.background },
   sheetTitle: { paddingHorizontal: 20, paddingBottom: 8, fontFamily: fonts.extraBold, fontSize: 17, color: colors.text },
   sheetList: { paddingHorizontal: 12 },
+  sheetLabel: { marginTop: 14, marginBottom: 8, paddingHorizontal: 20, fontFamily: fonts.bold, fontSize: 13, color: colors.textSecondary },
+  sidoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20 },
+  sidoChip: { width: '22.5%', height: 42, borderRadius: 12, borderWidth: 1, borderColor: glass.border, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  sidoChipOn: { borderColor: colors.purpleLine, borderWidth: 1.5 },
+  sidoChipText: { fontFamily: fonts.medium, fontSize: 14, color: colors.text },
+  sidoChipTextOn: { fontFamily: fonts.bold, color: colors.textPurple },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingBottom: 8 },
+  sheetBack: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  sheetHeadTitle: { fontFamily: fonts.extraBold, fontSize: 17, color: colors.text },
+  sheetHeadPath: { fontFamily: fonts.extraBold, fontSize: 17, color: colors.textPurple },
+  choiceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 8, paddingBottom: 8 },
+  choiceChip: { width: '31.5%', height: 44, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: glass.border, backgroundColor: colors.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  choiceMore: { fontFamily: fonts.bold, fontSize: 14, color: colors.textSecondary },
   sheetRow: { height: 48, paddingHorizontal: 8, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: colors.line },
   sheetRowText: { fontFamily: fonts.regular, fontSize: 15, color: colors.text },
   sheetRowTextCurrent: { fontFamily: fonts.bold, color: colors.textPurple },

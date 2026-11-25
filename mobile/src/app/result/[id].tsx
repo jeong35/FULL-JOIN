@@ -1,6 +1,5 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
 import { KindIcon } from '@/components/KindIcon';
+import { ShopButtons } from '@/components/ShopButtons';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
@@ -16,6 +16,7 @@ import { kindLabel, type Kind } from '@/data/catalog';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { buildOutfits, substitutesFor, type OutfitPiece, type OutfitSuggestion } from '@/data/outfits';
+import { addToClosetFrom } from '@/data/purchase';
 import { shoppingLinksFor } from '@/data/shopping';
 import { heartStyleImage, unheartStyleImage, useHeart, useStyleImage, useWardrobe, type HeartState } from '@/data/store';
 import type { GapStatus, HeartItem, HeartResult, ItemDecisionResult, Product, StyleImage, WardrobeItem } from '@/data/types';
@@ -286,7 +287,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
         }}>
         <InfoBar style={styles.savedBar}>
           <BookmarkIcon color={colors.textPurple} size={15} filled />
-          <Text style={styles.savedBarText}>모든 저장에 담았어요</Text>
+          <Text style={styles.savedBarText}>저장 탭의 모든 저장에 담았어요</Text>
         </InfoBar>
 
         <Text style={styles.title} accessibilityRole="header">
@@ -503,38 +504,36 @@ function ResultCard({
         </>
       )}
       {error !== null && <Text style={styles.choiceError}>{error}</Text>}
+      {/* 11/24 팀 결정 16번: 사진 속 옷을 이미 갖고 있거나 샀으면 바로 내 옷장에 넣는다(종류·색·핏 미리 채움). */}
+      {item.gap_status !== '활용' && (
+        <Pressable
+          onPress={() => {
+            track('wardrobe_add_start', { source: 'saved_photo', kind: item.kind });
+            addToClosetFrom(item, 'photo');
+          }}
+          accessibilityRole="button"
+          hitSlop={6}
+          style={styles.ownIt}>
+          <Text style={styles.ownItText}>이 옷 갖고 있어요 · 내 옷장에 넣기 ›</Text>
+        </Pressable>
+      )}
     </GlassView>
   );
 }
 
 // '필요'한 옷의 쇼핑 링크. 검색어는 옷마다 다르다(색 + 핏 + 종류, parse_query.md 쇼핑 검색어 규칙).
+// 11/25: 무신사·에이블리·지그재그 세 버튼을 같은 크기로 한 줄에(한 번 누르면 바로 간다).
 // place: 아이템 목록('list')인지 코디 카드('outfit')인지 — 어느 자리 링크를 누르는지 보려고 기록에 남긴다.
 function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; place: 'list' | 'outfit' }) {
   const { id } = useLocalSearchParams<{ id?: string }>();
   return (
-    <View style={styles.decisionLinks}>
-      {links.map((product) => (
-        <Pressable
-          key={`${product.platform}-${product.match_type}`}
-          onPress={() => {
-            track('shop_link_click', {
-              place,
-              platform: product.platform,
-              match_type: product.match_type,
-              kind: item.kind,
-              style_image_id: typeof id === 'string' ? id : null,
-            });
-            void WebBrowser.openBrowserAsync(product.url);
-          }}
-          accessibilityRole="link"
-          accessibilityLabel={`${kindLabel(item.kind)} ${product.platform}에서 찾기`}
-          style={styles.decisionLink}>
-          <Text style={styles.decisionLinkText}>
-            {product.match_type === 'exact' ? `사진 속 ${kindLabel(item.kind)}` : product.platform} ›
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+    <ShopButtons
+      target={item}
+      links={links}
+      title={`비슷한 ${kindLabel(item.kind)} 찾기`}
+      place={place}
+      styleImageId={typeof id === 'string' ? id : null}
+    />
   );
 }
 
@@ -752,6 +751,8 @@ function GapTag({ status, substitute = false }: { status: GapStatus; substitute?
 }
 
 const styles = StyleSheet.create({
+  ownIt: { alignSelf: 'flex-start', marginTop: 10, marginLeft: 55 },
+  ownItText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
   container: {
     flex: 1,
     backgroundColor: colors.background,

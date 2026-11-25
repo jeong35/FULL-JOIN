@@ -1,18 +1,20 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookmarkIcon } from '@/components/Icons';
 import { KindIcon } from '@/components/KindIcon';
+import { TasteSuggestBubble } from '@/components/TasteSuggest';
 import { BackButton, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, fetchStyleImageDetail } from '@/data/api';
-import { kindLabel } from '@/data/catalog';
 import { track } from '@/data/events';
+import { kindLabel, type Style } from '@/data/catalog';
 import { markHintDone } from '@/data/hints';
+import { openShop } from '@/data/purchase';
 import { heartStyleImage, unheartStyleImage, useSaved } from '@/data/store';
+import { tasteSuggestionFor } from '@/data/tasteSuggest';
 import type { StyleImageDetail, StyleImageDetailItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
@@ -24,6 +26,8 @@ export default function StyleDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 추구미가 아닌 스타일 사진을 저장하면 추구미로 저장할지 묻는다(11/24 팀 결정 2번).
+  const [suggest, setSuggest] = useState<Style | null>(null);
   const trackedItems = useRef(new Set<string>());
 
   const load = async () => {
@@ -82,8 +86,10 @@ export default function StyleDetailScreen() {
         track('photo_save', { style_image_id: imageId, place: 'detail' });
         markHintDone('home_after_closet');
         const ok = await heartStyleImage(imageId);
-        if (ok) track('photo_save_done', { style_image_id: imageId, place: 'detail' });
-        else {
+        if (ok) {
+          track('photo_save_done', { style_image_id: imageId, place: 'detail' });
+          if (detail !== null) setSuggest(tasteSuggestionFor(detail.style_image.style));
+        } else {
           track('photo_save_failed', { style_image_id: imageId, place: 'detail' });
           track('error_shown', { screen: 'style_detail', error_code: 'photo_save_failed' });
         }
@@ -196,6 +202,7 @@ export default function StyleDetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        <TasteSuggestBubble style={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.suggest} noteStyle={styles.suggest} />
         <PrimaryButton
           label={isSaved ? '내 옷장 비교 보기' : '저장하고 내 옷장과 비교'}
           onPress={openComparison}
@@ -223,7 +230,8 @@ function ProductItem({ item }: { item: StyleImageDetailItem }) {
           <Pressable
             onPress={() => {
               track('shop_link_click', { place: 'detail', match_type: 'exact', platform: item.shop ?? null, kind: item.kind });
-              void WebBrowser.openBrowserAsync(item.product_url!);
+              // 갔다 오면 샀는지 묻는다(11/24 팀 결정 15번).
+              void openShop(item, { item_id: item.item_id, platform: item.shop ?? '쇼핑몰', url: item.product_url!, match_type: 'exact' });
             }}
             accessibilityRole="link"
             style={styles.productLink}>
@@ -264,5 +272,6 @@ const styles = StyleSheet.create({
   noProductTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.text },
   helpText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, color: colors.textSecondary, textAlign: 'center' },
   errorText: { paddingHorizontal: layout.screenPaddingX, fontFamily: fonts.regular, fontSize: 12, color: '#A23B3B', textAlign: 'center' },
+  suggest: { marginBottom: 10 },
   footer: { paddingHorizontal: layout.screenPaddingX, paddingTop: 10, paddingBottom: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, backgroundColor: colors.background },
 });
