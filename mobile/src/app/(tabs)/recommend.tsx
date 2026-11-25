@@ -5,7 +5,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Image as PlainImage, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { ArtPager, ViewToggle } from '@/components/ArtPager';
@@ -488,7 +488,9 @@ function LookSection({ title, view, look, closetLooks, near, index, date, chosen
   const photos = useWardrobePhotos();
   const artView = useClosetView();
   // 이 룩에 사진 넣은 옷이 있으면 그림 | 사진 보기를 고를 수 있다(옷장과 같은 설정).
-  const hasPhoto = look !== undefined && look.pieces.some((piece) => photos[piece.wardrobeItem.id] !== undefined);
+  // 룩에 사진 넣은 옷이 있으면(저장 사진 룩이든 옷장 옷만으로 고른 룩이든) 그림 | 사진을 고를 수 있다(11/25).
+  const shownItems = look !== undefined ? look.pieces.map((piece) => piece.wardrobeItem) : closet?.items ?? [];
+  const hasPhoto = shownItems.some((item) => photos[item.id] !== undefined);
   const addClothes = { label: '옷장에 옷 넣기', onPress: () => router.push('/add-item/kind') };
   const feed = useFeedState();
   const tastes = useSession()?.styles ?? [];
@@ -550,7 +552,7 @@ function LookSection({ title, view, look, closetLooks, near, index, date, chosen
         </>
       ) : closet !== undefined ? (
         <>
-          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
+          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
           {total > 1 && <Dots total={total} index={index % total} />}
         </>
       ) : feedLook !== undefined ? (
@@ -586,10 +588,12 @@ function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: ()
 
 // 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 보통은 모두 그날 기온에 맞는 옷이다.
 // day가 있으면(③ 가장 가까운 조합) 기온에 딱 맞지 않는다는 안내를 붙인다.
-function ClosetLookCard({ combo, date, day, chosen, onChoose, onNext }: {
+function ClosetLookCard({ combo, date, day, photos, artView, chosen, onChoose, onNext }: {
   combo: Combo;
   date: string;
   day?: DayWeather;
+  photos: Readonly<Record<string, WardrobePhoto>>;
+  artView: ClosetView;
   chosen: boolean;
   onChoose: () => void;
   onNext?: () => void;
@@ -620,7 +624,7 @@ function ClosetLookCard({ combo, date, day, chosen, onChoose, onNext }: {
           </Pressable>
         )}
       </View>
-      <ComboGrid items={combo.items} />
+      <ComboGrid items={combo.items} photos={photos} artView={artView} />
       {nearNote !== null && (
         <View style={styles.tipRow}>
           <Text style={styles.tipLabel}>기온</Text>
@@ -671,10 +675,11 @@ function FeedLookCard({ image, emptyCloset, onAdd }: { image: StyleImage; emptyC
 }
 
 // 오늘의 룩과 같은 칸 배치(큰 칸 + 오른쪽 두 칸 + 아래 줄), 매치 딱지 없이.
-function ComboGrid({ items }: { items: readonly WardrobeItem[] }) {
+// 사진 넣은 옷은 칸을 옆으로 밀면 그림 ↔ 사진(오늘의 룩 사진 룩과 같음, 11/25).
+function ComboGrid({ items, photos, artView }: { items: readonly WardrobeItem[]; photos: Readonly<Record<string, WardrobePhoto>>; artView: ClosetView }) {
   const tile = (item: WardrobeItem, size: number, style: object) => (
     <View key={item.id} style={[styles.tile, style]}>
-      <ItemIcon item={item} size={size} />
+      <ArtPager key={`${item.id}-${artView}`} item={item} photo={photos[item.id]} view={artView} iconSize={size} photoSize={size} height={size + 14} />
       <View style={styles.tileName}>
         <Text style={styles.tileKind}>{kindLabel(item.kind)}</Text>
         <Text style={styles.tileColor}>{item.color}</Text>
@@ -736,10 +741,13 @@ function LookGrid({ look, photos, artView }: { look: Look; photos: Readonly<Reco
 }
 
 // 내 옷으로 조합 만들기: 옷장 옷 하나를 고르면 조합 만들기(/combo/[id])로 간다.
-// 11/24 팀 결정 8번: 고른 날 기온에 맞는 옷만 먼저 보여 주고, 안 맞는 옷은 '기온에 안 맞는 옷도 보기'를 눌러야 나온다.
+// 11/24 팀 결정 8번: 고른 날 기온에 맞는 옷만 먼저 보여 준다. 11/25: '기온에 맞는 옷만 보기'를 토글 스위치로(끄면 다 보임).
+// 옷장을 '사진'으로 보고 있으면 사진 넣은 옷은 사진으로 보인다.
 function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]; day: DayWeather | undefined; date: string }) {
   const [slot, setSlot] = useState<Slot | '전체'>('전체');
   const [showAll, setShowAll] = useState(false);
+  const photos = useWardrobePhotos();
+  const artView = useClosetView();
   const slots = SLOTS.filter((item) => wardrobe.some((piece) => piece.slot === item));
   const inSlot = wardrobe
     .filter((item) => slot === '전체' || item.slot === slot)
@@ -753,8 +761,24 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
     <View style={styles.section}>
       <View>
         <Text style={styles.h2}>내 옷으로 조합 만들기</Text>
-        <Text style={styles.sub}>{day !== undefined ? `${tempRangeLabel(day)} 기온에 맞는 옷이에요. ` : ''}옷 하나를 고르면 같이 입을 조합을 보여 드려요</Text>
+        <Text style={styles.sub}>{day !== undefined && !showAll ? `${tempRangeLabel(day)} 기온에 맞는 옷이에요. ` : ''}옷 하나를 고르면 같이 입을 조합을 보여 드려요</Text>
       </View>
+      {hidden > 0 && (
+        <View style={styles.tempToggle}>
+          <Text style={styles.tempToggleText}>
+            기온에 맞는 옷만 보기{showAll ? '' : <Text style={styles.tempToggleSub}> · {hidden}벌 숨김</Text>}
+          </Text>
+          <Switch
+            value={!showAll}
+            onValueChange={(on) => setShowAll(!on)}
+            trackColor={{ false: colors.line, true: colors.purpleStrong }}
+            thumbColor={colors.white}
+            // 웹(react-native-web)은 켜졌을 때 동그라미 색을 따로 받는다.
+            {...({ activeThumbColor: colors.white } as object)}
+            accessibilityLabel="기온에 맞는 옷만 보기"
+          />
+        </View>
+      )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.makerChips}>
         {(['전체', ...slots] as const).map((item) => {
           const on = item === slot;
@@ -775,7 +799,9 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
               accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 조합 만들기`}
               style={styles.clothesItem}>
               <View style={styles.clothesTile}>
-                <ItemIcon item={item} size={60} />
+                {artView === 'photo' && photos[item.id] !== undefined
+                  ? <PlainImage source={{ uri: photos[item.id].uri }} style={styles.clothesPhoto} resizeMode="contain" accessibilityLabel={`${kindLabel(item.kind)} 사진`} />
+                  : <ItemIcon item={item} size={60} />}
               </View>
               <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
               {gap !== null && <Text style={styles.makerGap}>{gap === '추움' ? '추울 수도' : '더울 수도'}</Text>}
@@ -784,11 +810,6 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
         </ScrollView>
       ) : (
         <Text style={styles.sub}>이 날 기온에 맞는 {slot === '전체' ? '옷' : slot}이 아직 없어요</Text>
-      )}
-      {hidden > 0 && (
-        <Pressable onPress={() => setShowAll((value) => !value)} accessibilityRole="button" hitSlop={6} style={styles.showAll}>
-          <Text style={styles.showAllText}>{showAll ? '기온에 맞는 옷만 보기' : `기온에 안 맞는 옷 ${hidden}벌도 보기`}</Text>
-        </Pressable>
       )}
     </View>
   );
@@ -920,8 +941,9 @@ const styles = StyleSheet.create({
   compactTemp: { fontFamily: fonts.extraBold, fontSize: 20, letterSpacing: -0.5, color: colors.text },
   compactText: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
   closetThumb: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.purpleTint },
-  showAll: { alignSelf: 'flex-start' },
-  showAllText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
+  tempToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  tempToggleText: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 13, color: colors.text },
+  tempToggleSub: { fontFamily: fonts.regular, color: colors.textSecondary },
   sheetRowLocate: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 56 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
@@ -988,6 +1010,7 @@ const styles = StyleSheet.create({
   clothesRow: { gap: 8, paddingHorizontal: layout.screenPaddingX },
   clothesItem: { width: 76, alignItems: 'center', gap: 6 },
   clothesTile: { width: 76, height: 76, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  clothesPhoto: { width: 68, height: 68 },
   clothesName: { fontFamily: fonts.medium, fontSize: 12, color: colors.text },
   makerChips: { gap: 6, paddingHorizontal: layout.screenPaddingX },
   makerChip: { height: 32, paddingHorizontal: 13, borderRadius: 16, borderWidth: 1, borderColor: glass.border, backgroundColor: glass.background, justifyContent: 'center' },

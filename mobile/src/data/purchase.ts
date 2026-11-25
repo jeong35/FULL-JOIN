@@ -1,6 +1,9 @@
 // 쇼핑몰에 갔다 오면 "샀어요?"를 묻고, 샀으면 종류·색을 미리 채운 옷 추가 화면으로 보낸다(11/24 팀 결정 15번).
 // 앱(iOS·안드로이드): 앱 안 브라우저를 닫으면 묻는다. 웹: 새 탭으로 열고, 이 탭으로 돌아오면 묻는다.
 // 너무 빨리(3초 안에) 돌아오면 그냥 둘러본 것으로 보고 묻지 않는다.
+// 11/25 고침: 웹에서 작은 팝업 창으로 열려서(데스크톱) 원래 탭이 가려지지 않아 '돌아옴'을 못 알아채던 문제 —
+// 그냥 새 탭으로 열고, 탭이 다시 보일 때·창이 다시 눌릴 때·폰 브라우저가 탭을 새로 불러왔을 때 모두 묻는다
+// (갔다 온 기록은 이 탭 저장 공간(sessionStorage)에 둬서 새로 불러와도 남는다).
 import { router, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
@@ -13,7 +16,32 @@ export type ShopTarget = { slot?: Slot | null; kind: Kind; color?: Color | null;
 export type PurchaseAsk = { slot: Slot; kind: Kind; color: Color | null; fit: VisualFit | null; platform: string; openedAt: number };
 
 const MIN_AWAY_MS = 3000;
+// 이보다 오래 지나서 돌아오면 묻지 않는다(다른 날 다시 연 경우).
+const MAX_AWAY_MS = 6 * 60 * 60 * 1000;
+const PENDING_KEY = 'odit-shop-pending-v1';
 let pending: PurchaseAsk | null = null;
+
+function savePending(next: PurchaseAsk | null) {
+  pending = next;
+  try {
+    if (next === null) globalThis.sessionStorage?.removeItem(PENDING_KEY);
+    else globalThis.sessionStorage?.setItem(PENDING_KEY, JSON.stringify(next));
+  } catch {
+    // 저장이 막힌 브라우저는 이 탭이 살아 있는 동안만 기억한다.
+  }
+}
+
+function storedPending(): PurchaseAsk | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(PENDING_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Partial<PurchaseAsk>) : null;
+    return parsed !== null && typeof parsed.kind === 'string' && typeof parsed.slot === 'string' && typeof parsed.openedAt === 'number'
+      ? (parsed as PurchaseAsk)
+      : null;
+  } catch {
+    return null;
+  }
+}
 let asking: PurchaseAsk | null = null;
 const listeners = new Set<() => void>();
 
@@ -26,32 +54,46 @@ export function slotOfKind(kind: Kind): Slot | null {
 }
 
 function ask() {
-  const from = pending;
-  pending = null;
-  if (from === null || Date.now() - from.openedAt < MIN_AWAY_MS) return;
+  const from = pending ?? storedPending();
+  if (from === null) return;
+  const away = Date.now() - from.openedAt;
+  // 너무 빨리 돌아왔으면(아직 쇼핑몰 탭이 열리는 중일 수도) 기록은 그대로 두고 다음에 다시 본다.
+  if (away < MIN_AWAY_MS) return;
+  savePending(null);
+  if (away > MAX_AWAY_MS) return;
   asking = from;
   emit();
 }
 
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && pending !== null) ask();
-  });
+if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof window !== 'undefined') {
+  const back = () => {
+    if (document.visibilityState === 'visible') ask();
+  };
+  document.addEventListener('visibilitychange', back);
+  window.addEventListener('focus', back);
+  window.addEventListener('pageshow', back);
+  // 폰 브라우저가 돌아온 탭을 새로 불러온 경우: 처음 열릴 때 한 번 본다.
+  setTimeout(back, 1500);
 }
 
 // 쇼핑몰 링크는 모두 이걸로 연다.
 export async function openShop(target: ShopTarget, product: Product): Promise<void> {
   const slot = target.slot ?? slotOfKind(target.kind);
-  pending = slot === null ? null : {
+  savePending(slot === null ? null : {
     slot,
     kind: target.kind,
     color: target.color ?? null,
     fit: target.visual_fit ?? null,
     platform: product.match_type === 'exact' ? '쇼핑몰' : product.platform,
     openedAt: Date.now(),
-  };
+  });
+  if (Platform.OS === 'web') {
+    // 작은 팝업 창 대신 새 탭으로(돌아오면 이 탭이 다시 보여서 물을 수 있다).
+    globalThis.open?.(product.url, '_blank', 'noopener');
+    return;
+  }
   await WebBrowser.openBrowserAsync(product.url);
-  if (Platform.OS !== 'web') ask();
+  ask();
 }
 
 export function usePurchaseAsk(): PurchaseAsk | null {
