@@ -185,6 +185,8 @@ export function summarizeProductAnalytics(
   }
 
   const featureEvents = [
+    ["feed_search", "홈 피드 검색"],
+    ["feed_filter_apply", "홈 피드 필터"],
     ["archive_filter_apply", "아카이브 필터"],
     ["comparison_reopened", "재비교"],
     ["item_choice", "비슷함 선택"],

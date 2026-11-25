@@ -17,12 +17,20 @@ export type WardrobeItem = {
 
 export type StyleImageSource = '쇼핑몰' | '인플루언서' | '연예인' | '자체_촬영';
 
+export type StyleImageItemSummary = {
+  slot: Slot;
+  kind: Kind;
+  color: Color | null;
+};
+
 // 피드 사진(GET /feed). thumbnail_url은 1시간 뒤 만료되는 서명 주소다.
 export type StyleImage = {
   id: string;
   thumbnail_url: string;
   style: Style[];
   source: StyleImageSource;
+  // 검색·필터용 요약. 구버전 서버 응답과 저장 아카이브에는 없을 수 있다.
+  items?: StyleImageItemSummary[];
 };
 
 export type StyleImageDetailItem = {
