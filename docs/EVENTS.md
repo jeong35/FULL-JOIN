@@ -121,6 +121,9 @@
 | `feed_load_failed` | 피드 로딩 실패 | `error_code`, `latency_ms` |
 | `feed_scroll` | 25/50/75/100% 스크롤 도달 | `depth_percent`, `cards_seen` |
 | `feed_card_impression` | 피드 카드가 실제 viewport에 들어옴 | `style_image_id`, `position`, `recommendation` |
+| `feed_search` | 홈 검색 화면에서 글자로 찾기(추천 단어 누름·키보드 검색) | `query_length`, `result_count` (검색어 원문은 저장하지 않음) |
+| `feed_filter_apply` | 홈 검색 화면에서 스타일·종류·색 칩 누름(다시 눌러 풀면 `filter_value=all`) | `filter_type`, `filter_value`, `result_count` |
+| `feed_filter_clear` | 홈 검색 화면 [초기화] | `had_query`, `active_filter_count` |
 | `photo_open` | 피드 사진 상세 진입 | `style_image_id` |
 | `photo_save` | 저장 시도 | `style_image_id`, `place` |
 | `photo_save_done` | 저장 성공 | `style_image_id`, `place`, `saved_count`(가능한 경로) |
@@ -137,7 +140,7 @@
 
 피드 진입은 `screen_view(screen=feed)`, 모든 저장 진입은 `screen_view(screen=archive)`로 본다. `archive`로 전환할 때는 현재 `saved_count`도 해당 `screen_view` property에 함께 남긴다.
 
-피드에는 사용자가 직접 조작하는 스타일 필터 이벤트를 두지 않는다. 추구미 기반 자동 정렬 효과는 `feed_card_impression.recommendation = preferred | neighbor | other`로 본다.
+추구미 기반 자동 정렬 효과는 `feed_card_impression.recommendation = preferred | neighbor | other`로 본다. 검색·필터 결과에서도 이 순서는 유지된다.
 
 ## 상세·비교·결과
 

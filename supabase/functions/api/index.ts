@@ -745,6 +745,26 @@ async function handleFeed(url: URL, db: SupabaseClient): Promise<Response> {
   if (error !== null) throw error;
   const images = (data ?? []) as Array<FeedImage & { image_path: string; source: string }>;
 
+  const imageIds = images.map((image) => image.id);
+  const { data: itemData, error: itemError } = imageIds.length === 0
+    ? { data: [], error: null }
+    : await db.from("style_image_items")
+      .select("style_image_id,item_id,slot,kind,color")
+      .in("style_image_id", imageIds)
+      .order("item_id");
+  if (itemError !== null) throw itemError;
+  const itemsByImage = new Map<string, Array<{ slot: string; kind: string; color: string | null }>>();
+  for (const item of itemData ?? []) {
+    const styleImageId = String(item.style_image_id);
+    const current = itemsByImage.get(styleImageId) ?? [];
+    current.push({
+      slot: String(item.slot),
+      kind: String(item.kind),
+      color: item.color === null ? null : String(item.color),
+    });
+    itemsByImage.set(styleImageId, current);
+  }
+
   let ordered: typeof images;
   if (selectedStyle !== null) {
     ordered = filterFeed(images, selectedStyle) as typeof images;
@@ -762,6 +782,7 @@ async function handleFeed(url: URL, db: SupabaseClient): Promise<Response> {
     thumbnail_url: await signedThumbnail(db, image.image_path),
     style: image.style,
     source: image.source,
+    items: itemsByImage.get(image.id) ?? [],
   })));
   return json({ style_images: styleImages });
 }

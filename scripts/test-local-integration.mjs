@@ -51,6 +51,8 @@ let attacker = "";
 let ownerToken = "";
 let attackerToken = "";
 const styleImageId = `test-look-${suffix}`;
+const styleImagePath = `local/${styleImageId}.jpg`;
+const localSeedStoragePaths = [];
 
 async function api(path, init = {}, token = ownerToken) {
   const hasBody = init.body !== undefined;
@@ -71,10 +73,37 @@ function ok(name, detail) {
   console.log(`✓ ${name}: ${detail}`);
 }
 
+async function ensureLocalFeedStorage() {
+  if (integrationTarget !== "local") return;
+  const { data: images, error: imageError } = await db.from("style_images")
+    .select("image_path")
+    .eq("published", true);
+  assert.equal(imageError, null);
+  const paths = [...new Set((images ?? []).map((image) => image.image_path).filter(Boolean))].sort();
+  for (const path of paths) {
+    const { error: signedError } = await db.storage.from("feed-images").createSignedUrl(path, 60);
+    if (signedError === null) continue;
+    const { error: uploadError } = await db.storage.from("feed-images").upload(
+      path,
+      new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      { contentType: "image/jpeg", upsert: false },
+    );
+    assert.equal(uploadError, null);
+    localSeedStoragePaths.push(path);
+  }
+  ok("로컬 피드 Storage fixture", `${localSeedStoragePaths.length}개 누락 synthetic 이미지만 임시 생성`);
+}
+
 async function insertFixture() {
+  const { error: uploadError } = await db.storage.from("feed-images").upload(
+    styleImagePath,
+    new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    { contentType: "image/jpeg", upsert: true },
+  );
+  assert.equal(uploadError, null);
   const { error: imageError } = await db.from("style_images").insert({
     id: styleImageId,
-    image_path: `local/${styleImageId}.jpg`,
+    image_path: styleImagePath,
     source: "자체_촬영",
     permission: "필요 없음",
     uploaded_at: new Date().toISOString(),
@@ -133,7 +162,21 @@ async function run() {
   assert.equal(health.body.ok, true);
   ok("Edge Function", `${integrationTarget} /health returned 200`);
 
+  await ensureLocalFeedStorage();
   await insertFixture();
+
+  const feed = await api(`/feed?user_id=${encodeURIComponent(owner)}`, { method: "GET" });
+  assert.equal(feed.status, 200);
+  const feedFixture = feed.body.style_images.find((image) => image.id === styleImageId);
+  assert.ok(feedFixture);
+  assert.deepEqual(
+    feedFixture.items.map(({ slot, kind, color }) => ({ slot, kind, color })),
+    [
+      { slot: "하의", kind: "데님팬츠", color: "진청" },
+      { slot: "상의", kind: "니트", color: "아이보리" },
+    ],
+  );
+  ok("홈 피드 검색 요약", "공개 사진의 종류·색·부위 요약을 item_id 순서로 반환");
 
   const wardrobeInputs = [
     { user_id: owner, slot: "하의", kind: "데님팬츠", color: "진청", visual_fit: "와이드" },
@@ -302,6 +345,7 @@ async function cleanup() {
     await db.from("wardrobe_items").delete().in("user_id", [owner, attacker].filter(Boolean));
   }
   await db.from("style_images").delete().eq("id", styleImageId);
+  await db.storage.from("feed-images").remove([styleImagePath, ...localSeedStoragePaths]);
   for (const userId of [owner, attacker].filter(Boolean)) {
     await db.auth.admin.deleteUser(userId);
   }
