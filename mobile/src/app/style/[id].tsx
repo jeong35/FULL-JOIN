@@ -10,11 +10,11 @@ import { TasteSuggestBubble } from '@/components/TasteSuggest';
 import { BackButton, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, fetchStyleImageDetail } from '@/data/api';
 import { track } from '@/data/events';
-import { kindLabel, type Style } from '@/data/catalog';
+import { kindLabel } from '@/data/catalog';
 import { markHintDone } from '@/data/hints';
 import { openShop } from '@/data/purchase';
 import { heartStyleImage, unheartStyleImage, useSaved } from '@/data/store';
-import { tasteSuggestionFor } from '@/data/tasteSuggest';
+import { tasteSuggestionFor, type TasteSuggestion } from '@/data/tasteSuggest';
 import type { StyleImageDetail, StyleImageDetailItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
@@ -27,7 +27,7 @@ export default function StyleDetailScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 추구미가 아닌 스타일 사진을 저장하면 추구미로 저장할지 묻는다(11/24 팀 결정 2번).
-  const [suggest, setSuggest] = useState<Style | null>(null);
+  const [suggest, setSuggest] = useState<TasteSuggestion | null>(null);
   const trackedItems = useRef(new Set<string>());
 
   const load = async () => {
@@ -88,7 +88,7 @@ export default function StyleDetailScreen() {
         const ok = await heartStyleImage(imageId);
         if (ok) {
           track('photo_save_done', { style_image_id: imageId, place: 'detail' });
-          if (detail !== null) setSuggest(tasteSuggestionFor(detail.style_image.style));
+          if (detail !== null) setSuggest(tasteSuggestionFor(detail.style_image));
         } else {
           track('photo_save_failed', { style_image_id: imageId, place: 'detail' });
           track('error_shown', { screen: 'style_detail', error_code: 'photo_save_failed' });
@@ -202,7 +202,7 @@ export default function StyleDetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TasteSuggestBubble style={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.suggest} noteStyle={styles.suggest} />
+        <TasteSuggestBubble suggestion={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.suggest} noteStyle={styles.suggest} />
         <PrimaryButton
           label={isSaved ? '내 옷장 비교 보기' : '저장하고 내 옷장과 비교'}
           onPress={openComparison}

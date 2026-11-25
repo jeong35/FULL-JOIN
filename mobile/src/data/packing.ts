@@ -70,7 +70,7 @@ const slotIndex = (item: WardrobeItem) => (isOnePiece(item) ? 2 : ORDER.indexOf(
 const isTop = (item: WardrobeItem) => item.slot === '상의';
 const isBottom = (item: WardrobeItem) => item.slot === '하의' && item.kind !== '점프수트';
 // 짐은 겹쳐 입을 수 있어 기온 표보다 3° 넉넉하게 본다.
-const fitsDay = (item: WardrobeItem, weather: TripWeather) => fitsTemp(item.kind, item.slot, weather, 3);
+const fitsDay = (item: WardrobeItem, weather: TripWeather) => fitsTemp(item, weather, 3);
 
 // 점수 배열을 앞에서부터 비교(큰 값이 먼저), 같으면 id 순서.
 function pickBest<T extends { id: string }>(items: readonly T[], key: (item: T) => readonly number[]): T | undefined {

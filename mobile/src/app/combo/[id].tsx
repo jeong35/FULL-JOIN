@@ -109,7 +109,7 @@ export default function ComboScreen() {
             {edited === null && <Text style={styles.sub}>{view.day !== undefined ? '날씨에 맞춰 ' : ''}{andParticle(kindLabel(anchor.kind))} 입기 좋은 옷을 골라 뒀어요</Text>}
             <View style={styles.picked}>
               {selected.map((item) => {
-                const warm = view.day === undefined ? null : tempGap(item.kind, view.day);
+                const warm = view.day === undefined ? null : tempGap(item, view.day);
                 return (
                   <View key={item.id} style={styles.pickedItem}>
                     <View style={[styles.pickedTile, item.id === anchor.id && styles.pickedAnchor]}>

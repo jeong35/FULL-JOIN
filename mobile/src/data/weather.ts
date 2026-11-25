@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
 
 import { API_URL } from './api';
 import type { Kind, Slot } from './catalog';
+import type { Season, WardrobeItem } from './types';
 import { SIDO_LIST, type Sido, type Sigungu } from './regions';
 
 // ── 지역 ────────────────────────────────────────────
@@ -330,21 +331,74 @@ export function dayTempFor(_slot: Slot, day: Pick<DayWeather, 'min' | 'max'>): n
   return Math.round((day.min + day.max) / 2);
 }
 
-export function fitsTemp(kind: Kind, slot: Slot, day: Pick<DayWeather, 'min' | 'max'>, tolerance = 2): boolean {
-  const range = KIND_TEMP[kind];
-  if (range === undefined) return true;
-  const t = dayTempFor(slot, day);
-  return t >= range[0] - tolerance && t <= range[1] + tolerance;
+// ── 옷 하나가 그날 입기 좋은지(11/25 팀 결정) ──
+// 1순위: 사람이 고른 계절(옷 추가 '더 자세히'의 계절). 겨울로 고른 미니스커트·니트 미니원피스도 겨울에 추천한다.
+// 2순위: 계절이 없거나 처음 값 그대로면, 종류(미니·미디·롱 같은 기장 포함) 기온표 + 소재(니트·기모 등)·두께(기모 스타킹) 보정.
+const SEASON_TEMP: Record<Season, readonly [number, number]> = {
+  여름: [21, 45],
+  봄: [9, 23],
+  가을: [7, 22],
+  겨울: [-20, 11],
+};
+// 옷 추가 화면이 처음부터 골라 두는 계절(data/wardrobeArt.ts의 계절 칸 처음 값). 이 값 그대로면 사람이 고른 게 아니라고 보고
+// 종류 기온표를 쓴다 — 예: 롱패딩(처음 값 가을·겨울)을 가을 기온에 추천하지 않게.
+const DEFAULT_SEASONS: Partial<Record<Kind, readonly Season[]>> = {
+  반소매티셔츠: ['봄', '여름'], 민소매: ['봄', '여름'], 숏팬츠: ['봄', '여름'], 샌들: ['봄', '여름'], 슬리퍼: ['봄', '여름'],
+  니트: ['가을', '겨울'], 맨투맨: ['가을', '겨울'], 후드: ['가을', '겨울'], 카디건: ['가을', '겨울'],
+  퍼코트: ['가을', '겨울'], 무스탕: ['가을', '겨울'], 숏코트: ['가을', '겨울'], 하프코트: ['가을', '겨울'], 롱코트: ['가을', '겨울'],
+  숏패딩: ['가을', '겨울'], 롱패딩: ['가을', '겨울'], 경량패딩: ['가을', '겨울'], 부츠: ['가을', '겨울'],
+  스타킹: ['가을', '겨울'], 모자: ['가을', '겨울'], 벨트: ['가을', '겨울'],
+};
+const WARM_MATERIALS: ReadonlySet<string> = new Set(['니트', '울', '캐시미어', '기모', '플리스', '퍼', '코듀로이']);
+
+export type TempItem = Pick<WardrobeItem, 'kind'> & Partial<Pick<WardrobeItem, 'seasons' | 'material' | 'details'>>;
+
+function chosenSeasons(item: TempItem): readonly Season[] {
+  const seasons = item.seasons ?? [];
+  const defaults = DEFAULT_SEASONS[item.kind] ?? [];
+  const same = seasons.length === defaults.length && seasons.every((season) => defaults.includes(season));
+  return same ? [] : seasons;
+}
+
+// 이 옷을 입기 좋은 하루 평균 기온 범위. 신발·가방처럼 기온과 상관없으면 undefined.
+export function tempRangeOf(item: TempItem): readonly [number, number] | undefined {
+  const seasons = chosenSeasons(item);
+  if (seasons.length > 0) {
+    const ranges = seasons.map((season) => SEASON_TEMP[season]);
+    return [Math.min(...ranges.map((r) => r[0])), Math.max(...ranges.map((r) => r[1]))];
+  }
+  // 스타킹 두께(옷 추가에서 고른 것, details.두께): 기모는 한겨울까지, 비침은 늦봄·초가을까지.
+  if (item.kind === '스타킹' && item.details?.두께 === '기모') return [-20, 12];
+  if (item.kind === '스타킹' && item.details?.두께 === '비침') return [5, 24];
+  const range = KIND_TEMP[item.kind];
+  if (range === undefined) return undefined;
+  // 니트·기모 같은 따뜻한 소재면 더 추운 날까지(8° 아래로), 대신 아주 더운 날은 빼고.
+  if ((item.material ?? []).some((material) => WARM_MATERIALS.has(material))) {
+    return [Math.max(-20, range[0] - 8), Math.min(range[1], 24)];
+  }
+  return range;
+}
+
+export function fitsTemp(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>, tolerance = 2): boolean {
+  return tempGap(item, day, tolerance) === null;
 }
 
 // 기온표보다 덥거나 추운 옷인지(옷 고르기 목록의 안내 글). 신발·가방처럼 표에 없으면 null.
-export function tempGap(kind: Kind, day: Pick<DayWeather, 'min' | 'max'>, tolerance = 2): '추움' | '더움' | null {
-  const range = KIND_TEMP[kind];
+export function tempGap(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>, tolerance = 2): '추움' | '더움' | null {
+  const range = tempRangeOf(item);
   if (range === undefined) return null;
   const t = dayTempFor('상의', day);
   if (t < range[0] - tolerance) return '추움';
   if (t > range[1] + tolerance) return '더움';
   return null;
+}
+
+// 기온표에서 몇 도 벗어났는지(맞으면 0). 딱 맞는 옷이 없을 때 가장 가까운 옷을 고르는 데 쓴다.
+export function tempDistance(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>): number {
+  const range = tempRangeOf(item);
+  if (range === undefined) return 0;
+  const t = dayTempFor('상의', day);
+  return t < range[0] ? range[0] - t : t > range[1] ? t - range[1] : 0;
 }
 
 // 겉옷이 있어야 하는 날(아침이 쌀쌀함).

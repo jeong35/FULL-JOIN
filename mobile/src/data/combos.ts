@@ -117,7 +117,7 @@ type BuildInput = {
 };
 
 export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2 }: BuildInput): Combo[] {
-  const fits = (item: WardrobeItem) => day === undefined || fitsTemp(item.kind, item.slot, day);
+  const fits = (item: WardrobeItem) => day === undefined || fitsTemp(item, day);
   const pool = wardrobe.filter((item) => item.id !== anchor?.id && fits(item));
   const tops = pool.filter(isTop);
   const bottoms = pool.filter(isBottom);
@@ -201,7 +201,7 @@ export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather
       if (result === null) continue;
       const sorted = sortItems(items);
       const tags = [...result.tags];
-      if (day !== undefined && sorted.every((item) => fitsTemp(item.kind, item.slot, day))) tags.push('기온 맞춤');
+      if (day !== undefined && sorted.every((item) => fitsTemp(item, day))) tags.push('기온 맞춤');
       combos.push({ id: sorted.map((item) => item.id).join('+'), items: sorted, tags, score: result.score + (tags.includes('기온 맞춤') ? 1 : 0) });
     }
   }

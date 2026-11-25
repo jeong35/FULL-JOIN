@@ -47,7 +47,7 @@ const SLOT_ORDER: readonly Slot[] = ['아우터', '상의', '원피스', '하의
 
 function weatherFits(pieces: readonly OwnedPiece[], day: DayWeather | undefined): boolean {
   if (day === undefined) return true;
-  return pieces.every((piece) => fitsTemp(piece.wardrobeItem.kind, piece.wardrobeItem.slot, day));
+  return pieces.every((piece) => fitsTemp(piece.wardrobeItem, day));
 }
 
 function styleMatches(image: ArchiveImage, styles: readonly Style[]): boolean {
@@ -128,7 +128,7 @@ const CLOTHING: readonly Slot[] = ['아우터', '상의', '원피스', '하의']
 
 export function clothesForWeather(wardrobe: readonly WardrobeItem[], day: DayWeather | undefined): WardrobeItem[] {
   return wardrobe
-    .filter((item) => CLOTHING.includes(item.slot) && (day === undefined || fitsTemp(item.kind, item.slot, day, 0)))
+    .filter((item) => CLOTHING.includes(item.slot) && (day === undefined || fitsTemp(item, day, 0)))
     .sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot) || a.id.localeCompare(b.id));
 }
 

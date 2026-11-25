@@ -4,11 +4,11 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ItemIcon } from '@/components/WardrobeIcon';
-import { DetailHeader } from '@/components/ui';
+import { DetailHeader, SmallWhiteButton } from '@/components/ui';
 import { kindLabel } from '@/data/catalog';
 import { track } from '@/data/events';
 import { pickPhoto, startPhotoDraft } from '@/data/photoAdd';
-import { useWardrobeState } from '@/data/store';
+import { findWardrobeItem, useWardrobeState } from '@/data/store';
 import { removeWardrobePhotos, useClosetView, useWardrobePhoto } from '@/data/wardrobePhotos';
 import { colors, fonts, glass, layout } from '@/theme';
 
@@ -18,9 +18,11 @@ import { colors, fonts, glass, layout } from '@/theme';
 type Page = 'icon' | 'photo';
 
 export default function ItemDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: openedId } = useLocalSearchParams<{ id: string }>();
   const wardrobe = useWardrobeState();
-  const item = wardrobe.data.find((i) => i.id === id);
+  // 이 화면에서 '고치기'로 옷을 고치면 id가 바뀐다(store.replaceWardrobeItem) — 바뀐 옷을 그대로 보여 준다.
+  const item = findWardrobeItem(wardrobe.data, openedId);
+  const id = item?.id ?? openedId;
   const photo = useWardrobePhoto(id);
   const view = useClosetView();
   const { width } = useWindowDimensions();
@@ -105,11 +107,18 @@ export default function ItemDetailScreen() {
           </>
         )}
 
-        <View style={styles.info}>
-          <Text style={styles.name} accessibilityRole="header">
-            {kindLabel(item.kind)}
-          </Text>
-          <Text style={styles.meta}>{meta}</Text>
+        <View style={styles.infoRow}>
+          <View style={styles.info}>
+            <Text style={styles.name} accessibilityRole="header">
+              {kindLabel(item.kind)}
+            </Text>
+            <Text style={styles.meta}>{meta}</Text>
+          </View>
+          {/* 11/25: 종류·색·핏·모양을 고치면 옷 그림도 바뀐다. */}
+          <SmallWhiteButton
+            label="고치기"
+            onPress={() => router.push({ pathname: '/add-item/color-fit', params: { slot: item.slot, kind: item.kind, edit: item.id } })}
+          />
         </View>
 
         <View style={styles.card}>
@@ -211,9 +220,16 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.textSecondary,
   },
-  info: {
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     paddingHorizontal: layout.screenPaddingX,
     paddingTop: 18,
+    gap: 12,
+  },
+  info: {
+    flex: 1,
+    minWidth: 0,
     gap: 3,
   },
   name: {
