@@ -1,0 +1,17 @@
+{
+  "events": [
+    { "received_at": "2026-11-24T15:00:00.000Z", "client_ts": "2026-11-24T15:00:00.000Z", "device_id": "device-user-a", "session_id": "session-user-a", "platform": "web", "user_id": "user-a", "name": "app_open", "props": { "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-a-01" } },
+    { "received_at": "2026-11-24T15:00:01.000Z", "client_ts": "2026-11-24T15:00:01.000Z", "device_id": "device-user-a", "session_id": "session-user-a", "platform": "web", "user_id": "user-a", "name": "screen_view", "props": { "screen": "feed", "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-a-02" } },
+    { "received_at": "2026-11-24T15:00:02.000Z", "client_ts": "2026-11-24T15:00:02.000Z", "device_id": "device-user-a", "session_id": "session-user-a", "platform": "web", "user_id": "user-a", "name": "photo_open", "props": { "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-a-03" } },
+    { "received_at": "2026-11-24T15:00:03.000Z", "client_ts": "2026-11-24T15:00:03.000Z", "device_id": "device-user-a", "session_id": "session-user-a", "platform": "web", "user_id": "user-a", "name": "photo_save_done", "props": { "place": "detail", "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-a-04" } },
+    { "received_at": "2026-11-24T15:00:04.000Z", "client_ts": "2026-11-24T15:00:04.000Z", "device_id": "device-user-a", "session_id": "session-user-a", "platform": "web", "user_id": "user-a", "name": "result_view", "props": { "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-a-05" } },
+    { "received_at": "2026-11-24T16:00:00.000Z", "client_ts": "2026-11-24T16:00:00.000Z", "device_id": "device-user-b", "session_id": "session-user-b", "platform": "web", "user_id": "user-b", "name": "app_open", "props": { "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-b-01" } },
+    { "received_at": "2026-11-24T16:00:01.000Z", "client_ts": "2026-11-24T16:00:01.000Z", "device_id": "device-user-b", "session_id": "session-user-b", "platform": "web", "user_id": "user-b", "name": "screen_view", "props": { "screen": "wardrobe", "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-b-02" } },
+    { "received_at": "2026-11-24T16:00:02.000Z", "client_ts": "2026-11-24T16:00:02.000Z", "device_id": "device-user-b", "session_id": "session-user-b", "platform": "web", "user_id": "user-b", "name": "wardrobe_add_start", "props": { "via": "manual", "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-b-03" } },
+    { "received_at": "2026-11-24T16:00:03.000Z", "client_ts": "2026-11-24T16:00:03.000Z", "device_id": "device-user-b", "session_id": "session-user-b", "platform": "web", "user_id": "user-b", "name": "wardrobe_add_done", "props": { "via": "manual", "app_version": "1.0.0", "analytics_version": "fixture-v1", "client_event_id": "fixture-event-b-04" } }
+  ],
+  "wardrobe": [
+    { "user_id": "user-a" }, { "user_id": "user-a" }, { "user_id": "user-a" }, { "user_id": "user-a" }, { "user_id": "user-a" }, { "user_id": "user-b" }
+  ],
+  "llmOperations": []
+}

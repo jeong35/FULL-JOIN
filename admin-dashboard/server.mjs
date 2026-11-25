@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { createReadStream, existsSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,15 +8,42 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
 import { summarizeLlmOps, summarizeProductAnalytics } from "../src/fulljoin/admin_metrics.ts";
+import { analyzeJourneys } from "../src/fulljoin/journey_metrics.ts";
+import { evaluateLlmOpsAlerts, llmOpsAlertThresholdsFromEnvironment } from "../src/fulljoin/llmops_alerts.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PUBLIC_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "public");
 const PORT = Number(process.env.DASHBOARD_PORT ?? "4173");
 const HOST = "127.0.0.1";
+const DATA_SOURCE = process.env.DASHBOARD_DATA_SOURCE ?? "local";
+const ADMIN_TOKEN = process.env.DASHBOARD_ADMIN_TOKEN ?? "";
+const FIXTURE_PATH = process.env.DASHBOARD_FIXTURE_PATH ?? "";
+const HISTORICAL_RECOVERY = JSON.parse(readFileSync(join(ROOT, "admin-dashboard/historical-recovery.json"), "utf8"));
 
 function localSupabaseEnvironment() {
+  if (DATA_SOURCE === "fixture") {
+    if (!FIXTURE_PATH || !existsSync(FIXTURE_PATH)) throw new Error("fixture 모드에는 존재하는 DASHBOARD_FIXTURE_PATH가 필요합니다.");
+    return { url: null, serviceRoleKey: null, dataSource: "fixture", fixturePath: FIXTURE_PATH };
+  }
+  if (DATA_SOURCE === "production") {
+    const url = process.env.SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (process.env.DASHBOARD_ALLOW_REMOTE_READONLY !== "true") {
+      throw new Error("운영 DB 읽기는 DASHBOARD_ALLOW_REMOTE_READONLY=true로 명시해야 합니다.");
+    }
+    if (!url || !serviceRoleKey || !url.startsWith("https://")) {
+      throw new Error("운영 Supabase URL과 server-only service role 키가 필요합니다.");
+    }
+    if (ADMIN_TOKEN.length < 32) throw new Error("32자 이상의 DASHBOARD_ADMIN_TOKEN이 필요합니다.");
+    return { url, serviceRoleKey, dataSource: "production_supabase_readonly" };
+  }
+  if (DATA_SOURCE !== "local") throw new Error("DASHBOARD_DATA_SOURCE는 local 또는 production이어야 합니다.");
   if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return { url: process.env.SUPABASE_URL, serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY };
+    return {
+      url: process.env.SUPABASE_URL,
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      dataSource: "local_supabase",
+    };
   }
   const output = execFileSync(join(ROOT, "node_modules/.bin/supabase"), ["status", "-o", "env"], {
     cwd: ROOT,
@@ -23,18 +51,23 @@ function localSupabaseEnvironment() {
     stdio: ["ignore", "pipe", "ignore"],
   });
   const values = new Map([...output.matchAll(/^([A-Z_]+)="([^"]*)"$/gmu)].map((match) => [match[1], match[2]]));
-  return { url: values.get("API_URL"), serviceRoleKey: values.get("SERVICE_ROLE_KEY") };
+  return { url: values.get("API_URL"), serviceRoleKey: values.get("SERVICE_ROLE_KEY"), dataSource: "local_supabase" };
 }
 
 const environment = localSupabaseEnvironment();
-if (!environment.url || !environment.serviceRoleKey) throw new Error("로컬 Supabase URL과 service role 키를 찾지 못했습니다.");
-const supabaseUrl = new URL(environment.url);
-if (!["127.0.0.1", "localhost"].includes(supabaseUrl.hostname)) {
-  throw new Error("관리자 대시보드는 로컬 Supabase에만 연결할 수 있습니다.");
+if (DATA_SOURCE !== "fixture") {
+  if (!environment.url || !environment.serviceRoleKey) throw new Error("로컬 Supabase URL과 service role 키를 찾지 못했습니다.");
+  const supabaseUrl = new URL(environment.url);
+  if (DATA_SOURCE === "local" && !["127.0.0.1", "localhost"].includes(supabaseUrl.hostname)) {
+    throw new Error("local 모드는 로컬 Supabase에만 연결할 수 있습니다.");
+  }
 }
-const db = createClient(environment.url, environment.serviceRoleKey, { auth: { persistSession: false } });
+const db = environment.url && environment.serviceRoleKey
+  ? createClient(environment.url, environment.serviceRoleKey, { auth: { persistSession: false } })
+  : null;
 
 async function paged(table, select, configure = (query) => query) {
+  if (db === null) throw new Error("fixture 모드에서는 Supabase query를 실행하지 않습니다.");
   const rows = [];
   for (let from = 0; ; from += 1_000) {
     const query = configure(db.from(table).select(select)).range(from, from + 999);
@@ -43,6 +76,31 @@ async function paged(table, select, configure = (query) => query) {
     rows.push(...(data ?? []));
     if ((data?.length ?? 0) < 1_000) return rows;
   }
+}
+
+function journeyOptions(url) {
+  const unit = url.searchParams.get("unit") ?? "user";
+  const cohort = url.searchParams.get("cohort") ?? "all";
+  const depth = Number(url.searchParams.get("depth") ?? "5");
+  const minimumCount = Number(url.searchParams.get("minimum_count") ?? "1");
+  const platform = url.searchParams.get("platform");
+  const start = url.searchParams.get("start");
+  const cleanFilter = (value) => value === null || value === "" ? null : value.slice(0, 80);
+  if (!["user", "session"].includes(unit) || !["all", "new", "returning"].includes(cohort) ||
+      !Number.isInteger(depth) || depth < 1 || depth > 8 ||
+      !Number.isInteger(minimumCount) || minimumCount < 1 || minimumCount > 50 ||
+      (platform !== null && !["", "web", "ios", "android"].includes(platform))) return null;
+  return {
+    unit,
+    cohort,
+    depth,
+    minimumCount,
+    startKey: start === null || start === "" || start === "__session_start__" ? null : start.slice(0, 100),
+    includeTests: url.searchParams.get("include_tests") === "true",
+    platform: cleanFilter(platform),
+    appVersion: cleanFilter(url.searchParams.get("app_version")),
+    analyticsVersion: cleanFilter(url.searchParams.get("analytics_version")),
+  };
 }
 
 function validRange(url) {
@@ -56,12 +114,17 @@ function validRange(url) {
   return { from, to };
 }
 
-async function dashboardPayload(range) {
-  const [events, wardrobe, llmOperations] = await Promise.all([
+async function dashboardRows(range) {
+  if (DATA_SOURCE === "fixture") {
+    const fixture = JSON.parse(readFileSync(environment.fixturePath, "utf8"));
+    return [fixture.events ?? [], fixture.wardrobe ?? [], fixture.llmOperations ?? []];
+  }
+  return Promise.all([
     paged(
       "user_events",
       "received_at,client_ts,device_id,session_id,platform,user_id,name,props",
-      (query) => query.lt("received_at", range.to).order("received_at", { ascending: true }),
+      (query) => query.lt("received_at", new Date(Date.parse(range.to) + 24 * 60 * 60 * 1_000).toISOString())
+        .order("received_at", { ascending: true }),
     ),
     paged("wardrobe_items", "user_id"),
     paged(
@@ -70,15 +133,33 @@ async function dashboardPayload(range) {
       (query) => query.gte("created_at", range.from).lt("created_at", range.to).order("created_at", { ascending: true }),
     ),
   ]);
+}
+
+async function dashboardPayload(range, options) {
+  const [events, wardrobe, llmOperations] = await dashboardRows(range);
+  const llmops = summarizeLlmOps(llmOperations.map((row) => ({
+    ...row,
+    estimated_cost_usd: row.estimated_cost_usd === null ? null : Number(row.estimated_cost_usd),
+  })), range);
   return {
     generated_at: new Date().toISOString(),
-    data_source: "local_supabase_only",
+    data_source: environment.dataSource,
     product: summarizeProductAnalytics(events, wardrobe, range),
-    llmops: summarizeLlmOps(llmOperations.map((row) => ({
-      ...row,
-      estimated_cost_usd: row.estimated_cost_usd === null ? null : Number(row.estimated_cost_usd),
-    })), range),
+    journeys: analyzeJourneys(events, wardrobe, range, options),
+    historical_recovery: HISTORICAL_RECOVERY,
+    llmops,
+    alerts: evaluateLlmOpsAlerts(llmops, llmOpsAlertThresholdsFromEnvironment(process.env)),
   };
+}
+
+function authorized(request) {
+  if (DATA_SOURCE === "local" || DATA_SOURCE === "fixture") return true;
+  const authorization = request.headers.authorization ?? "";
+  const prefix = "Bearer ";
+  if (!authorization.startsWith(prefix)) return false;
+  const received = Buffer.from(authorization.slice(prefix.length), "utf8");
+  const expected = Buffer.from(ADMIN_TOKEN, "utf8");
+  return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
 const types = new Map([
@@ -95,9 +176,12 @@ createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
     if (url.pathname === "/api/dashboard") {
+      if (!authorized(request)) return sendJson(response, 401, { error: "관리자 토큰을 확인해 주세요." });
       const range = validRange(url);
       if (!range) return sendJson(response, 400, { error: "from/to 기간은 최대 366일의 유효한 ISO 시각이어야 합니다." });
-      return sendJson(response, 200, await dashboardPayload(range));
+      const options = journeyOptions(url);
+      if (!options) return sendJson(response, 400, { error: "journey 필터 값을 확인해 주세요." });
+      return sendJson(response, 200, await dashboardPayload(range, options));
     }
     const requested = url.pathname === "/" ? "/index.html" : url.pathname;
     const file = normalize(join(PUBLIC_DIR, requested));
@@ -109,6 +193,6 @@ createServer(async (request, response) => {
     sendJson(response, 500, { error: "로컬 지표를 불러오지 못했습니다." });
   }
 }).listen(PORT, HOST, () => {
-  console.log(`ODIT local admin dashboard: http://${HOST}:${PORT}`);
-  console.log("Connected only to local Supabase; service role key remains in this server process.");
+  console.log(`ODIT admin dashboard: http://${HOST}:${PORT}`);
+  console.log(`Data source: ${environment.dataSource}; service role key remains in this server process.`);
 });

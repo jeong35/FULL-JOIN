@@ -7,8 +7,9 @@
 - Supabase Edge Function 이름: `api`
 - 배포 기본 URL: `https://<project-ref>.supabase.co/functions/v1/api`
 - 오류: `{ "error": { "code": string, "message": string, "field"?: string } }`
-- 현재 MVP는 합의 대기 항목에 따라 요청의 `user_id`를 데모 사용자 식별자로 사용한다.
-- 실제 사용자 배포 전에는 Supabase Anonymous Auth의 사용자 ID와 RLS 정책으로 교체해야 한다.
+- 사용자 경로는 `Authorization: Bearer <Supabase access token>`을 요구한다. 서버가 `auth.getUser`로 확인한 JWT subject가 사용자 ID의 정본이다.
+- 전환 기간에는 기존 `user_id` 필드를 유지하지만 JWT subject와 다르면 `403 user_id_mismatch`, 토큰이 없거나 유효하지 않으면 `401 authentication_required`다. 이 변경은 아직 운영 배포되지 않았다.
+- `/health`와 별도 `x-admin-token`을 쓰는 운영자 경로는 기존 계약을 유지한다. 공개·관리 경로와 사용자 경로가 같은 함수에 있어 gateway는 아직 `verify_jwt=false`이고, 사용자 경로가 함수 내부에서 JWT를 검증한다.
 
 ## 구현된 경로
 
@@ -23,6 +24,8 @@
 | `GET` | `/feed?style=` | 선택 스타일 최신순 필터 |
 | `GET` | `/archive?user_id=&style=&season=` | 저장한 사진을 스타일·계절로 필터링하고 최근 저장순으로 조회 |
 | `POST` | `/chat` | 베타 기능. 저장된 사진 분석과 실제 옷장을 재사용해 질문에 답변(MVP 필수 평가 제외) |
+| `GET` | `/chat/history?style_image_id=&limit=&before=` | 인증 사용자의 사진별 대화 기록을 ordinal cursor로 조회 |
+| `DELETE` | `/chat/history?style_image_id=` | 인증 사용자의 해당 사진 conversation과 메시지를 삭제 |
 | `POST` | `/events` | 앱 사용 기록(이탈 지점·최종 목표 측정용) 저장, 이름은 `docs/EVENTS.md` 목록만 |
 | `GET` | `/weather?lat=&lon=&days=` | 추천 탭 날씨. 기상청 단기·중기예보를 하루 단위로 바꿔 오늘부터 최대 10일 |
 | `POST` | `/analyze` | Storage의 피드 사진을 운영자가 1회 AI 태깅하고 비공개 저장 |
@@ -70,7 +73,9 @@
 
 ## 저장 사진 챗봇
 
-`POST /chat`은 현재 **베타 API이며 필수 MVP 완료 판정에서 제외**한다. `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. 응답에는 기존 필드 외에 `intents`, `answer_sections`, 선택적 진단용 `comparison[]`이 추가된다. `comparison[]`의 gap/후보/근거는 비교 화면과 같은 `classifyGap`·승인된 대체 종류표를 사용한다. `claimed_owned_item_ids`에는 조회한 현재 옷장에 실제 존재하고 비교 또는 승인된 대체 후보인 ID만 들어간다.
+`POST /chat`은 현재 **베타 API이며 필수 MVP 완료 판정에서 제외**한다. `{ "user_id": "demo-user", "style_image_id": "IMG-001", "message": "이 옷이랑 뭐 입어?" }`를 받는다. 사진을 다시 분석하지 않고 저장된 아이템 분류와 현재 옷장만 사용한다. 응답에는 기존 필드 외에 `conversation_id`, `intents`, `answer_sections`, 선택적 진단용 `comparison[]`이 추가된다. `comparison[]`의 gap/후보/근거는 비교 화면과 같은 `classifyGap`·승인된 대체 종류표를 사용한다. `claimed_owned_item_ids`에는 조회한 현재 옷장에 실제 존재하고 비교 또는 승인된 대체 후보인 ID만 들어간다. 같은 인증 사용자와 `style_image_id`는 하나의 conversation을 재사용하며 사용자·assistant 메시지를 한 exchange로 저장한다.
+
+`GET /chat/history`는 `style_image_id`가 필수이고 `limit`은 기본 50·최대 100이다. 응답 메시지는 시간순이며 `next_before`가 있으면 같은 값을 다음 요청의 `before`로 전달한다. 다른 사용자의 conversation은 존재 여부를 드러내지 않고 빈 결과로 반환한다. `DELETE /chat/history`는 JWT subject 소유자의 해당 conversation만 삭제하고 메시지는 cascade 삭제한다. 하트를 취소해도 동일하게 conversation이 삭제된다. 원문 메시지는 `llm_operation_metrics`에 복제하지 않는다. 자동 보존 기간과 계정 전체 삭제는 제품 정책 확정 전 운영 적용하지 않는다.
 
 서버가 `wardrobe_outfit`, `saved_photo_outfit`, `product_search`, `general_advice`, `mixed`, `out_of_scope`를 자동 분류한다. 사용자가 상담 유형을 먼저 선택하지 않는다. 보유 옷·상품 탐색·저장 사진·범위 밖 질문은 결정론적 grounded 응답(`answer_source: grounded`)을 사용하며, 빈 옷장에서도 상품 탐색은 가능하다. 일반 패션 조언이 포함된 질문만 LLM을 호출한다. 복합 답변은 `answer_sections`의 `내 옷장 기준`, `저장 사진 기준`, `일반 패션 조언`을 분리한다. 모델은 보유 여부를 주장하지 않으며 실제 상품명·브랜드·가격·사이즈·URL을 만들지 않는다. 실패 시 `answer_source: fallback`으로 구조화된 비교 결과를 유지한다. 쇼핑 질문은 아이템 분류로 만든 `match_type: similar` 검색 링크만 반환한다. 하트하지 않은 사진은 `409 heart_required`다. 상세 JSON은 `docs/FRONTEND_MATCH_CHAT_HANDOFF.md`를 따른다.
 

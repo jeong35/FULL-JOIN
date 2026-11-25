@@ -7,6 +7,8 @@ import { createClient } from "@supabase/supabase-js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
+const integrationTarget = process.env.FULL_JOIN_INTEGRATION_TARGET ?? "local";
+
 function localEnvironment() {
   const output = execFileSync(`${root}/node_modules/.bin/supabase`, ["status", "-o", "env"], {
     cwd: root,
@@ -15,25 +17,51 @@ function localEnvironment() {
   });
   const values = new Map([...output.matchAll(/^([A-Z_]+)="([^"]*)"$/gmu)].map((match) => [match[1], match[2]]));
   const apiUrl = values.get("API_URL");
+  const anonKey = values.get("ANON_KEY");
   const serviceRoleKey = values.get("SERVICE_ROLE_KEY");
-  if (!apiUrl || !serviceRoleKey || !["127.0.0.1", "localhost"].includes(new URL(apiUrl).hostname)) {
+  if (!apiUrl || !anonKey || !serviceRoleKey || !["127.0.0.1", "localhost"].includes(new URL(apiUrl).hostname)) {
     throw new Error("Integration tests require a running local Supabase stack.");
   }
-  return { apiUrl, serviceRoleKey };
+  return { apiUrl, anonKey, serviceRoleKey };
 }
 
-const environment = localEnvironment();
+function stagingEnvironment() {
+  const projectRef = process.env.FULL_JOIN_STAGING_PROJECT_REF;
+  const apiUrl = process.env.FULL_JOIN_STAGING_URL;
+  const anonKey = process.env.FULL_JOIN_STAGING_ANON_KEY;
+  const serviceRoleKey = process.env.FULL_JOIN_STAGING_SERVICE_ROLE_KEY;
+  if (!projectRef || !apiUrl || !anonKey || !serviceRoleKey) {
+    throw new Error("Staging integration requires the FULL_JOIN_STAGING_* environment variables.");
+  }
+  if (projectRef === "gctbcanltqgcymdlplyr") {
+    throw new Error("Refusing to run destructive integration fixtures against the production project.");
+  }
+  if (new URL(apiUrl).hostname !== `${projectRef}.supabase.co`) {
+    throw new Error("Staging project ref and API URL do not match.");
+  }
+  return { apiUrl, anonKey, serviceRoleKey };
+}
+
+const environment = integrationTarget === "staging" ? stagingEnvironment() : localEnvironment();
 const db = createClient(environment.apiUrl, environment.serviceRoleKey, { auth: { persistSession: false } });
 const functionUrl = `${environment.apiUrl}/functions/v1/api`;
 const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
-const owner = `test-owner-${suffix}`;
-const attacker = `test-attacker-${suffix}`;
+let owner = "";
+let attacker = "";
+let ownerToken = "";
+let attackerToken = "";
 const styleImageId = `test-look-${suffix}`;
 
-async function api(path, init = {}) {
+async function api(path, init = {}, token = ownerToken) {
+  const hasBody = init.body !== undefined;
+  const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
   const response = await fetch(`${functionUrl}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    headers: {
+      ...(hasBody && !isForm ? { "content-type": "application/json" } : {}),
+      ...(token === "" ? {} : { authorization: `Bearer ${token}` }),
+      ...(init.headers ?? {}),
+    },
   });
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
@@ -69,11 +97,41 @@ async function insertFixture() {
   assert.equal(itemError, null);
 }
 
+async function createAuthenticatedUser(label) {
+  const email = `${label}-${suffix}@local.odit.test`;
+  const password = `Local-${suffix}-Aa1!`;
+  const { data: created, error: createError } = await db.auth.admin.createUser({ email, password, email_confirm: true });
+  assert.equal(createError, null);
+  assert.ok(created.user);
+  const client = createClient(environment.apiUrl, environment.anonKey, { auth: { persistSession: false } });
+  const { data: signedIn, error: signInError } = await client.auth.signInWithPassword({ email, password });
+  assert.equal(signInError, null);
+  assert.ok(signedIn.session);
+  return { id: created.user.id, token: signedIn.session.access_token, client };
+}
+
 async function run() {
-  const health = await api("/health", { method: "GET" });
+  if (integrationTarget === "local") {
+    const anonymousClient = createClient(environment.apiUrl, environment.anonKey, { auth: { persistSession: false } });
+    const { data: anonymousData, error: anonymousError } = await anonymousClient.auth.signInAnonymously();
+    assert.equal(anonymousError, null);
+    assert.ok(anonymousData.session);
+    ok("모바일 개발용 익명 Auth", "local config에서 access token과 사용자 UUID 발급");
+  } else {
+    ok("스테이징 Auth 방식", "익명 로그인을 변경하지 않고 이메일 테스트 계정으로 격리 검증");
+  }
+
+  const ownerAuth = await createAuthenticatedUser("owner");
+  const attackerAuth = await createAuthenticatedUser("attacker");
+  owner = ownerAuth.id;
+  attacker = attackerAuth.id;
+  ownerToken = ownerAuth.token;
+  attackerToken = attackerAuth.token;
+
+  const health = await api("/health", { method: "GET" }, "");
   assert.equal(health.status, 200);
   assert.equal(health.body.ok, true);
-  ok("Edge Function", "local /health returned 200");
+  ok("Edge Function", `${integrationTarget} /health returned 200`);
 
   await insertFixture();
 
@@ -116,6 +174,7 @@ async function run() {
   });
   assert.equal(groundedChat.status, 200);
   assert.equal(groundedChat.body.answer_source, "grounded");
+  assert.equal(typeof groundedChat.body.conversation_id, "string");
   assert.ok(groundedChat.body.claimed_owned_item_ids.every((id) => afterDelete.body.wardrobe_items.some((item) => item.id === id)));
   ok("보유 옷 상담", "응답의 소유 주장 ID가 실제 옷장 ID에 한정됨");
 
@@ -126,6 +185,7 @@ async function run() {
   assert.equal(generalChat.status, 200);
   assert.equal(generalChat.body.intents.includes("general_advice"), true);
   assert.equal(["fallback", "openai"].includes(generalChat.body.answer_source), true);
+  assert.equal(generalChat.body.conversation_id, groundedChat.body.conversation_id);
   ok("일반 패션 상담", `${generalChat.body.answer_source} 경로로 안전한 응답 반환`);
 
   const mixedChat = await api("/chat", {
@@ -136,7 +196,28 @@ async function run() {
   assert.equal(mixedChat.body.intents.includes("mixed"), true);
   assert.equal(mixedChat.body.answer_sections.some((section) => section.source === "wardrobe"), true);
   assert.equal(mixedChat.body.answer_sections.some((section) => section.source === "general_advice"), true);
+  assert.equal(mixedChat.body.conversation_id, groundedChat.body.conversation_id);
   ok("복합 상담", "내 옷장 근거와 일반 조언이 별도 section으로 분리됨");
+
+  const historyPage = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}&limit=2`, { method: "GET" });
+  assert.equal(historyPage.status, 200);
+  assert.equal(historyPage.body.conversation_id, groundedChat.body.conversation_id);
+  assert.equal(historyPage.body.messages.length, 2);
+  assert.equal(typeof historyPage.body.next_before, "number");
+  const olderHistoryPage = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}&limit=2&before=${historyPage.body.next_before}`, { method: "GET" });
+  assert.equal(olderHistoryPage.status, 200);
+  assert.equal(olderHistoryPage.body.messages.length, 2);
+  assert.ok(olderHistoryPage.body.messages.every((message) => message.ordinal < historyPage.body.next_before));
+  ok("사진별 대화 복원·페이지네이션", "같은 conversation ID에서 최근 2개와 이전 2개를 결정적으로 조회");
+
+  const attackerHistory = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "GET" }, attackerToken);
+  assert.equal(attackerHistory.status, 200);
+  assert.equal(attackerHistory.body.conversation_id, null);
+  const attackerDelete = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "DELETE" }, attackerToken);
+  assert.equal(attackerDelete.status, 200);
+  const historyAfterAttack = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "GET" });
+  assert.equal(historyAfterAttack.body.conversation_id, groundedChat.body.conversation_id);
+  ok("대화 API 사용자 격리", "타 사용자 조회는 빈 결과이며 삭제 요청도 소유자 대화에 영향 없음");
 
   const events = await api("/events", {
     method: "POST",
@@ -167,24 +248,67 @@ async function run() {
   ok("LLMOps DB 저장", `${metrics?.length ?? 0}개 운영 레코드 확인`);
   if (generalChat.body.answer_source === "fallback") {
     assert.ok((metrics ?? []).some((metric) => metric.fallback_used));
-    ok("LLM 실패·fallback", "로컬 키 미설정 실패를 configuration fallback으로 저장");
+    ok("LLM 실패·fallback", `${integrationTarget} 키 미설정 실패를 configuration fallback으로 저장`);
   } else {
     ok("LLM 실패·fallback", "현재 환경은 LLM 성공 경로; 실패 경로는 단위 테스트로 검증");
   }
 
-  const securityProbe = await api(`/wardrobe?user_id=${encodeURIComponent(owner)}`, {
-    method: "GET",
-    headers: { "x-test-actor": attacker },
-  });
-  assert.equal(securityProbe.status, 200);
-  assert.ok(securityProbe.body.wardrobe_items.length > 0);
-  ok("실제 API 보안 점검", "KNOWN GAP: JWT 없이 타 user_id 조회가 가능함(운영 연결 전 보완 필요)");
+  const unauthenticated = await api(`/wardrobe?user_id=${encodeURIComponent(owner)}`, { method: "GET" }, "");
+  assert.equal(unauthenticated.status, 401);
+  const securityProbe = await api(`/wardrobe?user_id=${encodeURIComponent(owner)}`, { method: "GET" }, attackerToken);
+  assert.equal(securityProbe.status, 403);
+  ok("실제 API 사용자 격리", "토큰 없음 401, 타 user_id 403");
 
-  console.log("\nLocal integration summary");
+  const { data: ownerRows, error: ownerRlsError } = await ownerAuth.client.from("wardrobe_items").select("id,user_id");
+  assert.equal(ownerRlsError, null);
+  assert.ok((ownerRows ?? []).every((row) => row.user_id === owner));
+  const { data: attackerRows, error: attackerRlsError } = await attackerAuth.client.from("wardrobe_items").select("id,user_id");
+  assert.equal(attackerRlsError, null);
+  assert.equal(attackerRows?.length, 0);
+  ok("DB RLS 사용자 격리", "authenticated 클라이언트는 자기 user_id 행만 조회");
+
+  const { data: ownerConversations, error: ownerConversationError } = await ownerAuth.client.from("chat_conversations").select("id,user_id");
+  assert.equal(ownerConversationError, null);
+  assert.equal(ownerConversations?.length, 1);
+  assert.ok((ownerConversations ?? []).every((row) => row.user_id === owner));
+  const { data: attackerConversations, error: attackerConversationError } = await attackerAuth.client.from("chat_conversations").select("id,user_id");
+  assert.equal(attackerConversationError, null);
+  assert.equal(attackerConversations?.length, 0);
+  const { data: ownerMessages, error: ownerMessagesError } = await ownerAuth.client.from("chat_messages").select("id,user_id");
+  assert.equal(ownerMessagesError, null);
+  assert.equal(ownerMessages?.length, 6);
+  const { data: attackerMessages, error: attackerMessagesError } = await attackerAuth.client.from("chat_messages").select("id,user_id");
+  assert.equal(attackerMessagesError, null);
+  assert.equal(attackerMessages?.length, 0);
+  ok("대화 DB RLS 격리", "authenticated 사용자는 자기 conversation과 메시지만 조회");
+
+  const deletedHistory = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "DELETE" });
+  assert.equal(deletedHistory.status, 200);
+  const emptyHistory = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "GET" });
+  assert.equal(emptyHistory.body.conversation_id, null);
+  assert.deepEqual(emptyHistory.body.messages, []);
+  ok("대화 삭제", "사진별 conversation 삭제 시 메시지도 cascade 삭제");
+
+  console.log(`\n${integrationTarget === "staging" ? "Staging" : "Local"} integration summary`);
   console.log("- Mock/grounded/fallback paths: executed without paid external calls");
   console.log("- Live OpenAI call: not executed; no cost incurred");
-  console.log("- Auth policy module: test separately with npm run test:auth-policy");
-  console.log("- Actual API isolation: currently fails by design because verify_jwt=false and user_id is trusted");
+  console.log(`- Auth policy and actual API/RLS isolation: passed on ${integrationTarget} with two users`);
 }
 
-await run();
+async function cleanup() {
+  await db.from("user_events").delete().eq("device_id", `device_${suffix}`);
+  await db.from("chat_conversations").delete().eq("style_image_id", styleImageId);
+  if (owner || attacker) {
+    await db.from("wardrobe_items").delete().in("user_id", [owner, attacker].filter(Boolean));
+  }
+  await db.from("style_images").delete().eq("id", styleImageId);
+  for (const userId of [owner, attacker].filter(Boolean)) {
+    await db.auth.admin.deleteUser(userId);
+  }
+}
+
+try {
+  await run();
+} finally {
+  await cleanup();
+}

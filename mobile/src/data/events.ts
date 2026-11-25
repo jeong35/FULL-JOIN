@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { API_URL } from './api';
+import { acknowledgeOutbox, compactOutbox, markOutboxFailed, retryDelayMs, type OutboxRecord } from './eventOutboxCore';
 import { getSession } from './session';
 
 // 서버 src/fulljoin/events.ts의 EVENT_NAMES와 같아야 한다(scripts/check-events.mjs가 확인).
@@ -87,18 +88,34 @@ export const EVENT_NAMES = [
   'hint_view',
   'hint_click',
   'hint_close',
+  'recommendation_view',
+  'recommendation_item_click',
+  'recommendation_combo_view',
+  'recommendation_choice',
+  'notification_prompt_view',
+  'notification_consent',
+  'notification_decline',
+  'notification_permission',
+  'notification_schedule_done',
+  'notification_schedule_failed',
+  'notification_cancel',
+  'notification_open',
+  'notification_recommendation_reselect',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
 export type EventProps = Record<string, string | number | boolean | null>;
 
-type QueuedEvent = { session_id: string; name: EventName; ts: string; user_id: string | null; props: EventProps };
+type QueuedEvent = OutboxRecord & { session_id: string; name: EventName; ts: string; user_id: string | null; props: EventProps };
 type AnalyticsSessionRecord = { session_id: string; last_active_at: number; user_id: string | null };
 
 const DEVICE_KEY = 'odit-device-v1';
 const ANALYTICS_SESSION_KEY = 'odit-analytics-session-v1';
+const EVENT_OUTBOX_KEY = 'odit-event-outbox-v1';
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_BATCH = 20;
+const MAX_OUTBOX_EVENTS = 200;
+const OUTBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FLUSH_MS = 2000;
 
 function randomId(): string {
@@ -125,10 +142,47 @@ function readDeviceId(): string {
 const deviceId = typeof window === 'undefined' ? 'server-render' : readDeviceId();
 const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
 const appVersion = Constants.expoConfig?.version ?? 'unknown';
-const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-11-v4';
+const analyticsVersion = process.env.EXPO_PUBLIC_ANALYTICS_VERSION ?? '2026-11-25-v1';
 let queue: QueuedEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let sending = false;
 let memoryAnalyticsSession: AnalyticsSessionRecord | null = null;
+
+function validQueuedEvent(value: unknown): value is QueuedEvent {
+  if (value === null || typeof value !== 'object') return false;
+  const event = value as Partial<QueuedEvent>;
+  return typeof event.event_id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(event.event_id) &&
+    typeof event.enqueued_at === 'number' && Number.isFinite(event.enqueued_at) &&
+    typeof event.attempts === 'number' && Number.isInteger(event.attempts) && event.attempts >= 0 &&
+    typeof event.session_id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(event.session_id) &&
+    typeof event.name === 'string' && (EVENT_NAMES as readonly string[]).includes(event.name) &&
+    typeof event.ts === 'string' && Number.isFinite(Date.parse(event.ts)) &&
+    (event.user_id === null || typeof event.user_id === 'string') &&
+    event.props !== null && typeof event.props === 'object' && !Array.isArray(event.props);
+}
+
+function readOutbox(): QueuedEvent[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(EVENT_OUTBOX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return compactOutbox(Array.isArray(parsed) ? parsed.filter(validQueuedEvent) : [], Date.now(), MAX_OUTBOX_EVENTS, OUTBOX_TTL_MS);
+  } catch {
+    return [];
+  }
+}
+
+function persistOutbox(): void {
+  queue = compactOutbox(queue, Date.now(), MAX_OUTBOX_EVENTS, OUTBOX_TTL_MS);
+  try {
+    globalThis.localStorage?.setItem(EVENT_OUTBOX_KEY, JSON.stringify(queue));
+  } catch {
+    // 저장 공간이 없으면 현재 페이지의 메모리 queue는 유지한다.
+  }
+}
+
+if (typeof window !== 'undefined') queue = readOutbox();
 
 function readAnalyticsSession(): AnalyticsSessionRecord | null {
   try {
@@ -251,17 +305,53 @@ export function track(name: EventName, props: EventProps = {}): void {
     // 30분 타임아웃이나 사용자 전환으로 세션이 바뀌면 이전 세션 큐를 먼저 보낸다.
     if (queue.length > 0 && queue[queue.length - 1].session_id !== eventSessionId) flushEvents();
 
+    const eventId = randomId();
     queue.push({
+      event_id: eventId,
+      enqueued_at: now,
+      attempts: 0,
       session_id: eventSessionId,
       name,
       ts: new Date(now).toISOString(),
       user_id: userId,
-      props: clean({ app_version: appVersion, analytics_version: analyticsVersion, ...props }),
+      props: clean({ client_event_id: eventId, app_version: appVersion, analytics_version: analyticsVersion, ...props }),
     });
+    persistOutbox();
     if (queue.length >= MAX_BATCH) flushEvents();
     else if (timer === null) timer = setTimeout(flushEvents, FLUSH_MS);
   } catch {
     // 기록은 앱 사용을 막지 않는다.
+  }
+}
+
+async function sendPendingEvents(): Promise<void> {
+  if (sending || queue.length === 0) return;
+  const firstSessionId = queue[0].session_id;
+  let batchSize = 0;
+  while (batchSize < queue.length && batchSize < MAX_BATCH && queue[batchSize].session_id === firstSessionId) batchSize += 1;
+  const queued = queue.slice(0, batchSize);
+  const eventIds = new Set(queued.map((event) => event.event_id));
+  const events = queued.map(({ session_id: _sessionId, event_id: _eventId, enqueued_at: _enqueuedAt, attempts: _attempts, ...event }) => event);
+  sending = true;
+  try {
+    const response = await fetch(`${API_URL}/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
+      keepalive: true,
+    });
+    if (!response.ok) throw new Error(`analytics_http_${response.status}`);
+    queue = acknowledgeOutbox(queue, eventIds);
+    persistOutbox();
+    if (queue.length > 0) timer = setTimeout(flushEvents, 0);
+  } catch {
+    queue = markOutboxFailed(queue, eventIds);
+    persistOutbox();
+    const attempts = Math.max(0, ...queue.filter((event) => eventIds.has(event.event_id)).map((event) => event.attempts));
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => { retryTimer = null; flushEvents(); }, retryDelayMs(attempts));
+  } finally {
+    sending = false;
   }
 }
 
@@ -270,27 +360,7 @@ export function flushEvents(): void {
     clearTimeout(timer);
     timer = null;
   }
-  if (queue.length === 0) return;
-  const firstSessionId = queue[0].session_id;
-  let batchSize = 0;
-  while (batchSize < queue.length && batchSize < MAX_BATCH && queue[batchSize].session_id === firstSessionId) {
-    batchSize += 1;
-  }
-  const queued = queue.slice(0, batchSize);
-  queue = queue.slice(batchSize);
-  const events = queued.map(({ session_id: _sessionId, ...event }) => event);
-  try {
-    // text/plain이면 브라우저가 사전 확인(preflight) 없이 보내고, keepalive라 페이지를 닫는 중에도 전송된다.
-    void fetch(`${API_URL}/events`, {
-      method: 'POST',
-      headers: { 'content-type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
-      keepalive: true,
-    }).catch(() => undefined);
-  } catch {
-    // 기록은 앱 사용을 막지 않는다.
-  }
-  if (queue.length > 0) timer = setTimeout(flushEvents, FLUSH_MS);
+  void sendPendingEvents();
 }
 
 // 탭을 닫거나 다른 앱으로 갈 때 남은 기록을 보낸다.
@@ -299,4 +369,6 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !=
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushEvents();
   });
+  window.addEventListener('online', flushEvents);
+  if (queue.length > 0) timer = setTimeout(flushEvents, 0);
 }

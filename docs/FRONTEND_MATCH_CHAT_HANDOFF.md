@@ -41,13 +41,16 @@
 }
 ```
 
-`history`는 현재 요청 문맥 전달용이며 영구 저장 계약이 아니다. 사진별 대화 저장은 인증·삭제 정책 확정 후 별도 API로 추가한다.
+`history`는 구버전 앱의 요청 문맥 전달용으로 계속 허용한다. 인증된 서버는 DB에 이전 메시지가 있으면 해당 사진 conversation의 최근 8개를 정본으로 사용한다. 새 응답의 `conversation_id`를 저장하면 현재 사진의 대화 스레드를 식별할 수 있다.
+
+사진별 기록은 `GET /chat/history?style_image_id=IMG-001&limit=50`으로 복원한다. `next_before`가 숫자면 `before`에 넣어 이전 페이지를 가져온다. `DELETE /chat/history?style_image_id=IMG-001`은 현재 인증 사용자의 해당 사진 기록만 삭제한다. 모든 history API는 Supabase access token이 필요하며 운영 배포 전 Auth 연동이 선행돼야 한다.
 
 ## 챗 응답
 
 ```json
 {
   "answer": "내 옷장 기준: 옷장에 실제 등록된 니트 · 아이보리 · 레귤러를 활용할 수 있어요. 일반 패션 조언: 출근용으로는 단정한 색 조합과 간결한 실루엣이 무난해요.",
+  "conversation_id": "7e8bb1b1-327e-46f9-a82d-38f15d76456f",
   "answer_source": "openai",
   "intents": ["wardrobe_outfit", "saved_photo_outfit", "general_advice", "mixed"],
   "answer_sections": [

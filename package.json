@@ -14,12 +14,21 @@
     "check:chat": "node scripts/check-chat.mjs",
     "check:chat-grounding": "node scripts/check-chat-grounding.mjs",
     "check:match-explanations": "node scripts/check-match-explanations.mjs",
+    "check:match-reason-ui": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-match-reason-ui.mjs",
     "test:chat03": "node --test --test-reporter=spec tests/test_chat_consultation.ts",
     "test:llmops": "node --test --test-reporter=spec tests/test_llm_observability.ts",
+    "test:llmops-alerts": "node --test --test-reporter=spec tests/test_llmops_alerts.ts",
     "test:auth-policy": "node --test --test-reporter=spec tests/test_auth_policy.ts",
-    "test:admin-metrics": "node --test --test-reporter=spec tests/test_admin_metrics.ts",
+    "test:api-auth": "node --test --test-reporter=spec tests/test_api_auth.ts",
+    "test:chat-history": "node --test --test-reporter=spec tests/test_chat_history.ts",
+    "test:admin-metrics": "node --test --test-reporter=spec tests/test_admin_metrics.ts tests/test_journey_metrics.ts tests/test_event_outbox.ts",
+    "test:photo-batch": "node --test --test-reporter=spec tests/test_photo_batch.ts",
+    "test:notifications": "node --test --test-reporter=spec scripts/check-task4-notifications.ts",
     "test:integration:local": "node scripts/test-local-integration.mjs",
+    "test:integration:staging": "FULL_JOIN_INTEGRATION_TARGET=staging node scripts/test-local-integration.mjs",
     "dashboard:local": "node admin-dashboard/server.mjs",
+    "dashboard:production": "DASHBOARD_DATA_SOURCE=production DASHBOARD_ALLOW_REMOTE_READONLY=true node admin-dashboard/server.mjs",
+    "dashboard:alerts": "node admin-dashboard/check-alerts.mjs",
     "check:events": "node scripts/check-events.mjs",
     "check:weather": "node scripts/check-weather.mjs",
     "check:wardrobe-expansion": "node scripts/check-wardrobe-expansion.mjs",
@@ -28,23 +37,25 @@
     "link:item-product": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/link-item-product.mjs",
     "review:style-image": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/review-style-image.mjs",
     "publish:style-image": "node --env-file-if-exists=.env --env-file-if-exists=supabase/.env.functions scripts/publish-style-image.mjs",
-    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check src/fulljoin/garment_similarity.ts && node --check src/fulljoin/llm_observability.ts && node --check src/fulljoin/admin_metrics.ts && node --check src/fulljoin/auth_policy.ts && node --check src/fulljoin/catalog.ts && node --check src/fulljoin/feed.ts && node --check src/fulljoin/analysis.ts && node --check src/fulljoin/product_metadata.ts && node --check src/fulljoin/review.ts && node --check src/fulljoin/heart.ts && node --check src/fulljoin/decision.ts && node --check src/fulljoin/outfit.ts && node --check src/fulljoin/archive.ts && node --check src/fulljoin/chat.ts && node --check src/fulljoin/events.ts && node --check src/fulljoin/weather.ts && node --check admin-dashboard/server.mjs && node --check admin-dashboard/public/app.js && node --check scripts/test-local-integration.mjs && node --check scripts/import-style-images.mjs && node --check scripts/link-item-product.mjs && node --check scripts/review-style-image.mjs && node --check scripts/publish-style-image.mjs && node --check scripts/generate-analysis-contract.mjs && node --check scripts/check-product-metadata.mjs && node --check scripts/check-review-publish.mjs && node --check scripts/check-heart-response.mjs && node --check scripts/check-decision.mjs && node --check scripts/check-outfits.mjs && node --check scripts/check-archive.mjs && node --check scripts/check-chat.mjs && node --check scripts/check-chat-grounding.mjs && node --check scripts/check-match-explanations.mjs && node --check scripts/check-events.mjs && node --check scripts/check-weather.mjs && node --check scripts/check-wardrobe-expansion.mjs && node --check supabase/functions/api/index.ts && node --check tests/test_gap_analysis_golden.ts && node --check tests/test_acceptance_contracts_golden.ts && node --check tests/test_server_contract.ts && node --check tests/test_garment_similarity.ts && node --check tests/test_matching_integration.ts && node --check tests/test_chat_consultation.ts && node --check tests/test_llm_observability.ts && node --check tests/test_auth_policy.ts && node --check tests/test_admin_metrics.ts",
+    "check:syntax": "node --check src/fulljoin/gap_analysis.ts && node --check src/fulljoin/garment_similarity.ts && node --check src/fulljoin/llm_observability.ts && node --check src/fulljoin/llmops_alerts.ts && node --check src/fulljoin/admin_metrics.ts && node --check src/fulljoin/journey_metrics.ts && node --check src/fulljoin/auth_policy.ts && node --check src/fulljoin/api_auth.ts && node --check src/fulljoin/catalog.ts && node --check src/fulljoin/feed.ts && node --check src/fulljoin/analysis.ts && node --check src/fulljoin/product_metadata.ts && node --check src/fulljoin/review.ts && node --check src/fulljoin/heart.ts && node --check src/fulljoin/decision.ts && node --check src/fulljoin/outfit.ts && node --check src/fulljoin/archive.ts && node --check src/fulljoin/chat.ts && node --check src/fulljoin/events.ts && node --check src/fulljoin/weather.ts && node --check mobile/src/data/matchReasonCore.ts && node --check mobile/src/data/eventOutboxCore.ts && node --check mobile/src/data/photoBatchCore.ts && node --check admin-dashboard/server.mjs && node --check admin-dashboard/check-alerts.mjs && node --check admin-dashboard/public/app.js && node --check scripts/verify-release.mjs && node --check scripts/test-local-integration.mjs && node --check scripts/import-style-images.mjs && node --check scripts/link-item-product.mjs && node --check scripts/review-style-image.mjs && node --check scripts/publish-style-image.mjs && node --check scripts/generate-analysis-contract.mjs && node --check scripts/check-product-metadata.mjs && node --check scripts/check-review-publish.mjs && node --check scripts/check-heart-response.mjs && node --check scripts/check-decision.mjs && node --check scripts/check-outfits.mjs && node --check scripts/check-archive.mjs && node --check scripts/check-chat.mjs && node --check scripts/check-chat-grounding.mjs && node --check scripts/check-match-explanations.mjs && node --check scripts/check-match-reason-ui.mjs && node --check scripts/check-events.mjs && node --check scripts/check-weather.mjs && node --check scripts/check-wardrobe-expansion.mjs && node --check supabase/functions/api/index.ts && node --check tests/test_gap_analysis_golden.ts && node --check tests/test_acceptance_contracts_golden.ts && node --check tests/test_server_contract.ts && node --check tests/test_garment_similarity.ts && node --check tests/test_matching_integration.ts && node --check tests/test_chat_consultation.ts && node --check tests/test_llm_observability.ts && node --check tests/test_llmops_alerts.ts && node --check tests/test_auth_policy.ts && node --check tests/test_api_auth.ts && node --check tests/test_chat_history.ts && node --check tests/test_admin_metrics.ts && node --check tests/test_journey_metrics.ts && node --check tests/test_event_outbox.ts && node --check tests/test_photo_batch.ts",
     "check:types": "tsc --noEmit",
     "test:golden": "node --test --test-reporter=spec tests/test_gap_analysis_golden.ts tests/test_acceptance_contracts_golden.ts",
     "test:server": "node --test --test-reporter=spec tests/test_server_contract.ts",
     "test:similarity": "node --test --test-reporter=spec tests/test_garment_similarity.ts tests/test_matching_integration.ts",
     "check:mobile": "npm --prefix mobile run typecheck && npm --prefix mobile run lint",
-    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:decision && npm run check:outfits && npm run check:archive && npm run check:chat && npm run check:chat-grounding && npm run check:match-explanations && npm run check:events && npm run check:weather && npm run check:wardrobe-expansion && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server && npm run test:similarity && npm run test:chat03 && npm run test:llmops && npm run test:auth-policy && npm run test:admin-metrics"
+    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:decision && npm run check:outfits && npm run check:archive && npm run check:chat && npm run check:chat-grounding && npm run check:match-explanations && npm run check:match-reason-ui && npm run check:events && npm run check:weather && npm run check:wardrobe-expansion && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server && npm run test:similarity && npm run test:chat03 && npm run test:llmops && npm run test:llmops-alerts && npm run test:auth-policy && npm run test:api-auth && npm run test:chat-history && npm run test:admin-metrics && npm run test:photo-batch"
   },
   "engines": {
     "node": ">=22.18"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "web-push": "^3.6.7",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
+    "@types/web-push": "^3.6.4",
     "supabase": "^3.0.0",
     "typescript": "5.9.3"
   }

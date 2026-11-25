@@ -1,4 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  authorizeRequestedUsers,
+  bearerToken,
+  requestedUserIds,
+  userRouteRequiresAuth,
+} from "../../../src/fulljoin/api_auth.ts";
+import { AccessControlError } from "../../../src/fulljoin/auth_policy.ts";
 
 import {
   analyzeInputSchema,
@@ -11,9 +18,11 @@ import { filterArchive, SEASONS, seasonForSavedAt, type ArchiveRecord, type Seas
 import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
 import {
   buildChatResponse,
+  chatHistoryQuerySchema,
   chatRequiresLlm,
   chatInputSchema,
   chatModelOutputSchema,
+  storedChatMessageSchema,
   withGeneralAdvice,
   type ChatItem,
   type ChatWardrobeItem,
@@ -135,6 +144,36 @@ async function bodyAsObject(request: Request): Promise<JsonObject | null> {
   } catch {
     return null;
   }
+}
+
+async function bodyForAccessControl(request: Request): Promise<unknown> {
+  if (request.method === "GET" || request.method === "OPTIONS") return null;
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json") && !contentType.includes("text/plain")) return null;
+  try {
+    return await request.clone().json();
+  } catch {
+    return null;
+  }
+}
+
+async function authenticateUserRoute(
+  request: Request,
+  url: URL,
+  path: string,
+  db: SupabaseClient,
+): Promise<string | null> {
+  if (!userRouteRequiresAuth(path, request.method)) return null;
+  const token = bearerToken(request.headers.get("authorization"));
+  if (token === null) throw new AccessControlError(401, "authentication_required");
+  const { data, error } = await db.auth.getUser(token);
+  if (error !== null || data.user === null) throw new AccessControlError(401, "authentication_required");
+  return authorizeRequestedUsers(data.user.id, requestedUserIds({
+    path,
+    method: request.method,
+    queryUserId: url.searchParams.get("user_id"),
+    body: await bodyForAccessControl(request),
+  }));
 }
 
 async function styleImageExists(db: SupabaseClient, styleImageId: string): Promise<boolean> {
@@ -866,6 +905,107 @@ async function requestOpenAiChat(input: {
   return { answer: parsed.data.answer, model, usage: parseLlmUsage(payload) };
 }
 
+type ChatAnswerSource = "grounded" | "openai" | "fallback";
+type ChatResponse = ReturnType<typeof buildChatResponse>;
+
+async function recentChatContext(
+  db: SupabaseClient,
+  userId: string,
+  styleImageId: string,
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  const { data: conversation, error: conversationError } = await db.from("chat_conversations")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("style_image_id", styleImageId)
+    .maybeSingle();
+  if (conversationError !== null) throw conversationError;
+  if (conversation === null) return [];
+
+  const { data, error } = await db.from("chat_messages")
+    .select("id,ordinal,role,content,products,answer_source,created_at")
+    .eq("conversation_id", conversation.id)
+    .order("ordinal", { ascending: false })
+    .limit(8);
+  if (error !== null) throw error;
+  return storedChatMessageSchema.array().parse(data ?? []).reverse().map(({ role, content }) => ({ role, content }));
+}
+
+async function persistedChatResponse(
+  db: SupabaseClient,
+  input: { user_id: string; style_image_id: string; message: string },
+  response: ChatResponse,
+  answerSource: ChatAnswerSource,
+): Promise<Response> {
+  const { data: conversationId, error } = await db.rpc("append_chat_exchange", {
+    p_user_id: input.user_id,
+    p_style_image_id: input.style_image_id,
+    p_user_content: input.message,
+    p_assistant_content: response.answer,
+    p_products: response.products,
+    p_answer_source: answerSource,
+  });
+  if (error !== null) throw error;
+  if (typeof conversationId !== "string") throw new Error("chat_conversation_not_created");
+  return json({ ...response, answer_source: answerSource, conversation_id: conversationId });
+}
+
+async function handleChatHistory(
+  request: Request,
+  url: URL,
+  db: SupabaseClient,
+  authenticatedUserId: string,
+): Promise<Response> {
+  const parsed = chatHistoryQuerySchema.safeParse({
+    style_image_id: url.searchParams.get("style_image_id") ?? "",
+    limit: url.searchParams.get("limit") ?? undefined,
+    before: url.searchParams.get("before") ?? undefined,
+  });
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0];
+    return apiError(400, "invalid_chat_history", parsed.error.issues[0]?.message ?? "대화 기록 요청을 확인해 주세요", typeof field === "string" ? field : undefined);
+  }
+
+  if (request.method === "DELETE") {
+    const { error } = await db.from("chat_conversations")
+      .delete()
+      .eq("user_id", authenticatedUserId)
+      .eq("style_image_id", parsed.data.style_image_id);
+    if (error !== null) throw error;
+    return json({ style_image_id: parsed.data.style_image_id, deleted: true });
+  }
+  if (request.method !== "GET") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+
+  const { data: conversation, error: conversationError } = await db.from("chat_conversations")
+    .select("id,style_image_id,created_at,updated_at")
+    .eq("user_id", authenticatedUserId)
+    .eq("style_image_id", parsed.data.style_image_id)
+    .maybeSingle();
+  if (conversationError !== null) throw conversationError;
+  if (conversation === null) {
+    return json({ conversation_id: null, style_image_id: parsed.data.style_image_id, messages: [], next_before: null });
+  }
+
+  let messagesQuery = db.from("chat_messages")
+    .select("id,ordinal,role,content,products,answer_source,created_at")
+    .eq("conversation_id", conversation.id)
+    .order("ordinal", { ascending: false })
+    .limit(parsed.data.limit + 1);
+  if (parsed.data.before !== undefined) messagesQuery = messagesQuery.lt("ordinal", parsed.data.before);
+  const { data, error } = await messagesQuery;
+  if (error !== null) throw error;
+  const messages = storedChatMessageSchema.array().parse(data ?? []);
+  const page = messages.slice(0, parsed.data.limit);
+  const nextBefore = messages.length > parsed.data.limit ? page.at(-1)?.ordinal ?? null : null;
+  return json({
+    conversation_id: conversation.id,
+    style_image_id: conversation.style_image_id,
+    created_at: conversation.created_at,
+    updated_at: conversation.updated_at,
+    messages: page.reverse(),
+    next_before: nextBefore,
+  });
+}
+
 async function handleChat(request: Request, db: SupabaseClient): Promise<Response> {
   if (request.method !== "POST") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
   const operationStartedAt = performance.now();
@@ -916,12 +1056,13 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
       status: "grounded",
       latency_ms: performance.now() - operationStartedAt,
     }));
-    return json({ ...fallback, answer_source: "grounded" });
+    return await persistedChatResponse(db, input.data, fallback, "grounded");
   }
   try {
+    const storedHistory = await recentChatContext(db, input.data.user_id, input.data.style_image_id);
     const result = await requestOpenAiChat({
       message: input.data.message,
-      history: input.data.history ?? [],
+      history: storedHistory.length > 0 ? storedHistory : input.data.history ?? [],
     });
     await persistLlmMetric(db, buildLlmOperationMetric({
       feature: "chat",
@@ -933,7 +1074,7 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
       usage: result.usage,
       latency_ms: performance.now() - operationStartedAt,
     }));
-    return json({ ...withGeneralAdvice(fallback, result.answer), answer_source: "openai" });
+    return await persistedChatResponse(db, input.data, withGeneralAdvice(fallback, result.answer), "openai");
   } catch (error) {
     await persistLlmMetric(db, buildLlmOperationMetric({
       feature: "chat",
@@ -947,7 +1088,7 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
       fallback_reason: fallbackReason(error),
     }));
     console.error("OpenAI chat failed; using grounded fallback", classifyLlmError(error).error_type);
-    return json({ ...fallback, answer_source: "fallback" });
+    return await persistedChatResponse(db, input.data, fallback, "fallback");
   }
 }
 
@@ -1187,6 +1328,7 @@ export default {
     const path = routePath(url);
 
     try {
+      const authenticatedUserId = await authenticateUserRoute(request, url, path, db);
       if (path === "/health" && request.method === "GET") {
         return json({
           ok: true,
@@ -1207,6 +1349,10 @@ export default {
       if (path === "/weather" && request.method === "GET") return await handleWeather(url);
       if (path === "/archive") return await handleArchive(request, url, db);
       if (path === "/chat") return await handleChat(request, db);
+      if (path === "/chat/history") {
+        if (authenticatedUserId === null) throw new AccessControlError(401, "authentication_required");
+        return await handleChatHistory(request, url, db, authenticatedUserId);
+      }
       if (path === "/events") return await handleEvents(request, db);
       const detailMatch = path.match(/^\/style-images\/([^/]+)$/);
       if (detailMatch?.[1] !== undefined) {
@@ -1232,6 +1378,12 @@ export default {
       if (heartMatch?.[1] !== undefined) return await handleHeart(request, decodeURIComponent(heartMatch[1]), db);
       return apiError(404, "route_not_found", "요청한 API를 찾을 수 없어요");
     } catch (error) {
+      if (error instanceof AccessControlError) {
+        const message = error.code === "user_id_mismatch"
+          ? "인증된 사용자와 요청 사용자가 일치하지 않아요"
+          : "로그인이 필요해요";
+        return apiError(error.status, error.code, message, "user_id");
+      }
       console.error(error);
       return apiError(500, "internal_error", "서버에서 요청을 처리하지 못했어요");
     }

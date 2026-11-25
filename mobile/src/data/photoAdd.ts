@@ -3,15 +3,19 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useSyncExternalStore } from 'react';
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
 
 import { cutoutPhoto, SERVER_HAS_PHOTO_CUTOUT, SERVER_HAS_PHOTO_TAGGING, tagWardrobePhoto } from './api';
 import { canCutoutInBrowser, cutoutInBrowser } from './cutoutWeb';
 import { BASE_COLORS, COLOR_HEX, colorsForKind, fitsForKind, type Color, type Kind, type Slot, type VisualFit } from './catalog';
 import { jpegColor, toLab } from './photoColor';
+import { appendUniqueBatchValues, removeBatchValue } from './photoBatchCore';
 import type { Season } from './types';
 
 export const MAX_BOXES = 4;
+export const MAX_BATCH_PHOTOS = 4;
+export const MAX_BATCH_ITEMS = 12;
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 // 서버로 보내는 사진의 긴 쪽(누끼 서버도 1024로 줄인다).
 const UPLOAD_SIDE = 1024;
 // 브라우저에서 배경을 지울 때 넣는 사진의 긴 쪽(모델은 320으로 줄여 보고, 결과 사진은 480).
@@ -22,7 +26,7 @@ const FALLBACK_SIDE = 640;
 const COLOR_SIDE = 48;
 const COLOR_INSET = 0.2;
 
-export type PhotoSource = { uri: string; width: number; height: number };
+export type PhotoSource = { uri: string; width: number; height: number; fileSize: number | null; mimeType: string | null };
 
 // 네모: 사진 크기에 대한 비율(0~1).
 export type Box = { id: string; x: number; y: number; w: number; h: number };
@@ -41,17 +45,28 @@ export type CutItem = {
   colorAuto: boolean;
   // AI 태깅으로 종류까지 채웠는지.
   tagged: boolean;
+  saveStatus: 'pending' | 'saving' | 'saved' | 'failed';
+  savedWardrobeId: string | null;
+  saveError: string | null;
+};
+
+export type PhotoDraftEntry = {
+  id: string;
+  source: PhotoSource;
+  boxes: Box[];
+  items: CutItem[];
+  status: 'pending' | 'processing' | 'ready' | 'failed';
+  error: string | null;
 };
 
 type Draft = {
-  source: PhotoSource | null;
-  boxes: Box[];
-  items: CutItem[];
+  photos: PhotoDraftEntry[];
+  activeIndex: number;
   // 옷 자세히에서 '사진 넣기'로 왔으면 그 옷 id(새 옷을 만들지 않고 사진만 붙인다).
   attachTo: string | null;
 };
 
-let draft: Draft = { source: null, boxes: [], items: [], attachTo: null };
+let draft: Draft = { photos: [], activeIndex: 0, attachTo: null };
 const listeners = new Set<() => void>();
 let nextId = 1;
 
@@ -80,27 +95,82 @@ export function newBox(index: number): Box {
 }
 
 export function startPhotoDraft(source: PhotoSource, attachTo: string | null = null) {
-  setDraft({ source, boxes: [newBox(0)], items: [], attachTo });
+  startPhotoBatch([source], attachTo);
+}
+
+function photoEntry(source: PhotoSource): PhotoDraftEntry {
+  return { id: `photo-${nextId++}`, source, boxes: [newBox(0)], items: [], status: 'pending', error: null };
+}
+
+export function startPhotoBatch(sources: readonly PhotoSource[], attachTo: string | null = null) {
+  for (const photo of draft.photos) releaseSource(photo.source);
+  const selected = sources.slice(0, attachTo === null ? MAX_BATCH_PHOTOS : 1);
+  setDraft({ photos: selected.map(photoEntry), activeIndex: 0, attachTo });
+}
+
+export function appendPhotoSources(sources: readonly PhotoSource[]) {
+  if (draft.attachTo !== null || sources.length === 0) return;
+  const combined = appendUniqueBatchValues(
+    draft.photos,
+    sources.map(photoEntry),
+    (photo) => photo.source.uri,
+    MAX_BATCH_PHOTOS,
+  );
+  setDraft({ photos: combined });
+}
+
+export function setActivePhoto(index: number) {
+  if (index < 0 || index >= draft.photos.length) return;
+  setDraft({ activeIndex: index });
+}
+
+function releaseSource(source: PhotoSource) {
+  if (source.uri.startsWith('blob:')) globalThis.URL?.revokeObjectURL?.(source.uri);
+}
+
+export function removeDraftPhoto(index: number) {
+  const target = draft.photos[index];
+  if (target === undefined || draft.photos.length <= 1 || draft.attachTo !== null) return;
+  releaseSource(target.source);
+  const photos = removeBatchValue(draft.photos, index);
+  setDraft({ photos, activeIndex: Math.min(draft.activeIndex, photos.length - 1) });
 }
 
 export function setBoxes(boxes: Box[]) {
-  setDraft({ boxes });
+  setDraft({ photos: draft.photos.map((photo, index) => index === draft.activeIndex
+    ? { ...photo, boxes, items: [], status: 'pending', error: null }
+    : photo) });
 }
 
 export function setCutItems(items: CutItem[]) {
-  setDraft({ items });
+  setDraft({ photos: draft.photos.map((photo, index) => index === draft.activeIndex
+    ? { ...photo, items, status: 'ready', error: null }
+    : photo) });
+}
+
+export function setPhotoProcessing(index: number, status: PhotoDraftEntry['status'], error: string | null = null) {
+  setDraft({ photos: draft.photos.map((photo, photoIndex) => photoIndex === index ? { ...photo, status, error } : photo) });
+}
+
+export function setAllCutItems(items: readonly CutItem[]) {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  setDraft({ photos: draft.photos.map((photo) => ({ ...photo, items: photo.items.map((item) => byId.get(item.id) ?? item) })) });
 }
 
 export function updateCutItem(id: string, patch: Partial<CutItem>) {
-  setDraft({ items: draft.items.map((item) => (item.id === id ? { ...item, ...patch } : item)) });
+  setDraft({ photos: draft.photos.map((photo) => ({
+    ...photo,
+    items: photo.items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+  })) });
 }
 
 export function removeCutItem(id: string) {
-  setDraft({ items: draft.items.filter((item) => item.id !== id) });
+  setDraft({ photos: draft.photos.map((photo) => ({ ...photo, items: photo.items.filter((item) => item.id !== id) })) });
 }
 
 export function clearPhotoDraft() {
-  setDraft({ source: null, boxes: [], items: [], attachTo: null });
+  for (const photo of draft.photos) releaseSource(photo.source);
+  setDraft({ photos: [], activeIndex: 0, attachTo: null });
 }
 
 // ── 사진 색 → 색 이름 ──
@@ -141,17 +211,41 @@ function sizeOf(uri: string): Promise<{ width: number; height: number }> {
 }
 
 // 사진 찍기 · 앨범에서 고르기. 취소하면 null. 웹에서는 누른 그 순간에 불러야 파일 고르기 창이 열린다.
-export async function pickPhoto(from: 'camera' | 'album'): Promise<PhotoSource | null> {
-  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.9 };
+export async function pickPhotos(from: 'camera' | 'album', selectionLimit = MAX_BATCH_PHOTOS): Promise<PhotoSource[]> {
+  const multiple = from === 'album' && selectionLimit > 1;
+  const options: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    quality: 0.9,
+    allowsMultipleSelection: multiple,
+    selectionLimit: multiple ? selectionLimit : 1,
+    orderedSelection: multiple,
+  };
   if (from === 'camera') {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) throw new Error('카메라를 쓸 수 있게 허락해 주세요');
+  } else if (Platform.OS !== 'web') {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) throw new Error('앨범 사진을 볼 수 있게 허락해 주세요');
   }
   const result = from === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-  const asset = result.canceled ? undefined : result.assets[0];
-  if (asset === undefined) return null;
-  const size = asset.width > 0 && asset.height > 0 ? { width: asset.width, height: asset.height } : await sizeOf(asset.uri);
-  return { uri: asset.uri, ...size };
+  if (result.canceled) return [];
+  const sources: PhotoSource[] = [];
+  for (const asset of result.assets.slice(0, selectionLimit)) {
+    if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_PHOTO_BYTES) {
+      throw new Error('사진 한 장은 15MB보다 작아야 해요');
+    }
+    if (asset.mimeType && !['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/webp'].includes(asset.mimeType)) {
+      throw new Error('JPG, PNG, HEIC 또는 WebP 사진을 골라 주세요');
+    }
+    const size = asset.width > 0 && asset.height > 0 ? { width: asset.width, height: asset.height } : await sizeOf(asset.uri);
+    if (size.width < 32 || size.height < 32) throw new Error('사진이 너무 작아요. 다른 사진을 골라 주세요');
+    sources.push({ uri: asset.uri, ...size, fileSize: asset.fileSize ?? null, mimeType: asset.mimeType ?? null });
+  }
+  return sources;
+}
+
+export async function pickPhoto(from: 'camera' | 'album'): Promise<PhotoSource | null> {
+  return (await pickPhotos(from, 1))[0] ?? null;
 }
 
 async function cropBox(source: PhotoSource, box: Box, side: number): Promise<string> {
@@ -186,7 +280,19 @@ async function prefill(item: CutItem): Promise<CutItem> {
 }
 
 async function cutOne(source: PhotoSource, box: Box): Promise<CutItem> {
-  const base = { id: box.id, slot: null, kind: null, colorName: null, fit: null, seasons: [], colorAuto: false, tagged: false };
+  const base = {
+    id: box.id,
+    slot: null,
+    kind: null,
+    colorName: null,
+    fit: null,
+    seasons: [],
+    colorAuto: false,
+    tagged: false,
+    saveStatus: 'pending' as const,
+    savedWardrobeId: null,
+    saveError: null,
+  };
   try {
     // 서버 누끼(u2net)가 있으면 서버에서, 없으면 웹에서는 브라우저에서(u2netp) 지운다.
     if (SERVER_HAS_PHOTO_CUTOUT) {
