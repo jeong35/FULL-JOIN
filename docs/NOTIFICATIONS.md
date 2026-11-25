@@ -4,7 +4,7 @@
 
 아래 초기 일회성 설계 설명은 이 반복 예약 규칙으로 대체한다.
 
-> 2026-11-25 운영 기반 배포 완료. migration `202611250001`, VAPID secrets, Edge Function `notifications` version 1, Expo deployment `tsnrjlpy32`를 production에 반영했다. GitHub CI, 로컬 DB/Edge 통합, 예약 adapter 테스트 9건, 모바일 typecheck/lint, Expo export가 통과했다. 운영 cron에서 dispatch HTTP 200과 빈 큐 정상 처리를 확인했다. 프론트 UI는 아직 모듈을 호출하지 않으므로 사용자 기능은 노출되지 않으며, 실제 브라우저/기기 수신·클릭은 UI 연동 후 별도 검증해야 한다.
+> 2026-11-25 운영 배포 완료. migration `202611250001`, VAPID secrets, Edge Function `notifications` version 1, Expo deployment `18rrpxhfbp`를 production에 반영했다. GitHub CI, 로컬 DB/Edge 통합, 예약 adapter 테스트 9건, 모바일 typecheck/lint, 최신 main Expo export가 통과했다. 운영 cron에서 dispatch HTTP 200과 빈 큐 정상 처리를 확인했다. PR #38의 추천 확인 창과 마이 탭 설정 UI가 운영 adapter를 호출하도록 연결됐다. 실제 브라우저/기기의 권한 허용, 수신 및 클릭은 아직 실기기 검증하지 않았다.
 
 ## 지원 범위
 
