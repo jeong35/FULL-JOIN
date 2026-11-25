@@ -12,6 +12,7 @@ import { SIDO_LIST, type Sido, type Sigungu } from './regions';
 export type Region = { name: string; lat: number; lon: number; current?: boolean };
 
 // 11/24 팀 결정 10번: 처음엔 현재 위치(폰·브라우저 위치 허용)로 날씨를 보고, 지역 버튼을 다시 누르면 목록에서 직접 고른다.
+// 11/25: 현재 위치도 버튼에는 '수원시 영통구'처럼 이름으로 보인다(currentRegionName). 이름을 못 찾을 때만 '현재 위치'.
 export const CURRENT_REGION_NAME = '현재 위치';
 
 // 지역 고르기(11/24): 시·도 → 시·군·구(data/regions.ts). 이름은 '경기 수원시 영통구'처럼 시·도를 앞에 붙인다.
@@ -49,6 +50,34 @@ export function choicesOf(sido: Sido): RegionChoice[] {
     group.children!.push({ name: item.name.slice(space + 1), region });
   }
   return out.sort((x, y) => Number(y.name === '광주') - Number(x.name === '광주') || x.name.localeCompare(y.name, 'ko'));
+}
+
+// 현재 위치 → 가장 가까운 시·군·구(경계 가운데 좌표 기준, 11/25). 주소 찾기 서비스(역지오코딩) 없이 목록 안에서 고른다 —
+// 경계 근처에서는 옆 구로 나올 수 있다.
+export function nearestRegion(lat: number, lon: number): Region | null {
+  let best: Region | null = null;
+  let bestDistance = Infinity;
+  const lonScale = Math.cos((lat * Math.PI) / 180);
+  for (const sido of SIDO_LIST) {
+    for (const item of sido.list) {
+      const distance = (item.lat - lat) ** 2 + ((item.lon - lon) * lonScale) ** 2;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = regionFor(sido, item);
+      }
+    }
+  }
+  return best;
+}
+
+// 현재 위치를 지역 버튼에 보여 줄 이름(11/25): 도는 빼고 '수원시 영통구', 특별시·광역시는 '서울 강남구'처럼 그대로.
+export function currentRegionName(lat: number, lon: number): string {
+  const name = nearestRegion(lat, lon)?.name;
+  if (name === undefined) return CURRENT_REGION_NAME;
+  const space = name.indexOf(' ');
+  if (space < 0) return name;
+  const head = name.slice(0, space);
+  return METRO_SIDO.has(head) || head === '광주' ? name : name.slice(space + 1);
 }
 
 // 지금 지역이 어느 시·도인지(시·도 칸에 표시할 때).
@@ -96,7 +125,9 @@ function readRegion(): Region {
       const parsed = JSON.parse(raw) as Partial<Region>;
       if (typeof parsed.lat === 'number' && typeof parsed.lon === 'number') {
         if (parsed.current === true || typeof parsed.name !== 'string') {
-          return { name: CURRENT_REGION_NAME, lat: parsed.lat, lon: parsed.lon, current: true };
+          // 예전에 '현재 위치'로만 저장한 것도 좌표로 이름을 다시 찾는다.
+          const name = typeof parsed.name === 'string' && parsed.name !== CURRENT_REGION_NAME ? parsed.name : currentRegionName(parsed.lat, parsed.lon);
+          return { name, lat: parsed.lat, lon: parsed.lon, current: true };
         }
         return { name: parsed.name, lat: parsed.lat, lon: parsed.lon };
       }
@@ -141,7 +172,9 @@ export function locateCurrentRegion(): Promise<boolean> {
     geo.getCurrentPosition(
       (position) => {
         const round = (value: number) => Math.round(value * 100) / 100;
-        setRegion({ name: CURRENT_REGION_NAME, lat: round(position.coords.latitude), lon: round(position.coords.longitude), current: true });
+        const lat = round(position.coords.latitude);
+        const lon = round(position.coords.longitude);
+        setRegion({ name: currentRegionName(lat, lon), lat, lon, current: true });
         resolve(true);
       },
       () => resolve(false),
