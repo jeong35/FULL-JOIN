@@ -92,7 +92,9 @@ export default function TabLayout() {
           }}
         />
       ))}
-      <Tabs.Screen name="chat" options={{ href: null }} />
+      {/* 챗봇은 탭 버튼만 숨긴다. href: null로 숨기면 expo-router 58에서는 '숨긴 탭'이 되어
+          /chat으로 가도 첫 탭(홈)으로 돌려보낸다(11/25 확인) — 그래서 버튼 칸만 안 보이게 한다. */}
+      <Tabs.Screen name="chat" options={{ title: '챗봇', tabBarItemStyle: { display: 'none' } }} />
     </Tabs>
     {showChatHint && (
       <HintBubble
