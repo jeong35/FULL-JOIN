@@ -86,6 +86,19 @@ export const EVENT_NAMES = [
   "hint_view",
   "hint_click",
   "hint_close",
+  "recommendation_view",
+  "recommendation_item_click",
+  "recommendation_combo_view",
+  "recommendation_choice",
+  "notification_prompt_view",
+  "notification_consent",
+  "notification_decline",
+  "notification_permission",
+  "notification_schedule_done",
+  "notification_schedule_failed",
+  "notification_cancel",
+  "notification_open",
+  "notification_recommendation_reselect",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

@@ -15,6 +15,7 @@ import { fetchStylePreferences, updateStylePreferences } from '@/data/api';
 import { enterAnalyticsScreen, flushEvents, getHomeAnalyticsScreen, recordAnalyticsBackground, resumeAnalyticsScreen, track } from '@/data/events';
 import { getSession, restoreStyles, useSession } from '@/data/session';
 import { loadFeed, loadWardrobe, resetUserData } from '@/data/store';
+import { protectNotificationAccount } from '@/data/webNotifications';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -106,6 +107,7 @@ export default function RootLayout() {
 
   // 로그인한 사용자가 정해지면(바뀌면) 그 사람의 옷장과 피드를 서버에서 받아 둔다.
   useEffect(() => {
+    void protectNotificationAccount(userId);
     if (userId === null) return;
     if (previousUserId.current !== null && previousUserId.current !== userId) resetUserData();
     previousUserId.current = userId;

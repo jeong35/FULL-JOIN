@@ -33,6 +33,22 @@
 
 ## 변경 이력
 
+### 2026-11-25 — TASK 3 여러 사진 옷장 일괄 등록
+
+- Expo ImagePicker 다중 선택을 기존 사진 등록 흐름에 연결하고 사진 4장·전체 12벌·사진당 4영역 상한, 사진별 선택/제거/크롭 상태와 전체 진행률을 추가했다.
+- 성공 항목 잠금, 실패 항목만 재시도, 저장 버튼 중복 방지, 로컬 사진 저장 실패 rollback, rollback 실패 시 같은 서버 item ID 재사용을 구현했다.
+- API 응답 유실 시 요청 전 옷장 ID snapshot과 서버 재조회로 새 일치 항목을 복구해 가능한 범위의 멱등성을 제공한다. 기존 production API와 DB schema는 변경하지 않았다.
+- 기존 웹 누끼·색 추정·수동 태그·계정별 사진 저장·옷 삭제 사진 정리를 재사용했다. 서버 누끼와 AI 태깅 flag는 기존처럼 비활성이고 외부 서비스를 추가하지 않았다.
+- 새 이벤트 이름 대신 `wardrobe_add_*`와 `via=photo`, batch 수량·처리 시간 property를 재사용해 production Edge 허용 목록과의 호환성을 유지했다.
+
+### 2026-11-25 — TASK 1 기간 보정 및 TASK 2 행동 분석 대시보드
+
+- 동료평가 복원 기간을 팀 내부 테스트가 끝난 뒤인 `[2026-11-12 00:00, 2026-11-19 00:00) Asia/Seoul`로 보정했다. 잔존 기록은 미분류 식별자 14명, 옷장 71행/12명, 사진 저장 38행/12명, 두 행동 모두 10명이다. 원시 이벤트로 역삽입하지 않았다.
+- production `POST /events`에 `is_test=true` synthetic batch 2건을 보내 HTTP 200/accepted 2를 확인하고, `user_events`에서 user/device/session, client/received 시각, app/analytics version 저장을 읽기 전용 조회로 검증했다.
+- 시간순 Journey 집계, 사용자/세션 Sankey, 30분 세션 분할, client clock 보정, client event 중복 제거, 시간순 퍼널, D1/D7 Retention, 공통 필터, 가명 상세 패널, Historical Recovery 탭을 추가했다. 기존 LLMOps는 유지했다.
+- 웹 이벤트 전송에 최대 200건·7일 제한 localStorage outbox, batch ack, 지수 backoff, 온라인 복귀 재시도와 `client_event_id`를 추가했다. 네이티브는 아직 메모리 fallback이다.
+- fixture 브라우저에서 노드·연결선 상세, 전 탭, N/A, 복원 지표와 콘솔 무오류를 확인했다. 관련 집계·outbox 테스트와 모바일 typecheck/lint를 통과시켰다.
+
 ### 2026-11-24 — 비교 판정 근거 줄바꿈 및 서버 계약 연결
 
 - 확인: 기존 결과 카드는 서버 `match_metadata.reason`이 아니라 프론트 `describe()` 문구를 표시했고 `numberOfLines={1}` 때문에 긴 문구가 잘렸다.
@@ -883,6 +899,14 @@ LLMOps·최신 eval
 10. 테스트 작성, 실행, 통과, 프론트 연동, main 병합, 운영 배포를 각각 별도로 보고한다.
 
 ## 9. 최종 상태 판정
+
+### 2026-11-25 ODIT 멘토링 TASK 2~4
+
+- 동료평가 복원 기간을 11월 12일~18일 KST로 바로잡고 잔존 DB 기록 기반 지표를 갱신했다.
+- localhost 관리자 대시보드에 시간순 Sankey, 시간순 퍼널, Retention, 복원 데이터, 추천 알림 퍼널을 추가했다.
+- 사진 등록은 최대 4장·전체 12벌 일괄 처리, 부분 실패 재시도, 성공 항목 중복 방지로 확장했다.
+- 추천 코디 선택 저장 모듈과 Web Push 매일 반복 예약·취소 서버를 추가했다. 프론트 담당자에게 UI를 맡기기로 해 추천/룩 상세/마이 화면 변경은 제거했다. 화면 연동 전이며 실제 전달 여부는 검증하지 않았다. 로컬 DB migration과 예약 교체·소유권 거부·취소 트랜잭션 검증은 통과했다.
+- 네이티브 알림은 현재 production 접속 형태가 Expo Web이고 신규 네이티브 빌드/실기기 검증이 필요하므로 이번 범위에서 성공으로 간주하지 않는다.
 
 현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/02/03·Auth/RLS·LLMOps·사진 옷장 등록 UI·local 통합 테스트·local 관리자 대시보드·승인형 release/alert**가 병합돼 있다. Auth와 사진별 영구 대화는 staging에서 실제 API/RLS 검증을 통과했지만 production에는 미배포다. 비교 학습 데이터와 추천 고도화는 아직 구현하지 않았다.
 

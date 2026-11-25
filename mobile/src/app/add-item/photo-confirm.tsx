@@ -11,11 +11,12 @@ import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { errorMessage } from '@/data/api';
 import { fitsForKind, kindLabel, SEASONS, type Color, type Kind, type Slot, type VisualFit } from '@/data/catalog';
 import { track } from '@/data/events';
-import { clearPhotoDraft, pickPhoto, removeCutItem, startPhotoDraft, updateCutItem, usePhotoDraft, withKind, type CutItem } from '@/data/photoAdd';
-import { addWardrobeItem, useWardrobe } from '@/data/store';
+import { clearPhotoDraft, pickPhotos, removeCutItem, setAllCutItems, startPhotoBatch, updateCutItem, usePhotoDraft, withKind, type CutItem } from '@/data/photoAdd';
+import { batchClock, savePhotoBatch } from '@/data/photoBatchCore';
+import { addWardrobeItemRecovering, removeWardrobeItems, useWardrobe } from '@/data/store';
 import type { Season } from '@/data/types';
 import { photoTint } from '@/data/photoColor';
-import { setWardrobePhoto } from '@/data/wardrobePhotos';
+import { removeWardrobePhotos, setWardrobePhoto } from '@/data/wardrobePhotos';
 import { colors, fonts, glass, layout } from '@/theme';
 
 // 사진으로 옷 추가 ③ 확인. 잘라 낸 옷마다 카드 한 장. 종류 · 색은 꼭, 핏 · 계절은 골라도 되고 안 골라도 된다.
@@ -25,7 +26,8 @@ import { colors, fonts, glass, layout } from '@/theme';
 type Sheet = { itemId: string; field: 'kind' | 'color' } | null;
 
 export default function PhotoConfirmScreen() {
-  const { items } = usePhotoDraft();
+  const { photos } = usePhotoDraft();
+  const items = photos.flatMap((photo) => photo.items);
   const wardrobe = useWardrobe();
   const insets = useSafeAreaInsets();
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -34,56 +36,78 @@ export default function PhotoConfirmScreen() {
   // 옷장에 넣은 벌 수. 넣고 나면 '더 넣기 · 옷장 보기'를 보여 준다.
   const [done, setDone] = useState<number | null>(null);
   const [moreError, setMoreError] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ completed: 0, total: 0 });
 
-  const missing = items.filter((item) => item.kind === null || item.colorName === null).length;
+  const missing = items.filter((item) => item.saveStatus !== 'saved' && (item.kind === null || item.colorName === null)).length;
   const sheetItem = sheet === null ? undefined : items.find((item) => item.id === sheet.itemId);
 
   async function save() {
     if (saving || items.length === 0 || missing > 0) return;
     setSaving(true);
     setError(null);
-    let failed = 0;
-    let added = 0;
-    let size = wardrobe.length;
-    // 옷장은 새로 넣은 옷이 맨 앞에 보이므로, 거꾸로 넣어야 1번 옷이 맨 앞에 온다.
-    for (const item of [...items].reverse()) {
-      if (item.slot === null || item.kind === null || item.colorName === null) continue;
-      try {
-        const saved = await addWardrobeItem({
+    const pendingBefore = new Set(items.filter((item) => item.saveStatus !== 'saved').map((item) => item.id));
+    const knownIds = new Set([...wardrobe.map((item) => item.id), ...items.flatMap((item) => item.savedWardrobeId ? [item.savedWardrobeId] : [])]);
+    const startedAt = batchClock();
+    const retry = items.some((item) => item.saveStatus === 'failed');
+    setProgress({ completed: 0, total: pendingBefore.size });
+    track('wardrobe_add_submit', { via: 'photo', step: 'batch_save', photo_count: photos.length, item_count: pendingBefore.size, retry });
+    const result = await savePhotoBatch([...items].reverse(), {
+      create: async (item) => {
+        if (item.slot === null || item.kind === null || item.colorName === null) throw new Error('종류와 색을 확인해 주세요');
+        const saved = await addWardrobeItemRecovering({
           slot: item.slot,
           kind: item.kind,
           color: item.colorName,
           visual_fit: item.fit,
           seasons: item.seasons,
-        });
-        setWardrobePhoto(saved.id, { uri: item.uri, color: item.color, cutout: item.cutout });
-        size += 1;
-        added += 1;
-        track('wardrobe_add_done', { via: 'photo', slot: item.slot, kind: item.kind, wardrobe_size: size });
-        removeCutItem(item.id);
-      } catch (e) {
-        failed += 1;
-        track('wardrobe_add_failed', { via: 'photo', kind: item.kind, error_code: errorMessage(e) });
-      }
-    }
+        }, knownIds);
+        knownIds.add(saved.id);
+        return saved;
+      },
+      persistPhoto: (itemId, item) => setWardrobePhoto(itemId, { uri: item.uri, color: item.color, cutout: item.cutout }),
+      rollback: async (itemId) => {
+        const failedIds = await removeWardrobeItems([itemId]);
+        if (failedIds.length === 0) removeWardrobePhotos([itemId]);
+        return failedIds.length === 0;
+      },
+      errorMessage: (saveError) => saveError instanceof Error ? saveError.message : errorMessage(saveError),
+      onChange: (nextItems) => {
+        setAllCutItems(nextItems);
+        setProgress({ completed: nextItems.filter((item) => pendingBefore.has(item.id) && ['saved', 'failed'].includes(item.saveStatus)).length, total: pendingBefore.size });
+      },
+    });
     setSaving(false);
-    if (failed === 0) {
+    const newlySaved = result.items.filter((item) => pendingBefore.has(item.id) && item.saveStatus === 'saved');
+    newlySaved.forEach((item, index) => track('wardrobe_add_done', {
+      via: 'photo', slot: item.slot, kind: item.kind, wardrobe_size: wardrobe.length + index + 1,
+      batch: items.length > 1,
+    }));
+    const totalSaved = result.items.filter((item) => item.saveStatus === 'saved').length;
+    if (result.failed === 0) {
+      track('wardrobe_add_submit', {
+        via: 'photo', step: 'batch_done', photo_count: photos.length, item_count: items.length,
+        success_count: totalSaved, failure_count: 0, duration_ms: batchClock() - startedAt,
+      });
       clearPhotoDraft();
-      setDone(added);
+      setDone(totalSaved);
       return;
     }
+    track('wardrobe_add_failed', {
+      via: 'photo', error_code: 'batch_partial_failure', success_count: totalSaved,
+      failure_count: result.failed, retry, duration_ms: batchClock() - startedAt,
+    });
     track('error_shown', { screen: 'wardrobe_add_photo', error_code: 'wardrobe_add_failed' });
-    setError(`${failed}벌은 넣지 못했어요. 다시 눌러 주세요`);
+    setError(`${result.failed}벌은 넣지 못했어요. 성공한 옷은 유지하고 실패한 옷만 다시 시도할게요`);
   }
 
   // 사진을 더 찍거나 골라서 이어서 넣는다(웹은 누른 그 순간에 파일 고르기 창을 열어야 해서 여기서 바로 부른다).
   async function addMore(from: 'camera' | 'album') {
     setMoreError(null);
     try {
-      const source = await pickPhoto(from);
-      if (source === null) return;
-      track('wardrobe_add_start', { via: 'photo', source: from, again: true });
-      startPhotoDraft(source);
+      const sources = await pickPhotos(from);
+      if (sources.length === 0) return;
+      track('wardrobe_add_start', { via: 'photo', source: from, again: true, photo_count: sources.length, batch: sources.length > 1 });
+      startPhotoBatch(sources);
       router.dismissTo('/closet');
       router.push('/add-item/photo-crop');
     } catch (e) {
@@ -126,7 +150,15 @@ export default function PhotoConfirmScreen() {
       ? '색은 사진을 보고 맞춰 뒀어요. 종류를 골라 주세요'
       : '종류와 색은 꼭 골라 주세요. 핏 · 계절은 안 골라도 돼요';
   const title = items.length > 1 ? `이 ${items.length}벌이 맞나요?` : '이 옷이 맞나요?';
-  const button = saving ? '넣는 중…' : missing > 0 ? '종류와 색을 골라 주세요' : items.length > 1 ? `옷장에 ${items.length}벌 넣기` : '옷장에 넣기';
+  const failedCount = items.filter((item) => item.saveStatus === 'failed').length;
+  const remainingCount = items.filter((item) => item.saveStatus !== 'saved').length;
+  const button = saving
+    ? `넣는 중 ${progress.completed}/${progress.total}`
+    : missing > 0
+      ? '종류와 색을 골라 주세요'
+      : failedCount > 0
+        ? `실패한 ${failedCount}벌 다시 넣기`
+        : items.length > 1 ? `옷장에 ${remainingCount}벌 넣기` : '옷장에 넣기';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -148,8 +180,9 @@ export default function PhotoConfirmScreen() {
             item={item}
             index={index}
             numbered={items.length > 1}
-            onRemove={items.length > 1 ? () => removeCutItem(item.id) : undefined}
-            onOpen={(field) => setSheet({ itemId: item.id, field })}
+            locked={item.saveStatus === 'saved' || item.saveStatus === 'saving'}
+            onRemove={items.length > 1 && item.saveStatus !== 'saved' && item.savedWardrobeId === null ? () => removeCutItem(item.id) : undefined}
+            onOpen={(field) => item.saveStatus !== 'saved' && item.saveStatus !== 'saving' && setSheet({ itemId: item.id, field })}
           />
         ))}
         {items.length === 0 && <Text style={styles.sub}>넣을 옷이 없어요. 뒤로 가서 네모를 다시 맞춰 주세요</Text>}
@@ -197,12 +230,14 @@ function ItemCard({
   item,
   index,
   numbered,
+  locked,
   onRemove,
   onOpen,
 }: {
   item: CutItem;
   index: number;
   numbered: boolean;
+  locked: boolean;
   onRemove?: () => void;
   onOpen: (field: 'kind' | 'color') => void;
 }) {
@@ -237,11 +272,13 @@ function ItemCard({
             {numbered ? `${index + 1} · ` : ''}
             {name}
           </Text>
+          {item.saveStatus === 'saved' && <Text style={styles.saveDone}>등록 완료 · 재시도 제외</Text>}
+          {item.saveStatus === 'failed' && <Text style={styles.saveFailed}>{item.saveError ?? '다시 시도해 주세요'}</Text>}
           <Field label="종류">
-            <Chip label={item.kind === null ? '고르기' : `${item.slot} · ${kindLabel(item.kind)}`} on={item.kind !== null} onPress={() => onOpen('kind')} />
+            <Chip label={item.kind === null ? '고르기' : `${item.slot} · ${kindLabel(item.kind)}`} on={item.kind !== null} disabled={locked} onPress={() => onOpen('kind')} />
           </Field>
           <Field label="색">
-            <Chip label={item.colorName ?? '고르기'} on={item.colorName !== null} swatch={item.colorName} onPress={() => onOpen('color')} />
+            <Chip label={item.colorName ?? '고르기'} on={item.colorName !== null} swatch={item.colorName} disabled={locked} onPress={() => onOpen('color')} />
             {item.colorAuto && <Text style={styles.autoNote}>사진 색</Text>}
           </Field>
         </View>
@@ -250,13 +287,13 @@ function ItemCard({
       {fits.length > 0 && (
         <Field label="핏" wide>
           {fits.map((fit) => (
-            <Chip key={fit} label={fit} on={item.fit === fit} onPress={() => chooseFit(fit)} />
+            <Chip key={fit} label={fit} on={item.fit === fit} disabled={locked} onPress={() => chooseFit(fit)} />
           ))}
         </Field>
       )}
       <Field label="계절" wide>
         {SEASONS.map((season) => (
-          <Chip key={season} label={season} on={item.seasons.includes(season)} onPress={() => toggleSeason(season)} />
+          <Chip key={season} label={season} on={item.seasons.includes(season)} disabled={locked} onPress={() => toggleSeason(season)} />
         ))}
       </Field>
 
@@ -408,6 +445,17 @@ const styles = StyleSheet.create({
   },
   cardNameEmpty: {
     color: colors.textPurple,
+  },
+  saveDone: {
+    fontFamily: fonts.bold,
+    fontSize: 11.5,
+    color: colors.textPurple,
+  },
+  saveFailed: {
+    fontFamily: fonts.medium,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: colors.danger,
   },
   field: {
     flexDirection: 'row',

@@ -11,8 +11,17 @@
 - 세션: 마지막 분석 이벤트 이후 **30분 inactivity** 전까지 같은 `session_id`를 유지한다. 새로고침·탭 닫기·Safari 재접속도 30분 안이면 같은 세션이다.
 - 시간: 클라이언트 `client_ts`와 서버 수신 `received_at`
 - 모든 이벤트 `props`에는 `app_version`, `analytics_version`이 자동으로 붙는다.
-- 현재 기본 `analytics_version`: `2026-11-11-v4`
+- 현재 기본 `analytics_version`: `2026-11-25-v1`
 - 이벤트 전송 실패가 앱 사용을 막아서는 안 된다.
+
+### 전송 내구성과 중복 처리
+
+- 각 이벤트에는 클라이언트가 만든 `props.client_event_id`가 자동으로 붙는다. 이미지, 파일 경로, Base64, 닉네임, PIN은 넣지 않는다.
+- 웹에서는 전송 전 이벤트를 `localStorage`의 제한된 outbox에 저장한다. 최대 200건, 최대 7일만 보존하고 오래된 항목부터 정리한다.
+- 최대 20건씩 batch 전송하며 2xx 응답을 받은 항목만 제거한다. 네트워크·서버 실패는 2초부터 최대 60초까지 지수 backoff로 재시도하고, 온라인 복귀 때 다시 flush한다.
+- 전송은 단일 실행으로 직렬화하며 앱의 주요 기능을 기다리게 하지 않는다. 서버 응답을 잃은 뒤 같은 batch가 재전송될 수 있으므로 분석 집계는 `client_event_id`를 우선 사용해 중복을 제거한다.
+- 현재 네이티브 런타임은 저장 어댑터가 없어 메모리 outbox를 사용한다. 앱 강제 종료 뒤에도 보존하는 네이티브 저장은 TASK 3/4의 저장 계층과 함께 별도 검토한다.
+- 서버 계약은 기존 `POST /events` batch 형식을 유지한다. 이번 변경은 DB migration이나 새 API route를 요구하지 않는다.
 
 ## 핵심 플로우
 
@@ -87,14 +96,14 @@
 
 | 이름 | 발생 시점 | 주요 속성 |
 |---|---|---|
-| `wardrobe_add_start` | 옷 추가 진입 | |
+| `wardrobe_add_start` | 옷 추가 진입 | `via`, 사진 흐름은 `source`, `photo_count`, `batch`, `again` |
 | `wardrobe_slot_select` | 부위 선택 | `slot` |
 | `wardrobe_kind_select` | 종류 선택 | `slot`, `kind` |
 | `wardrobe_color_select` | 색 선택 | `kind`, `color` |
 | `wardrobe_fit_select` | 핏 선택 | `kind`, `fit` |
-| `wardrobe_add_submit` | 옷장에 넣기 클릭 | `slot`, `kind`, `color`, `fit` |
-| `wardrobe_add_done` | 저장 성공 | `slot`, `kind`, `wardrobe_size` |
-| `wardrobe_add_failed` | 저장 실패 | `slot`, `kind`, `error_code` |
+| `wardrobe_add_submit` | 옷장에 넣기/사진 처리 단계 | 직접 등록은 `slot`, `kind`, `color`, `fit`; 사진은 `via=photo`, `step`, 사진·옷·성공·실패 수, `duration_ms`, `retry` |
+| `wardrobe_add_done` | 저장 성공 | `slot`, `kind`, `wardrobe_size`, 사진은 `via=photo`, `batch` |
+| `wardrobe_add_failed` | 저장 실패/일괄 부분 실패 | `slot`, `kind`, `error_code`, 사진은 성공·실패 수와 `retry` |
 | `wardrobe_milestone` | 1/3/5/10벌 도달 | `count`, `slots_covered` |
 | `wardrobe_edit_start` | 편집 시작 | `wardrobe_size` |
 | `wardrobe_delete_select` | 삭제할 옷 선택/해제 | `item_id`, `selected` |
@@ -102,6 +111,7 @@
 | `wardrobe_delete_failed` | 일부 삭제 실패 | `failed_count` |
 
 옷 등록 중 이탈은 별도 이벤트를 억지로 만들지 않고 `screen_view/screen_leave`와 마지막 선택 이벤트를 연결해 계산한다.
+사진 일괄 등록도 기존 네 이벤트를 재사용한다. `props`에는 수량·단계·처리 시간만 넣고 이미지, URI, 파일명, Base64를 넣지 않는다.
 
 ## 피드·저장·아카이브
 
@@ -432,6 +442,25 @@ group by recommendation;
 ```
 
 사진 수가 적은 기간에는 이 지표를 의사결정 근거로 강하게 사용하지 않고, 데이터가 쌓인 뒤 활용한다.
+
+### 추천 선택과 다음 날 알림
+
+| 이벤트 | 의미 | 주요 props |
+|---|---|---|
+| `recommendation_view` | 추천 탭의 날짜별 추천을 봄 | `date` |
+| `recommendation_item_click` | 추천 룩 상세를 선택함 | `date` |
+| `recommendation_combo_view` | 추천 룩 상세를 봄 | `date` |
+| `recommendation_choice` | 이 룩으로 입기를 확정함 | `date`, `recommendation_type` |
+| `notification_prompt_view` | 다음 날 알림 제안 노출 | `platform` |
+| `notification_consent` / `notification_decline` | 제안 동의/거절 | `platform` |
+| `notification_permission` | 브라우저 권한 결과 | `result`, `platform` |
+| `notification_schedule_done` | 서버의 일회성 예약 저장 성공 | `scheduled_for`, `platform` |
+| `notification_schedule_failed` | 미지원·거절·요청 실패 | `reason`, `platform` |
+| `notification_cancel` | 사용자가 예약 취소 | `platform` |
+| `notification_open` | 알림 클릭 URL로 추천 진입 | `source` |
+| `notification_recommendation_reselect` | 알림 진입 뒤 현재 날짜 코디를 다시 선택 | `date` |
+
+`scheduled_for`는 ISO 시각이고, Push endpoint·브라우저 구독 키·VAPID 키·원본 사용자 입력은 이벤트에 넣지 않는다. `notification_schedule_done`은 구독과 서버 예약 성공일 뿐 실제 기기 전달 성공이 아니다. 재방문율은 예정 시각이 지난 예약만 분모로 사용한다.
 
 ## 11. 비교·챗봇 응답시간
 
