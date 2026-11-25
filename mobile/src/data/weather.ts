@@ -5,12 +5,67 @@ import { useSyncExternalStore } from 'react';
 
 import { API_URL } from './api';
 import type { Kind, Slot } from './catalog';
+import { SIDO_LIST, type Sido, type Sigungu } from './regions';
 
 // ── 지역 ────────────────────────────────────────────
 
-export type Region = { name: string; lat: number; lon: number };
+export type Region = { name: string; lat: number; lon: number; current?: boolean };
 
-// 위치 권한 없이 고르는 지역 목록(시·구 중심 좌표).
+// 11/24 팀 결정 10번: 처음엔 현재 위치(폰·브라우저 위치 허용)로 날씨를 보고, 지역 버튼을 다시 누르면 목록에서 직접 고른다.
+export const CURRENT_REGION_NAME = '현재 위치';
+
+// 지역 고르기(11/24): 시·도 → 시·군·구(data/regions.ts). 이름은 '경기 수원시 영통구'처럼 시·도를 앞에 붙인다.
+// 세종은 '세종시' 하나, 광주·전남(2026.7 통합)은 광주 구는 '광주 동구', 전남 시·군은 '전남 여수시'.
+export function regionFor(sido: Sido, item: Sigungu): Region {
+  let name: string;
+  if (sido.name === '세종') name = item.name;
+  else if (sido.name === '광주·전남') name = item.name.startsWith('광주 ') ? item.name : `전남 ${item.name}`;
+  else name = `${sido.name} ${item.name}`;
+  return { name, lat: item.lat, lon: item.lon };
+}
+
+// 지역 고르기 단계(11/25: 도 → 시 → 구 한 단계씩). 광역시·특별시는 바로 구·군, 도는 시·군을 고르고
+// 구가 있는 시(수원시 등)는 그 안에서 구를 한 번 더 고른다. 광주·전남은 '광주'를 맨 앞에 두고 그 안에 광주 구.
+export type RegionChoice = { name: string; region?: Region; children?: RegionChoice[] };
+export const METRO_SIDO: ReadonlySet<string> = new Set(['서울', '부산', '대구', '인천', '대전', '울산', '세종']);
+
+export function choicesOf(sido: Sido): RegionChoice[] {
+  const out: RegionChoice[] = [];
+  const groups = new Map<string, RegionChoice>();
+  for (const item of sido.list) {
+    const region = regionFor(sido, item);
+    const space = item.name.indexOf(' ');
+    if (space < 0) {
+      out.push({ name: item.name, region });
+      continue;
+    }
+    const parent = item.name.slice(0, space);
+    let group = groups.get(parent);
+    if (group === undefined) {
+      group = { name: parent, children: [] };
+      groups.set(parent, group);
+      out.push(group);
+    }
+    group.children!.push({ name: item.name.slice(space + 1), region });
+  }
+  return out.sort((x, y) => Number(y.name === '광주') - Number(x.name === '광주') || x.name.localeCompare(y.name, 'ko'));
+}
+
+// 지금 지역이 어느 시·도인지(시·도 칸에 표시할 때).
+export function sidoOfRegion(at: Region): string | null {
+  if (at.current) return null;
+  if (at.name.startsWith('광주 ') || at.name.startsWith('전남 ')) return '광주·전남';
+  if (at.name === '세종시') return '세종';
+  return SIDO_LIST.find((sido) => at.name.startsWith(`${sido.name} `))?.name ?? null;
+}
+
+const DEFAULT_REGION: Region = (() => {
+  const gyeonggi = SIDO_LIST.find((sido) => sido.name === '경기');
+  const item = gyeonggi?.list.find((entry) => entry.name === '수원시 영통구');
+  return gyeonggi !== undefined && item !== undefined ? regionFor(gyeonggi, item) : { name: '경기 수원시 영통구', lat: 37.2749, lon: 127.0567 };
+})();
+
+// 여행 화면(trip/)이 쓰던 옛 지역 목록(시·구 중심 좌표). 코디 탭은 위 regionFor를 쓴다.
 export const REGIONS: readonly Region[] = [
   { name: '수원 영통구', lat: 37.2596, lon: 127.0465 },
   { name: '서울 강남구', lat: 37.5172, lon: 127.0473 },
@@ -30,14 +85,69 @@ export const REGIONS: readonly Region[] = [
 const REGION_KEY = 'odit-region-v1';
 let region: Region = readRegion();
 const regionListeners = new Set<() => void>();
+// 이번 방문에서 위치를 이미 물어봤는지(거절한 사람에게 화면마다 다시 묻지 않게).
+let askedThisVisit = false;
 
+// 이름과 좌표를 JSON으로 저장한다. 예전에 이름만 저장한 지역(옛 목록)도 읽는다.
 function readRegion(): Region {
   try {
-    const name = globalThis.localStorage?.getItem(REGION_KEY);
-    return REGIONS.find((item) => item.name === name) ?? REGIONS[0];
+    const raw = globalThis.localStorage?.getItem(REGION_KEY) ?? null;
+    if (raw !== null && raw.startsWith('{')) {
+      const parsed = JSON.parse(raw) as Partial<Region>;
+      if (typeof parsed.lat === 'number' && typeof parsed.lon === 'number') {
+        if (parsed.current === true || typeof parsed.name !== 'string') {
+          return { name: CURRENT_REGION_NAME, lat: parsed.lat, lon: parsed.lon, current: true };
+        }
+        return { name: parsed.name, lat: parsed.lat, lon: parsed.lon };
+      }
+    }
+    return REGIONS.find((item) => item.name === raw) ?? DEFAULT_REGION;
   } catch {
-    return REGIONS[0];
+    return DEFAULT_REGION;
   }
+}
+
+// 지역을 한 번이라도 정했는지(현재 위치든 목록이든). 안 정했으면 추천 탭이 처음 열릴 때 현재 위치를 물어본다.
+export function hasPickedRegion(): boolean {
+  if (askedThisVisit) return true;
+  try {
+    return Boolean(globalThis.localStorage?.getItem(REGION_KEY));
+  } catch {
+    return false;
+  }
+}
+
+type GeoPosition = { coords: { latitude: number; longitude: number } };
+type Geolocation = {
+  getCurrentPosition: (ok: (position: GeoPosition) => void, fail: () => void, options?: { enableHighAccuracy?: boolean; timeout?: number; maximumAge?: number }) => void;
+};
+
+// 브라우저(웹)는 navigator.geolocation으로 받는다. 앱(iOS·안드로이드)은 expo-location을 설치한 뒤에 연결한다 — 그 전에는 false.
+function geolocation(): Geolocation | null {
+  const nav = (globalThis as { navigator?: { geolocation?: Geolocation } }).navigator;
+  return typeof nav?.geolocation?.getCurrentPosition === 'function' ? nav.geolocation : null;
+}
+
+export function canLocate(): boolean {
+  return geolocation() !== null;
+}
+
+// 현재 위치를 받아 날씨 지역으로 정한다. 좌표는 소수 둘째 자리(약 1km)까지만 쓴다. 받으면 true.
+export function locateCurrentRegion(): Promise<boolean> {
+  askedThisVisit = true;
+  const geo = geolocation();
+  if (geo === null) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    geo.getCurrentPosition(
+      (position) => {
+        const round = (value: number) => Math.round(value * 100) / 100;
+        setRegion({ name: CURRENT_REGION_NAME, lat: round(position.coords.latitude), lon: round(position.coords.longitude), current: true });
+        resolve(true);
+      },
+      () => resolve(false),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 30 * 60 * 1000 },
+    );
+  });
 }
 
 export function useRegion(): Region {
@@ -55,8 +165,9 @@ export function useRegion(): Region {
 
 export function setRegion(next: Region) {
   region = next;
+  askedThisVisit = true;
   try {
-    globalThis.localStorage?.setItem(REGION_KEY, next.name);
+    globalThis.localStorage?.setItem(REGION_KEY, JSON.stringify({ name: next.name, lat: next.lat, lon: next.lon, current: next.current === true }));
   } catch {
     // 저장이 막힌 브라우저는 이번 방문 동안만 기억한다.
   }

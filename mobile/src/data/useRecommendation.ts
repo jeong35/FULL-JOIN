@@ -1,7 +1,7 @@
-// 추천 탭·룩 자세히 화면이 같이 쓰는 훅: 고른 날짜의 날씨·약속과 저장한 사진·옷장으로 룩을 고른다.
+// 추천(코디) 탭·룩 자세히 화면이 같이 쓰는 훅: 고른 날짜의 날씨와 저장한 사진·옷장으로 룩을 고른다.
 import { useEffect, useMemo } from 'react';
 
-import { plansOn, usePlans, type Plan } from './plans';
+import type { Plan } from './plans';
 import { ensureHearts, recommend, type Recommendation } from './recommend';
 import { useSession } from './session';
 import { useArchiveState, useHearts, useWardrobeState, type LoadStatus } from './store';
@@ -24,11 +24,11 @@ export function useRecommendation(date: string): RecommendationView {
   const wardrobe = useWardrobeState();
   const archive = useArchiveState();
   const hearts = useHearts();
-  const plans = usePlans();
   const region = useRegion();
   const weather = useWeather(region);
   const day = weather.days.find((item) => item.date === date);
-  const plan = plansOn(plans, date)[0];
+  // 11/24 팀 결정 6번: 약속·여행 기능을 빼서 약속 무드는 쓰지 않는다(약속 데이터·화면 파일은 남겨 둠).
+  const plan: Plan | undefined = undefined;
 
   // 옷장과 저장 목록을 다 받은 뒤, 최근 저장 사진의 옷장 대조 결과가 없으면 받아 온다.
   useEffect(() => {

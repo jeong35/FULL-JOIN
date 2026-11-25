@@ -10,7 +10,7 @@ import { BottomSheet } from '@/components/PhotoAddParts';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
-import { kindLabel, SEASONS, SLOTS, type Slot } from '@/data/catalog';
+import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useHintOpen } from '@/data/hints';
 import { pickPhotos, startPhotoBatch } from '@/data/photoAdd';
@@ -37,8 +37,8 @@ export default function ClosetScreen() {
   const wardrobe = wardrobeState.data;
   const loading = wardrobeState.status === 'idle' || wardrobeState.status === 'loading';
   const [filter, setFilter] = useState<Filter>('전체');
-  // 계절 거르기(11/19 옷 추가 시안). 계절을 안 고른 옷은 사계절 옷이라 어느 계절에도 보인다.
-  const [season, setSeason] = useState<Season | '전체'>('전체');
+  // 11/24 팀 결정 9번: 옷장 화면의 계절 표시(계절 거르기 칩, 옷 칸의 '사계절' 글)는 뺐다. 옷의 계절 값은 그대로 저장한다.
+  const season = '전체' as Season | '전체';
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
@@ -205,25 +205,12 @@ export default function ClosetScreen() {
         />
       )}
       <TextTabs options={FILTERS} value={filter} onChange={setFilter} />
-      <View style={styles.filterRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.seasonScroll} contentContainerStyle={styles.seasonRow}>
-        {(['전체', ...SEASONS] as const).map((s) => {
-          const on = s === season;
-          return (
-            <Pressable
-              key={s}
-              onPress={() => setSeason(s)}
-              accessibilityRole="button"
-              accessibilityLabel={s === '전체' ? '모든 계절' : s}
-              accessibilityState={{ selected: on }}
-              style={[styles.seasonPill, on && styles.seasonPillOn]}>
-              <Text style={[styles.seasonText, on && styles.seasonTextOn]}>{s === '전체' ? '모든 계절' : s}</Text>
-            </Pressable>
-          );
-        })}
-        </ScrollView>
-        {photoCount > 0 && <ViewToggle value={view} onChange={setClosetView} />}
-      </View>
+      {photoCount > 0 && (
+        <View style={styles.filterRow}>
+          <View style={styles.seasonScroll} />
+          <ViewToggle value={view} onChange={setClosetView} />
+        </View>
+      )}
       {actionError !== null && <Text style={styles.actionError}>{actionError}</Text>}
       {showSwipeHint && (
         <HintBubble
@@ -444,9 +431,6 @@ function WardrobeTile({
       <Text style={styles.tileMeta} numberOfLines={1}>
         {meta}
       </Text>
-      <Text style={styles.tileSeason} numberOfLines={1}>
-        {item.seasons?.length ? item.seasons.join(' · ') : '사계절'}
-      </Text>
     </>
   );
 
@@ -549,7 +533,8 @@ const styles = StyleSheet.create({
     columnGap: GRID_COLUMN_GAP,
     rowGap: 14,
     paddingHorizontal: layout.screenPaddingX,
-    paddingBottom: 16,
+    // 오른쪽 아래 챗봇 버튼(56)에 마지막 줄이 가리지 않게 넉넉히 둔다(11/25).
+    paddingBottom: 96,
   },
   gridUnderHint: {
     paddingBottom: 170,

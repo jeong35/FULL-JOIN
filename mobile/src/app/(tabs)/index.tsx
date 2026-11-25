@@ -17,14 +17,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { HintBubble } from '@/components/HintBubble';
 import { FeedPhoto, PHOTO_GAP, splitColumns } from '@/components/FeedPhoto';
 import { BookmarkIcon, SearchIcon } from '@/components/Icons';
-import { SmallWhiteButton, TextTabs } from '@/components/ui';
+import { TasteSuggestBubble } from '@/components/TasteSuggest';
+import { SmallWhiteButton } from '@/components/ui';
 import { errorMessage } from '@/data/api';
 import { STYLES, type Style } from '@/data/catalog';
-import { setHomeAnalyticsScreen, track } from '@/data/events';
+import { enterAnalyticsScreen, setHomeAnalyticsScreen, track } from '@/data/events';
 import { NEIGHBOR_STYLES, orderByTaste } from '@/data/feedOrder';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { onHomeTabReselect } from '@/data/homeTab';
 import { useSession } from '@/data/session';
+import { tasteSuggestionFor } from '@/data/tasteSuggest';
 import { heartStyleImage, loadArchive, loadFeed, unheartStyleImage, useArchiveState, useFeedState, useIsUnhearting, useSaved } from '@/data/store';
 import type { ArchiveImage, Season } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
@@ -32,9 +34,9 @@ import { colors, fonts, layout } from '@/theme';
 // 홈 피드. 모양은 design/screens/10-home-feed.html을 따른다.
 // 사진은 서버(GET /feed)에서 받은 실제 사진이다. 사진은 화면 끝까지, 사이는 2px(DESIGN.md 4절).
 
-// 내가 이름 지은 폴더(출근룩 등)는 나중에 '모든 저장' 옆에 붙는다.
-const FOLDERS = ['피드', '모든 저장'] as const;
-type Folder = (typeof FOLDERS)[number];
+// 11/24: 홈은 피드만, '모든 저장'은 따로 저장 탭((tabs)/saved.tsx)에서 연다. 두 탭이 이 화면(PhotoBoardScreen)을 같이 쓴다.
+// 내가 이름 지은 폴더(출근룩 등)는 나중에 저장 탭의 '모든 저장' 옆에 붙는다.
+type Folder = '피드' | '모든 저장';
 // '모든 저장' 사진 사이 간격. 피드(2px)보다 조금 넓게 둔다.
 const ARCHIVE_GAP = 4;
 
@@ -77,10 +79,11 @@ function filterOptions(images: readonly ArchiveImage[]) {
 const BUBBLE_HEIGHT = 28;
 const BUBBLE_MARGIN = 8;
 const BUBBLE_HIDE_MS = 1200;
-// '모든 저장' 글자 탭의 가운데(화면 왼쪽에서 px). 다음 할 일 말풍선 꼬리가 여기를 가리킨다.
-const SAVED_TAB_CENTER_X = 96;
-
 export default function HomeScreen() {
+  return <PhotoBoardScreen mode="피드" />;
+}
+
+export function PhotoBoardScreen({ mode }: { mode: Folder }) {
   const feed = useFeedState();
   const archive = useArchiveState();
   const saved = useSaved();
@@ -92,7 +95,7 @@ export default function HomeScreen() {
     () => orderByTaste(feed.data.filter((image) => saved[image.id] === undefined), taste ?? []),
     [feed.data, saved, taste],
   );
-  const [folder, setFolder] = useState<Folder>('피드');
+  const folder: Folder = mode;
   const [filter, setFilter] = useState<ArchiveFilter>(NO_FILTER);
   const [picking, setPicking] = useState<FilterKey | null>(null);
   const archiveImages = useMemo(() => archive.data.filter((image) => matchesFilter(image, filter)), [archive.data, filter]);
@@ -113,22 +116,24 @@ export default function HomeScreen() {
   const [justSaved, setJustSaved] = useState(false);
   const saveHintOpen = useHintOpen('save_compare');
   const openHintOpen = useHintOpen('archive_open');
+  const feedTasteOpen = useHintOpen('feed_taste');
+  // 추구미 아닌 스타일 사진을 저장하면 그 스타일을 추구미로 저장할지 묻는다(11/24 팀 결정 2번).
+  const [suggest, setSuggest] = useState<Style | null>(null);
 
   function changeFolder(next: Folder) {
     if (next === folder) return;
     if (next === '모든 저장') markHintDone('save_compare');
-    setHomeAnalyticsScreen(
-      next === '모든 저장' ? 'archive' : 'feed',
-      next === '모든 저장' ? { saved_count: archive.data.length } : {},
-    );
-    setFolder(next);
+    router.navigate((next === '모든 저장' ? '/saved' : '/') as Href);
   }
+
+
 
   // 화면에 돌아올 때마다 논리 화면(feed/archive)을 공통 tracker와 맞추고 데이터를 새로 확인한다.
   useFocusEffect(
     useCallback(() => {
-      setHomeAnalyticsScreen(folder === '모든 저장' ? 'archive' : 'feed',
-        folder === '모든 저장' ? { saved_count: archive.data.length } : {});
+      // 저장 탭은 홈 논리 화면(feed/archive 전환)을 건드리지 않고 archive로 바로 들어간다.
+      if (folder === '모든 저장') enterAnalyticsScreen('archive', { saved_count: archive.data.length });
+      else setHomeAnalyticsScreen('feed');
       void loadFeed();
       void loadArchive({ force: true });
     }, [folder, archive.data.length]),
@@ -205,11 +210,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => onHomeTabReselect(() => {
-    if (folder === '모든 저장') {
-      setHomeAnalyticsScreen('feed');
-      setFolder('피드');
-      return;
-    }
+    if (folder !== '피드') return;
     void onRefresh();
   }), [folder, onRefresh]);
 
@@ -236,6 +237,8 @@ export default function HomeScreen() {
       return;
     }
     track('photo_save_done', { style_image_id: id, place: 'feed', saved_count: Object.keys(saved).length + 1 });
+    const image = feed.data.find((candidate) => candidate.id === id);
+    if (image !== undefined) setSuggest(tasteSuggestionFor(image.style));
     await loadArchive({ force: true });
   }
 
@@ -257,8 +260,8 @@ export default function HomeScreen() {
   } else if (folder === '피드' && feedImages.length === 0) {
     body = (
       <View style={styles.center}>
-        <Text style={styles.centerText}>피드 사진을 모두 저장했어요{'\n'}저장한 사진은 &apos;모든 저장&apos;에서 볼 수 있어요</Text>
-        <SmallWhiteButton label="모든 저장 보기" onPress={() => changeFolder('모든 저장')} />
+        <Text style={styles.centerText}>피드 사진을 모두 저장했어요{'\n'}저장한 사진은 &apos;저장&apos; 탭에서 볼 수 있어요</Text>
+        <SmallWhiteButton label="저장 보기" onPress={() => changeFolder('모든 저장')} />
       </View>
     );
   } else if (folder !== '피드' && archive.data.length === 0 && archive.status !== 'error') {
@@ -338,11 +341,17 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.logo} accessibilityRole="header">
-          odit.
-        </Text>
+        {folder === '피드' ? (
+          <Text style={styles.logo} accessibilityRole="header">
+            odit.
+          </Text>
+        ) : (
+          <Text style={styles.pageTitle} accessibilityRole="header">
+            저장
+          </Text>
+        )}
         {/* 홈 검색(11/24 v2 시안): 피드 위에 필터 막대를 두지 않고 돋보기만. 누르면 검색 화면에서 스타일·옷·색을 고른다.
-            '모든 저장'은 자기 필터(연도·계절·스타일)가 있어서 돋보기를 숨긴다. */}
+            저장 탭('모든 저장')은 자기 필터(연도·계절·스타일)가 있어서 돋보기를 숨긴다. */}
         {folder === '피드' && (
           <Pressable
             onPress={() => router.push('/search')}
@@ -355,19 +364,27 @@ export default function HomeScreen() {
         )}
       </View>
 
-      <TextTabs options={FOLDERS} value={folder} onChange={changeFolder} />
-
-      {folder === '피드' && justSaved && saveHintOpen && (
+      {/* 피드 말풍선은 하나씩: 추구미 제안 → 저장 안내 → (처음 한 번) 추구미로 피드를 바꿨다는 안내. */}
+      {folder === '피드' && (
+        <TasteSuggestBubble style={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.hint} noteStyle={styles.tasteNote} />
+      )}
+      {folder === '피드' && suggest !== null ? null : folder === '피드' && justSaved && saveHintOpen ? (
         <HintBubble
           id="save_compare"
-          text="저장했어요! '모든 저장'에서 사진을 누르면 내 옷장과 비교해 드려요"
-          actionLabel="모든 저장 보기"
-          tail="up"
-          tailX={SAVED_TAB_CENTER_X - layout.screenPaddingX}
+          text="저장했어요! 아래 '저장' 탭에서 사진을 누르면 내 옷장과 비교해 드려요"
+          actionLabel="저장 보러 가기"
+          tail="none"
           onPress={() => changeFolder('모든 저장')}
           style={styles.hint}
         />
-      )}
+      ) : folder === '피드' && feedTasteOpen && taste !== undefined && taste.length > 0 && feed.data.length > 0 ? (
+        <HintBubble
+          id="feed_taste"
+          text={`고른 추구미(${taste.join('·')})에 맞춰 피드를 바꿨어요. 그 스타일 사진부터 먼저 보여 드려요`}
+          tail="none"
+          style={styles.hint}
+        />
+      ) : null}
 
       {folder === '모든 저장' && archive.data.length > 0 && (
         <View style={styles.filterBar}>
@@ -625,11 +642,27 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: colors.textPurple,
   },
+  // 저장 탭 제목: 다른 탭 제목(TabScreen)과 같은 24 / 800.
+  pageTitle: {
+    fontFamily: fonts.extraBold,
+    fontSize: 24,
+    letterSpacing: -0.4,
+    color: colors.text,
+  },
+  tasteNote: {
+    marginHorizontal: layout.screenPaddingX,
+    marginBottom: 10,
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: colors.textPurple,
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    // 마지막 사진의 저장 버튼이 챗봇 버튼에 가리지 않게(11/25).
+    paddingBottom: 80,
   },
   actionError: {
     marginHorizontal: layout.screenPaddingX,

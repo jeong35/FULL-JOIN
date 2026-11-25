@@ -52,9 +52,12 @@ import { colors, fonts, glass, layout } from '@/theme';
 // - 칸마다 보기와 그림, 고르면 바뀌는 그림 규칙은 data/wardrobeArt.ts(시안에서 생성)와 data/wardrobeLook.ts를 따른다.
 
 export default function AddItemColorFitScreen() {
-  const params = useLocalSearchParams<{ slot?: string; kind?: string }>();
+  // color·fit·from: 쇼핑몰에서 산 옷(from=purchase)이나 저장한 사진 속 옷(from=photo)을 넣을 때 미리 채우는 값(11/24 팀 결정 15·16번).
+  const params = useLocalSearchParams<{ slot?: string; kind?: string; color?: string; fit?: string; from?: string }>();
   const slot = isSlot(params.slot) ? params.slot : null;
   const kind = slot !== null && isKindOfSlot(slot, params.kind) ? params.kind : null;
+  const from = params.from === 'purchase' || params.from === 'photo' ? params.from : null;
+  const preset = { color: typeof params.color === 'string' ? params.color : undefined, fit: typeof params.fit === 'string' ? params.fit : undefined };
   const art = useWardrobeArt();
 
   if (slot === null || kind === null) {
@@ -81,7 +84,7 @@ export default function AddItemColorFitScreen() {
     );
   }
 
-  return <AddItemForm key={`${slot}-${kind}`} art={art} spec={spec} slot={slot} kind={kind} />;
+  return <AddItemForm key={`${slot}-${kind}`} art={art} spec={spec} slot={slot} kind={kind} preset={preset} from={from} />;
 }
 
 const COLOR_COLUMNS = 6;
@@ -97,9 +100,26 @@ function toggle(group: AddItemGroup, current: readonly string[], value: string):
   return current.includes(value) ? [] : [value];
 }
 
-function AddItemForm({ art, spec, slot, kind }: { art: WardrobeArt; spec: AddItemSpec; slot: Slot; kind: Kind }) {
-  const [sel, setSel] = useState<Record<string, string[]>>(() => initialSelection(spec));
-  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
+function AddItemForm({ art, spec, slot, kind, preset, from }: {
+  art: WardrobeArt;
+  spec: AddItemSpec;
+  slot: Slot;
+  kind: Kind;
+  preset: { color?: string; fit?: string };
+  from: 'purchase' | 'photo' | null;
+}) {
+  // 미리 채울 값은 그 칸에 실제로 있는 보기일 때만 고른 것으로 둔다.
+  const [sel, setSel] = useState<Record<string, string[]>>(() => {
+    const initial = initialSelection(spec);
+    for (const group of spec.groups) {
+      const value = group.role === 'color' ? preset.color : isFitGroup(group) ? preset.fit : undefined;
+      if (value !== undefined && group.options.some((o) => option(o).v === value)) initial[group.title] = [value];
+    }
+    return initial;
+  });
+  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set(
+    spec.groups.filter((group) => (group.role === 'color' && preset.color) || (isFitGroup(group) && preset.fit)).map((group) => group.title),
+  ));
   const [open, setOpen] = useState(false);
   const [materialNote, setMaterialNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -162,8 +182,9 @@ function AddItemForm({ art, spec, slot, kind }: { art: WardrobeArt; spec: AddIte
         const slotsCovered = new Set([...wardrobe.map((item) => item.slot), slot]).size;
         track('wardrobe_milestone', { count: nextSize, slots_covered: slotsCovered });
       }
-      // 옷 추가 화면 두 장을 닫고 옷장 탭으로 돌아간다.
-      router.dismissTo('/closet');
+      // 옷 추가 화면 두 장을 닫고 옷장 탭으로 돌아간다. 저장한 사진 속 옷을 넣었으면 그 사진 화면으로 돌아간다.
+      if (from === 'photo') router.back();
+      else router.dismissTo('/closet');
     } catch (error) {
       const message = errorMessage(error);
       track('wardrobe_add_failed', { slot, kind, error_code: message });
@@ -180,7 +201,20 @@ function AddItemForm({ art, spec, slot, kind }: { art: WardrobeArt; spec: AddIte
       <DetailHeader title="옷 추가" onBack={() => router.back()} />
       <ProgressSteps current={[2, 3]} />
 
-      <InfoBar style={styles.picked} right={<SmallWhiteButton label="바꾸기" onPress={() => router.back()} />}>
+      {from !== null && (
+        <InfoBar style={styles.picked}>
+          <Text style={styles.pickedLabel}>{from === 'purchase' ? '산 옷' : '사진 속 옷'}</Text>
+          <Text style={styles.pickedValue} numberOfLines={1}>종류{preset.color ? '·색' : ''}{preset.fit ? '·핏' : ''}을 미리 채웠어요. 다르면 고쳐 주세요</Text>
+        </InfoBar>
+      )}
+      <InfoBar
+        style={styles.picked}
+        right={
+          <SmallWhiteButton
+            label="바꾸기"
+            onPress={() => (from === null ? router.back() : router.replace({ pathname: '/add-item/kind', params: { slot } }))}
+          />
+        }>
         <LookIcon look={look} kind={kind} color={color ?? undefined} fit={fit} size={34} />
         <Text style={styles.pickedLabel}>고른 것</Text>
         <Text style={styles.pickedValue} numberOfLines={1}>

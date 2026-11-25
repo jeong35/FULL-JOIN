@@ -2,7 +2,7 @@ import type { ColorValue } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 // design/DESIGN.md 6절 아이콘 SVG를 그대로 옮김. 24×24, 선 1.8.
-export type TabIconName = 'home' | 'recommend' | 'chat' | 'closet' | 'my';
+export type TabIconName = 'home' | 'recommend' | 'saved' | 'chat' | 'closet' | 'my';
 
 type Props = {
   name: TabIconName;
@@ -37,6 +37,8 @@ function renderPaths(name: TabIconName) {
       );
     case 'recommend':
       return <Path d="M12 3l2.4 5.6L20 9.3l-4.3 3.9 1.2 5.8L12 16.1 7.1 19l1.2-5.8L4 9.3l5.6-.7z" />;
+    case 'saved':
+      return <Path d="M6.5 3.5h11v17l-5.5-4-5.5 4z" />;
     case 'chat':
       return <Path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />;
     case 'closet':
