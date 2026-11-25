@@ -900,6 +900,14 @@ LLMOps·최신 eval
 
 ## 9. 최종 상태 판정
 
+### 2026-11-25 ODIT 멘토링 TASK 2~4
+
+- 동료평가 복원 기간을 11월 12일~18일 KST로 바로잡고 잔존 DB 기록 기반 지표를 갱신했다.
+- localhost 관리자 대시보드에 시간순 Sankey, 시간순 퍼널, Retention, 복원 데이터, 추천 알림 퍼널을 추가했다.
+- 사진 등록은 최대 4장·전체 12벌 일괄 처리, 부분 실패 재시도, 성공 항목 중복 방지로 확장했다.
+- 추천 코디 선택 저장 모듈과 Web Push 매일 반복 예약·취소 서버를 추가했다. 프론트 담당자에게 UI를 맡기기로 해 추천/룩 상세/마이 화면 변경은 제거했다. 화면 연동 전이며 실제 전달 여부는 검증하지 않았다. 로컬 DB migration과 예약 교체·소유권 거부·취소 트랜잭션 검증은 통과했다.
+- 네이티브 알림은 현재 production 접속 형태가 Expo Web이고 신규 네이티브 빌드/실기기 검증이 필요하므로 이번 범위에서 성공으로 간주하지 않는다.
+
 현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/02/03·Auth/RLS·LLMOps·사진 옷장 등록 UI·local 통합 테스트·local 관리자 대시보드·승인형 release/alert**가 병합돼 있다. Auth와 사진별 영구 대화는 staging에서 실제 API/RLS 검증을 통과했지만 production에는 미배포다. 비교 학습 데이터와 추천 고도화는 아직 구현하지 않았다.
 
 다음 단계는 PR #29의 CI 중복·Supabase job 격리 검증, 모바일 Auth 토큰 전달과 대화 복원/삭제 UI다. production migration과 Edge Function 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.

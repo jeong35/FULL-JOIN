@@ -440,6 +440,25 @@ group by recommendation;
 
 사진 수가 적은 기간에는 이 지표를 의사결정 근거로 강하게 사용하지 않고, 데이터가 쌓인 뒤 활용한다.
 
+### 추천 선택과 다음 날 알림
+
+| 이벤트 | 의미 | 주요 props |
+|---|---|---|
+| `recommendation_view` | 추천 탭의 날짜별 추천을 봄 | `date` |
+| `recommendation_item_click` | 추천 룩 상세를 선택함 | `date` |
+| `recommendation_combo_view` | 추천 룩 상세를 봄 | `date` |
+| `recommendation_choice` | 이 룩으로 입기를 확정함 | `date`, `recommendation_type` |
+| `notification_prompt_view` | 다음 날 알림 제안 노출 | `platform` |
+| `notification_consent` / `notification_decline` | 제안 동의/거절 | `platform` |
+| `notification_permission` | 브라우저 권한 결과 | `result`, `platform` |
+| `notification_schedule_done` | 서버의 일회성 예약 저장 성공 | `scheduled_for`, `platform` |
+| `notification_schedule_failed` | 미지원·거절·요청 실패 | `reason`, `platform` |
+| `notification_cancel` | 사용자가 예약 취소 | `platform` |
+| `notification_open` | 알림 클릭 URL로 추천 진입 | `source` |
+| `notification_recommendation_reselect` | 알림 진입 뒤 현재 날짜 코디를 다시 선택 | `date` |
+
+`scheduled_for`는 ISO 시각이고, Push endpoint·브라우저 구독 키·VAPID 키·원본 사용자 입력은 이벤트에 넣지 않는다. `notification_schedule_done`은 구독과 서버 예약 성공일 뿐 실제 기기 전달 성공이 아니다. 재방문율은 예정 시각이 지난 예약만 분모로 사용한다.
+
 ## 11. 비교·챗봇 응답시간
 
 ```sql

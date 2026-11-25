@@ -139,6 +139,20 @@ function renderRetention(retention) {
   $("#retention-note").textContent = `${retention.definition}. 예정일이 아직 지나지 않은 사용자는 분모에서 제외하며, 이벤트 누락을 비재방문으로 단정하지 않습니다.`;
 }
 
+function renderNotifications(metrics) {
+  $("#notification-cards").innerHTML = [
+    card("추천 선택", `${count(metrics.choice_users)}명`, `알림 제안 ${count(metrics.prompt_users)}명`),
+    card("알림 동의율", pct(metrics.consent_rate_pct), `${count(metrics.consent_users)}명 동의`),
+    card("권한 허용률", pct(metrics.permission_granted_rate_pct), `${count(metrics.permission_granted_users)}명 허용`),
+    card("예약 성공률", pct(metrics.schedule_success_rate_pct), `${count(metrics.schedule_success_users)}명 예약`),
+    card("알림 진입 재방문", pct(metrics.notification_revisit_rate_pct), `${count(metrics.notification_open_users)} / ${count(metrics.matured_schedule_users)}명`),
+    card("진입 후 재선택", pct(metrics.reselect_rate_pct), `${count(metrics.reselect_users)}명`),
+    card("동의 코호트 재방문", pct(metrics.consent_cohort_revisit.rate_pct), `${count(metrics.consent_cohort_revisit.returned_users)} / ${count(metrics.consent_cohort_revisit.eligible_users)}명`),
+    card("거절 코호트 재방문", pct(metrics.decline_cohort_revisit.rate_pct), `${count(metrics.decline_cohort_revisit.returned_users)} / ${count(metrics.decline_cohort_revisit.eligible_users)}명`),
+  ].join("");
+  $("#notification-note").textContent = metrics.delivery_note;
+}
+
 function renderRecovery(recovery) {
   $("#recovery-cards").innerHTML = [card("미분류 식별자", `${count(recovery.identified_actors)}명`, recovery.source), card("옷장 잔존 기록", `${count(recovery.wardrobe_rows)}행`, `${count(recovery.wardrobe_users)}명`), card("사진 저장 잔존 기록", `${count(recovery.heart_rows)}행`, `${count(recovery.heart_users)}명`), card("두 행동 모두", `${count(recovery.both_users)}명`, recovery.period)].join("");
   const milestones = recovery.wardrobe_milestones; $("#recovery-milestones").innerHTML = [["1벌 이상", milestones.one], ["3벌 이상", milestones.three], ["5벌 이상", milestones.five], ["10벌 이상", milestones.ten], ["첫→5번째 중앙", `${number.format(recovery.first_to_fifth_median_seconds / 60)}분`]].map(([label, value]) => `<div class="metric-row"><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join("");
@@ -160,7 +174,7 @@ function renderAlerts(alerts) { $("#llm-alerts").innerHTML = alerts.length === 0
 function render(data) {
   payload = data; syncSelect("#app-version", data.journeys.filters.app_versions, "전체"); syncSelect("#analytics-version", data.journeys.filters.analytics_versions, "전체");
   const start = $("#journey-start"); const currentStart = start.value; start.innerHTML = `<option value="__session_start__">세션 첫 행동</option>${data.journeys.filters.available_start_keys.map((key) => `<option value="${escape(key)}">${escape(key)}</option>`).join("")}`; if ([...start.options].some((option) => option.value === currentStart)) start.value = currentStart;
-  renderOverview(data); renderSankey(data.journeys.journey); renderFunnels(data.journeys.sequential_funnels); renderActions(data.journeys.actions); renderRetention(data.journeys.retention); renderRecovery(data.historical_recovery); renderLlmOps(data.llmops); renderAlerts(data.alerts ?? []);
+  renderOverview(data); renderSankey(data.journeys.journey); renderFunnels(data.journeys.sequential_funnels); renderActions(data.journeys.actions); renderRetention(data.journeys.retention); renderNotifications(data.journeys.notification_metrics); renderRecovery(data.historical_recovery); renderLlmOps(data.llmops); renderAlerts(data.alerts ?? []);
 }
 
 async function refresh() {

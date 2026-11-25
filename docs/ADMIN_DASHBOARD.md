@@ -41,7 +41,7 @@ npm run dashboard:production
 - **User Journey:** 실제 시간순 Sankey. 시작 행동, 사용자/세션 단위, 깊이 2~8, 희귀 경로 묶기, 확대·축소를 제공한다.
 - **Funnel Analysis:** 시간순 도달 퍼널. 각 단계는 반드시 이전 단계 뒤에 관측돼야 한다.
 - **User Actions:** 이벤트별 발생 수·고유 사용자·세션과 KST 시간대 추이
-- **Retention:** 성숙 코호트만 포함한 D1/D7과 기간 이전 이력이 있는 재방문 사용자
+- **Retention:** 성숙 코호트만 포함한 D1/D7, 기간 이전 이력이 있는 재방문 사용자, 추천 선택→알림 동의·권한·예약·알림 진입·재선택 퍼널
 - **Historical Recovery:** 2026-11-12~18의 `persisted_action` 복원 집계. 정상 이벤트와 합치지 않는다.
 - **LLMOps:** 기존 비용·지연·오류·fallback·grounded·release 집계를 유지한다.
 
@@ -78,12 +78,7 @@ Sankey 선 두께는 선택한 집계 단위의 고유 수다. 반복 진입은 
 
 전환율은 `다음 단계 사용자 / 이전 단계 사용자`, 이탈률은 `1 - 전환율`이다. Overview의 존재 여부 기반 퍼널과 Funnel Analysis의 실제 시간순 퍼널은 별도로 표시한다. 존재 여부 퍼널은 순서를 주장하지 않으며, 시간순 퍼널은 각 사용자에서 이전 단계 뒤 최초 관측된 이벤트만 인정한다.
 
-현재 이벤트로 계산할 수 없는 항목:
-
-- 추천 탭/특정 아이템 기반 추천 이용률: `recommendation_view`, `recommendation_item_impression`, `recommendation_item_click`이 필요하다.
-- 사진 기반 옷 등록 전환: `wardrobe_photo_start`, `wardrobe_photo_analysis_done`, `wardrobe_photo_add_done`이 필요하다.
-
-이 이벤트는 제품 흐름이 확정되기 전에 임의 추가하지 않는다.
+추천 알림 지표는 `notification_schedule_done.props.scheduled_for`가 조회 종료 시각과 현재 시각보다 앞선 사용자만 재방문 분모에 포함한다. 알림 클릭은 전달의 일부 증거지만, 클릭하지 않은 알림의 실제 전달 여부는 Web Push API에서 확인할 수 없으므로 전달률은 제공하지 않는다. 동의/거절 코호트 재방문은 결정 다음 KST 날짜의 `app_open`으로 계산한다.
 
 ## LLMOps
 

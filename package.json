@@ -23,6 +23,7 @@
     "test:chat-history": "node --test --test-reporter=spec tests/test_chat_history.ts",
     "test:admin-metrics": "node --test --test-reporter=spec tests/test_admin_metrics.ts tests/test_journey_metrics.ts tests/test_event_outbox.ts",
     "test:photo-batch": "node --test --test-reporter=spec tests/test_photo_batch.ts",
+    "test:notifications": "node --test --test-reporter=spec scripts/check-task4-notifications.ts",
     "test:integration:local": "node scripts/test-local-integration.mjs",
     "test:integration:staging": "FULL_JOIN_INTEGRATION_TARGET=staging node scripts/test-local-integration.mjs",
     "dashboard:local": "node admin-dashboard/server.mjs",
@@ -49,10 +50,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "web-push": "^3.6.7",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
+    "@types/web-push": "^3.6.4",
     "supabase": "^3.0.0",
     "typescript": "5.9.3"
   }

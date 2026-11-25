@@ -625,6 +625,52 @@ function buildActions(events: readonly NormalizedEvent[]) {
   })).sort((left, right) => right.events - left.events || left.name.localeCompare(right.name));
 }
 
+function buildNotificationMetrics(events: readonly NormalizedEvent[], range: MetricsRange) {
+  const usersFor = (name: string, predicate: (event: NormalizedEvent) => boolean = () => true) =>
+    new Set(events.filter((event) => event.name === name && event.user_id !== null && predicate(event)).map((event) => event.user_id!));
+  const choices = usersFor("recommendation_choice");
+  const prompts = usersFor("notification_prompt_view");
+  const consents = usersFor("notification_consent");
+  const permissionGranted = usersFor("notification_permission", (event) => stringProp(event, "result") === "granted");
+  const scheduled = usersFor("notification_schedule_done");
+  const maturityPoint = Math.min(Date.now(), Date.parse(range.to));
+  const matured = usersFor("notification_schedule_done", (event) => {
+    const scheduledFor = Date.parse(stringProp(event, "scheduled_for") ?? "");
+    return Number.isFinite(scheduledFor) && scheduledFor <= maturityPoint;
+  });
+  const opens = usersFor("notification_open");
+  const reselects = usersFor("notification_recommendation_reselect");
+  const cohortReturn = (decisionName: "notification_consent" | "notification_decline") => {
+    const decisions = new Map<string, number>();
+    for (const event of events) {
+      if (event.name === decisionName && event.user_id !== null && !decisions.has(event.user_id)) decisions.set(event.user_id, event.effective_at);
+    }
+    const eligible = [...decisions].filter(([, at]) => dayNumber(at) < dayNumber(maturityPoint));
+    const returned = eligible.filter(([userId, at]) => events.some((event) =>
+      event.user_id === userId && event.name === "app_open" && dayNumber(event.effective_at) > dayNumber(at))).length;
+    return { eligible_users: eligible.length, returned_users: returned, rate_pct: percentage(returned, eligible.length) };
+  };
+  return {
+    choice_users: choices.size,
+    prompt_users: prompts.size,
+    consent_users: consents.size,
+    consent_rate_pct: percentage(consents.size, prompts.size),
+    permission_granted_users: permissionGranted.size,
+    permission_granted_rate_pct: percentage(permissionGranted.size, consents.size),
+    schedule_success_users: scheduled.size,
+    schedule_success_rate_pct: percentage(scheduled.size, consents.size),
+    matured_schedule_users: matured.size,
+    notification_open_users: new Set([...opens].filter((userId) => matured.has(userId))).size,
+    notification_revisit_rate_pct: percentage(new Set([...opens].filter((userId) => matured.has(userId))).size, matured.size),
+    reselect_users: reselects.size,
+    reselect_rate_pct: percentage(new Set([...reselects].filter((userId) => opens.has(userId))).size, opens.size),
+    consent_cohort_revisit: cohortReturn("notification_consent"),
+    decline_cohort_revisit: cohortReturn("notification_decline"),
+    delivery_observable: false,
+    delivery_note: "예약 성공은 브라우저 구독·서버 예약 성공이며 실제 기기 전달 성공을 뜻하지 않음",
+  };
+}
+
 export function analyzeJourneys(
   allEvents: readonly AnalyticsEventRow[],
   wardrobeRows: readonly WardrobeCountRow[],
@@ -661,6 +707,7 @@ export function analyzeJourneys(
     sequential_funnels: buildSequentialFunnels(selected),
     actions: buildActions(selected),
     retention: buildRetention(retentionEvents, range),
+    notification_metrics: buildNotificationMetrics(selected, range),
     selected_event_count: selected.length,
     selected_user_count: new Set(selected.flatMap((event) => event.user_id === null ? [] : [event.user_id])).size,
     selected_session_count: new Set(selected.map((event) => event.analysis_session_id)).size,
