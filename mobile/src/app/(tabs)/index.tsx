@@ -340,7 +340,7 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      <View style={[styles.header, folder === '피드' && styles.feedHeader]}>
         {folder === '피드' ? (
           <Text style={styles.logo} accessibilityRole="header">
             odit.
@@ -629,6 +629,11 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
     paddingLeft: layout.screenPaddingX,
     paddingRight: layout.screenPaddingX - 10,
+  },
+  // 11/25: 홈은 'odit.' 글자와 피드 사진 사이를 10px 더 띄운다(저장 탭은 아래 필터 줄이 있어 그대로).
+  feedHeader: {
+    height: 80,
+    paddingBottom: 12,
   },
   searchButton: {
     width: 44,
