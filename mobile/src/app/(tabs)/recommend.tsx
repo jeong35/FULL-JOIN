@@ -3,7 +3,7 @@
 // 오늘의 룩(저장한 사진으로 다 갖춰지는 룩, 없으면 옷장 옷만으로 기온에 맞게) → 내 옷으로 조합 만들기 → 하나만 더하면 완성.
 // 약속·여행은 뺐다(파일은 남겨 둠).
 import { Image } from 'expo-image';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -19,9 +19,12 @@ import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
+import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
 import { buildCombos, type Combo } from '@/data/combos';
+import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
 import { lookTips, matchOf, MAX_LOOKS, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
+import { useSession } from '@/data/session';
 import { shoppingLinksFor } from '@/data/shopping';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
@@ -59,9 +62,17 @@ export default function RecommendScreen() {
   const [lookIndex, setLookIndex] = useState(0);
   const [almostIndex, setAlmostIndex] = useState(0);
   const [regionOpen, setRegionOpen] = useState(false);
-  const [chosen, setChosen] = useState<Record<string, string>>({});
-  // '이 룩으로 입을래요'를 누르면 아래에서 '결정!' 창이 올라온다(11/25, LookChosenSheet).
-  const [chosenSheet, setChosenSheet] = useState(false);
+  const userId = useSession()?.userId ?? 'guest';
+  // 날짜별로 고른 룩은 계정마다 이 기기에 남긴다(친구분 recommendChoices.ts) — 다시 들어와도 '입기로 했어요'가 그대로.
+  const choices = useRecommendationChoices(userId);
+  // '이 룩으로 입을래요'를 누르면 아래에서 '결정!' 창이 올라온다(11/25, LookChosenSheet). 값 = 고른 룩.
+  const [chosenSheet, setChosenSheet] = useState<string | null>(null);
+  // 코디 알림을 눌러 들어오면 주소에 ?notification=1이 붙는다 — 한 번 기록하고, 그 뒤 고르면 '알림 뒤 다시 고름'으로 남긴다.
+  const { notification } = useLocalSearchParams<{ notification?: string }>();
+  const fromNotification = notification === '1';
+  useEffect(() => {
+    if (fromNotification) track('notification_open', { source: 'push' });
+  }, [fromNotification]);
   // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다.
   // 다시 맨 위로 올라와도 작은 채로 두고, 한 줄을 누르면 다시 커진다.
   const [weatherSmall, setWeatherSmall] = useState(false);
@@ -205,10 +216,12 @@ export default function RecommendScreen() {
             closetLooks={closetLooks}
             index={lookIndex}
             date={selected}
-            chosenId={chosen[selected]}
+            chosenId={choices[selected]?.lookId}
             onChoose={(id) => {
-              setChosen((prev) => ({ ...prev, [selected]: id }));
-              setChosenSheet(true);
+              saveRecommendationChoice(userId, { date: selected, lookId: id, chosenAt: new Date().toISOString(), notificationScheduled: false });
+              track('recommendation_choice', { date: selected, recommendation_type: look !== undefined ? 'saved_photo' : 'closet' });
+              if (fromNotification) track('notification_recommendation_reselect', { date: selected });
+              setChosenSheet(id);
             }}
             onNext={() => setLookIndex((i) => i + 1)}
           />
@@ -306,7 +319,7 @@ export default function RecommendScreen() {
         </Pressable>
       </Modal>
 
-      <LookChosenSheet visible={chosenSheet} onClose={() => setChosenSheet(false)} />
+      <LookChosenSheet visible={chosenSheet !== null} date={selected} lookId={chosenSheet} onClose={() => setChosenSheet(null)} />
     </TabScreen>
   );
 }
