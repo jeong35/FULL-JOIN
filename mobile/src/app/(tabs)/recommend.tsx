@@ -21,7 +21,7 @@ import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
 import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
-import { buildCombos, type Combo } from '@/data/combos';
+import { buildCombos, harmony, type Combo } from '@/data/combos';
 import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
 import { lookTips, matchOf, MAX_LOOKS, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
 import { useSession } from '@/data/session';
@@ -146,6 +146,28 @@ export default function RecommendScreen() {
     // 고른 옷을 큰 칸(첫 칸)에 보여 준다.
     return combos.map((combo) => ({ ...combo, items: [anchor, ...combo.items.filter((item) => item.id !== anchor.id)] }));
   }, [anchor, view.wardrobe, day]);
+  // 조합 만들기(/combo)나 오늘의 룩에서 '입을래요'로 고른 옷장 조합(11/25): 그날 오늘의 룩 맨 앞에 둔다.
+  // 룩 id가 옷 id를 + 로 이은 것이라 옷장에서 다시 찾는다(옷이 지워졌으면 없던 걸로).
+  const chosenLookId = choices[selected]?.lookId;
+  const chosenCombo = useMemo((): Combo | undefined => {
+    if (chosenLookId === undefined) return undefined;
+    const items = chosenLookId.split('+').map((id) => view.wardrobe.find((item) => item.id === id));
+    if (items.length === 0 || items.some((item) => item === undefined)) return undefined;
+    const list = items as WardrobeItem[];
+    const result = harmony(list);
+    const tags = [...(result?.tags ?? [])];
+    if (day !== undefined && list.every((item) => fitsTemp(item, day))) tags.push('기온 맞춤');
+    return { id: chosenLookId, items: list, tags, score: result?.score ?? 0 };
+  }, [chosenLookId, view.wardrobe, day]);
+  // 옷장 조합을 새로 고르면(여기서든 조합 만들기에서든) 고른 옷 보기를 풀고 그 조합(맨 앞)을 보여 준다.
+  const [seenChoice, setSeenChoice] = useState(chosenLookId);
+  if (seenChoice !== chosenLookId) {
+    setSeenChoice(chosenLookId);
+    if (chosenCombo !== undefined) {
+      setAnchorId(null);
+      setLookIndex(0);
+    }
+  }
   // 11/25 팀 결정(오늘의 룩은 어떻게든 보여 준다): 기온에 딱 맞는 조합이 없으면 기온에서 가장 덜 벗어난 조합을 고르고 안내를 붙인다.
   const nearLooks = useMemo(() => {
     if (closetLooks.length > 0 || day === undefined || view.looks.length > 0 || view.pending > 0) return [];
@@ -167,6 +189,15 @@ export default function RecommendScreen() {
       setHourlyOpen(false);
     }
   }
+
+  // 오늘의 룩에 보일 것: 고른 옷이 있으면 그 옷 조합 → '입을래요'로 정한 옷장 조합이 있으면 그것부터 → 원래 순서.
+  const defaultClosetLooks = closetLooks.length > 0 ? closetLooks : nearLooks;
+  const shownLook = anchor !== undefined || chosenCombo !== undefined ? undefined : look;
+  const shownClosetLooks = anchor !== undefined
+    ? anchorLooks
+    : chosenCombo !== undefined
+      ? [chosenCombo, ...defaultClosetLooks.filter((combo) => combo.id !== chosenCombo.id)]
+      : defaultClosetLooks;
 
   return (
     <TabScreen
@@ -235,9 +266,9 @@ export default function RecommendScreen() {
           <LookSection
             title={selected === today ? '오늘의 룩' : `${weekday(selected)}요일 룩`}
             view={view}
-            look={anchor !== undefined ? undefined : look}
-            closetLooks={anchor !== undefined ? anchorLooks : closetLooks.length > 0 ? closetLooks : nearLooks}
-            near={anchor === undefined && closetLooks.length === 0 && nearLooks.length > 0}
+            look={shownLook}
+            closetLooks={shownClosetLooks}
+            near={anchor === undefined && chosenCombo === undefined && closetLooks.length === 0 && nearLooks.length > 0}
             anchor={anchor}
             onClearAnchor={() => {
               setAnchorId(null);
@@ -248,7 +279,7 @@ export default function RecommendScreen() {
             chosenId={choices[selected]?.lookId}
             onChoose={(id) => {
               saveRecommendationChoice(userId, { date: selected, lookId: id, chosenAt: new Date().toISOString(), notificationScheduled: false });
-              track('recommendation_choice', { date: selected, recommendation_type: anchor === undefined && look !== undefined ? 'saved_photo' : 'closet' });
+              track('recommendation_choice', { date: selected, recommendation_type: shownLook !== undefined ? 'saved_photo' : 'closet' });
               if (fromNotification) track('notification_recommendation_reselect', { date: selected });
               setChosenSheet(id);
             }}
