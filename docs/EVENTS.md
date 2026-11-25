@@ -111,9 +111,9 @@
 | `feed_load_failed` | 피드 로딩 실패 | `error_code`, `latency_ms` |
 | `feed_scroll` | 25/50/75/100% 스크롤 도달 | `depth_percent`, `cards_seen` |
 | `feed_card_impression` | 피드 카드가 실제 viewport에 들어옴 | `style_image_id`, `position`, `recommendation` |
-| `feed_search` | 검색어 제출 | `query_length`, `result_count` (검색어 원문은 저장하지 않음) |
-| `feed_filter_apply` | 스타일·종류·색 필터 선택 | `filter_type`, `filter_value`, `result_count` |
-| `feed_filter_clear` | 검색·필터 전체 초기화 | `had_query`, `active_filter_count` |
+| `feed_search` | 홈 검색 화면에서 글자로 찾기(추천 단어 누름·키보드 검색) | `query_length`, `result_count` (검색어 원문은 저장하지 않음) |
+| `feed_filter_apply` | 홈 검색 화면에서 스타일·종류·색 칩 누름(다시 눌러 풀면 `filter_value=all`) | `filter_type`, `filter_value`, `result_count` |
+| `feed_filter_clear` | 홈 검색 화면 [초기화] | `had_query`, `active_filter_count` |
 | `photo_open` | 피드 사진 상세 진입 | `style_image_id` |
 | `photo_save` | 저장 시도 | `style_image_id`, `place` |
 | `photo_save_done` | 저장 성공 | `style_image_id`, `place`, `saved_count`(가능한 경로) |

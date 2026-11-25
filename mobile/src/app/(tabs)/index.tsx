@@ -7,36 +7,26 @@ import {
   Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
-import { BookmarkIcon } from '@/components/Icons';
+import { FeedPhoto, PHOTO_GAP, splitColumns } from '@/components/FeedPhoto';
+import { BookmarkIcon, SearchIcon } from '@/components/Icons';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { errorMessage } from '@/data/api';
-import { STYLES, kindLabel, type Color, type Kind, type Style } from '@/data/catalog';
+import { STYLES, type Style } from '@/data/catalog';
 import { setHomeAnalyticsScreen, track } from '@/data/events';
-import {
-  NO_FEED_FILTER,
-  feedFilterOptions,
-  filterFeedImages,
-  hasFeedDiscovery,
-  type FeedFilter,
-  type FeedFilterKey,
-} from '@/data/feedFilter';
 import { NEIGHBOR_STYLES, orderByTaste } from '@/data/feedOrder';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { onHomeTabReselect } from '@/data/homeTab';
 import { useSession } from '@/data/session';
 import { heartStyleImage, loadArchive, loadFeed, unheartStyleImage, useArchiveState, useFeedState, useIsUnhearting, useSaved } from '@/data/store';
-import type { ArchiveImage, Season, StyleImage } from '@/data/types';
+import type { ArchiveImage, Season } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 // 홈 피드. 모양은 design/screens/10-home-feed.html을 따른다.
@@ -45,21 +35,8 @@ import { colors, fonts, layout } from '@/theme';
 // 내가 이름 지은 폴더(출근룩 등)는 나중에 '모든 저장' 옆에 붙는다.
 const FOLDERS = ['피드', '모든 저장'] as const;
 type Folder = (typeof FOLDERS)[number];
-const PHOTO_GAP = 2;
 // '모든 저장' 사진 사이 간격. 피드(2px)보다 조금 넓게 둔다.
 const ARCHIVE_GAP = 4;
-const PHOTO_COLORS = [colors.line, '#E4E1EC'] as const;
-// 사진 비율(가로/세로)을 받기 전 기본값과 허용 범위. 너무 길거나 넓은 사진은 잘라서 보여 준다.
-const DEFAULT_RATIO = 3 / 4;
-const MIN_RATIO = 9 / 16;
-const MAX_RATIO = 1;
-
-// 순서대로 왼쪽·오른쪽에 번갈아 넣는다. 사진 비율을 받은 뒤에도 자리가 바뀌지 않는다.
-function splitColumns(images: readonly StyleImage[]) {
-  const columns: [StyleImage[], StyleImage[]] = [[], []];
-  images.forEach((image, index) => columns[index % 2].push(image));
-  return columns;
-}
 
 function splitArchiveColumns(images: readonly ArchiveImage[]) {
   const columns: [ArchiveImage[], ArchiveImage[], ArchiveImage[]] = [[], [], []];
@@ -111,19 +88,10 @@ export default function HomeScreen() {
   // 처음 고른 취향 스타일 사진 → 이웃 스타일 → 나머지 순서(SPEC AC15).
   // 이미 저장한 사진은 즉시 피드에서 빼고 '모든 저장'에서만 보여 준다.
   const taste = session?.styles;
-  const unsavedFeedImages = useMemo(
+  const feedImages = useMemo(
     () => orderByTaste(feed.data.filter((image) => saved[image.id] === undefined), taste ?? []),
     [feed.data, saved, taste],
   );
-  const [feedQuery, setFeedQuery] = useState('');
-  const [feedFilter, setFeedFilter] = useState<FeedFilter>(NO_FEED_FILTER);
-  const [feedPicking, setFeedPicking] = useState<FeedFilterKey | null>(null);
-  const feedOptions = useMemo(() => feedFilterOptions(unsavedFeedImages), [unsavedFeedImages]);
-  const feedImages = useMemo(
-    () => filterFeedImages(unsavedFeedImages, feedQuery, feedFilter),
-    [feedFilter, feedQuery, unsavedFeedImages],
-  );
-  const feedDiscoveryActive = hasFeedDiscovery(feedQuery, feedFilter);
   const [folder, setFolder] = useState<Folder>('피드');
   const [filter, setFilter] = useState<ArchiveFilter>(NO_FILTER);
   const [picking, setPicking] = useState<FilterKey | null>(null);
@@ -154,30 +122,6 @@ export default function HomeScreen() {
       next === '모든 저장' ? { saved_count: archive.data.length } : {},
     );
     setFolder(next);
-  }
-
-  function clearFeedDiscovery() {
-    track('feed_filter_clear', {
-      had_query: feedQuery.trim() !== '',
-      active_filter_count: Object.values(feedFilter).filter((value) => value !== null).length,
-    });
-    setFeedQuery('');
-    setFeedFilter(NO_FEED_FILTER);
-  }
-
-  function applyFeedFilter(key: FeedFilterKey, value: FeedFilter[FeedFilterKey]) {
-    const next = { ...feedFilter, [key]: value };
-    track('feed_filter_apply', {
-      filter_type: key,
-      filter_value: value ?? 'all',
-      result_count: filterFeedImages(unsavedFeedImages, feedQuery, next).length,
-    });
-    setFeedFilter(next);
-    setFeedPicking(null);
-  }
-
-  function submitFeedSearch() {
-    track('feed_search', { query_length: feedQuery.trim().length, result_count: feedImages.length });
   }
 
   // 화면에 돌아올 때마다 논리 화면(feed/archive)을 공통 tracker와 맞추고 데이터를 새로 확인한다.
@@ -310,18 +254,11 @@ export default function HomeScreen() {
         <SmallWhiteButton label="다시 시도" onPress={() => loadFeed({ force: true })} />
       </View>
     );
-  } else if (folder === '피드' && unsavedFeedImages.length === 0) {
+  } else if (folder === '피드' && feedImages.length === 0) {
     body = (
       <View style={styles.center}>
         <Text style={styles.centerText}>피드 사진을 모두 저장했어요{'\n'}저장한 사진은 &apos;모든 저장&apos;에서 볼 수 있어요</Text>
         <SmallWhiteButton label="모든 저장 보기" onPress={() => changeFolder('모든 저장')} />
-      </View>
-    );
-  } else if (folder === '피드' && feedImages.length === 0) {
-    body = (
-      <View style={styles.center}>
-        <Text style={styles.centerText}>검색 조건에 맞는 코디 사진이 없어요</Text>
-        <SmallWhiteButton label="검색·필터 초기화" onPress={clearFeedDiscovery} />
       </View>
     );
   } else if (folder !== '피드' && archive.data.length === 0 && archive.status !== 'error') {
@@ -404,22 +341,21 @@ export default function HomeScreen() {
         <Text style={styles.logo} accessibilityRole="header">
           odit.
         </Text>
+        {/* 홈 검색(11/24 v2 시안): 피드 위에 필터 막대를 두지 않고 돋보기만. 누르면 검색 화면에서 스타일·옷·색을 고른다.
+            '모든 저장'은 자기 필터(연도·계절·스타일)가 있어서 돋보기를 숨긴다. */}
+        {folder === '피드' && (
+          <Pressable
+            onPress={() => router.push('/search')}
+            accessibilityRole="button"
+            accessibilityLabel="스타일·옷·색으로 찾기"
+            hitSlop={4}
+            style={styles.searchButton}>
+            <SearchIcon color={colors.text} />
+          </Pressable>
+        )}
       </View>
 
       <TextTabs options={FOLDERS} value={folder} onChange={changeFolder} />
-
-      {folder === '피드' && feed.data.length > 0 && (
-        <FeedDiscoveryBar
-          query={feedQuery}
-          filter={feedFilter}
-          active={feedDiscoveryActive}
-          resultCount={feedImages.length}
-          onQueryChange={setFeedQuery}
-          onSubmit={submitFeedSearch}
-          onPick={setFeedPicking}
-          onClear={clearFeedDiscovery}
-        />
-      )}
 
       {folder === '피드' && justSaved && saveHintOpen && (
         <HintBubble
@@ -500,122 +436,7 @@ export default function HomeScreen() {
         }}
         onClose={() => setPicking(null)}
       />
-      <FeedFilterSheet
-        picking={feedPicking}
-        filter={feedFilter}
-        options={feedOptions}
-        onPick={applyFeedFilter}
-        onClose={() => setFeedPicking(null)}
-      />
     </SafeAreaView>
-  );
-}
-
-const FEED_FILTER_LABELS: Record<FeedFilterKey, string> = {
-  style: '스타일',
-  kind: '종류',
-  color: '색',
-};
-
-function FeedDiscoveryBar({
-  query,
-  filter,
-  active,
-  resultCount,
-  onQueryChange,
-  onSubmit,
-  onPick,
-  onClear,
-}: {
-  query: string;
-  filter: FeedFilter;
-  active: boolean;
-  resultCount: number;
-  onQueryChange: (value: string) => void;
-  onSubmit: () => void;
-  onPick: (key: FeedFilterKey) => void;
-  onClear: () => void;
-}) {
-  return (
-    <View style={styles.feedDiscovery}>
-      <View style={styles.searchBox}>
-        <Text style={styles.searchIcon}>⌕</Text>
-        <TextInput
-          value={query}
-          onChangeText={onQueryChange}
-          onSubmitEditing={onSubmit}
-          placeholder="스타일·종류·색 검색"
-          placeholderTextColor={colors.textSecondary}
-          returnKeyType="search"
-          accessibilityLabel="홈 피드 검색"
-          style={styles.searchInput}
-        />
-        {query !== '' && (
-          <Pressable onPress={() => onQueryChange('')} accessibilityRole="button" accessibilityLabel="검색어 지우기" hitSlop={8}>
-            <Text style={styles.searchClear}>×</Text>
-          </Pressable>
-        )}
-      </View>
-      <View style={styles.feedFilterBar}>
-        {(Object.keys(FEED_FILTER_LABELS) as FeedFilterKey[]).map((key) => {
-          const value = filter[key];
-          const label = value === null ? FEED_FILTER_LABELS[key] : key === 'kind' ? kindLabel(value as Kind) : value;
-          return <FilterPill key={key} label={label} active={value !== null} onPress={() => onPick(key)} />;
-        })}
-        {active && (
-          <>
-            <Text style={styles.feedResultCount}>{resultCount}개</Text>
-            <Pressable onPress={onClear} accessibilityRole="button" hitSlop={8}>
-              <Text style={styles.clearFilterText}>전체</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function FeedFilterSheet({
-  picking,
-  filter,
-  options,
-  onPick,
-  onClose,
-}: {
-  picking: FeedFilterKey | null;
-  filter: FeedFilter;
-  options: { style: Style[]; kind: Kind[]; color: Color[] };
-  onPick: (key: FeedFilterKey, value: FeedFilter[FeedFilterKey]) => void;
-  onClose: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const key = picking ?? 'style';
-  const values = options[key] as readonly (Style | Kind | Color)[];
-  const current = filter[key];
-  return (
-    <Modal visible={picking !== null} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.sheetBackdrop} onPress={onClose} accessibilityLabel="닫기" />
-      <View style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
-        <Text style={styles.sheetTitle}>{FEED_FILTER_LABELS[key]}</Text>
-        <Text style={styles.sheetNote}>현재 피드 사진에 있는 값만 보여 드려요.</Text>
-        <ScrollView style={styles.feedSheetScroll} contentContainerStyle={styles.sheetChips}>
-          {[null, ...values].map((value) => {
-            const selected = value === current;
-            const label = value === null ? '전체' : key === 'kind' ? kindLabel(value as Kind) : value;
-            return (
-              <Pressable
-                key={label}
-                onPress={() => onPick(key, value as FeedFilter[FeedFilterKey])}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                style={[styles.sheetChip, selected && styles.sheetChipSelected]}>
-                <Text style={[styles.sheetChipText, selected && styles.sheetChipTextSelected]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-    </Modal>
   );
 }
 
@@ -777,65 +598,6 @@ function ArchiveThumbnail({ image, onUnsave }: { image: ArchiveImage; onUnsave: 
   );
 }
 
-function FeedPhoto({
-  image,
-  colorIndex,
-  saved,
-  onOpen,
-  onSave,
-  onLayout,
-}: {
-  image: StyleImage;
-  colorIndex: number;
-  saved: boolean;
-  onOpen: () => void;
-  onSave: () => void;
-  onLayout: (y: number, height: number) => void;
-}) {
-  const [ratio, setRatio] = useState(DEFAULT_RATIO);
-  const unhearting = useIsUnhearting(image.id);
-  return (
-    <View
-      style={[styles.photo, { aspectRatio: ratio, backgroundColor: PHOTO_COLORS[colorIndex] }]}
-      onLayout={(event) => onLayout(event.nativeEvent.layout.y, event.nativeEvent.layout.height)}>
-      <Pressable
-        onPress={onOpen}
-        accessibilityRole="button"
-        accessibilityLabel={`${image.style.join('·')} 스타일 사진 제품 정보 보기`}
-        style={StyleSheet.absoluteFill}>
-        <Image
-          // 사진 주소는 받을 때마다 바뀌지만 사진은 같으니 id로 캐시한다.
-          source={{ uri: image.thumbnail_url, cacheKey: image.id }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={150}
-          onLoad={({ source }) => {
-            if (source.width > 0 && source.height > 0) {
-              setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, source.width / source.height)));
-            }
-          }}
-        />
-      </Pressable>
-      <Pressable
-        onPress={onSave}
-        disabled={unhearting}
-        accessibilityRole="button"
-        accessibilityLabel={saved ? '저장 취소' : '저장'}
-        accessibilityState={{ busy: unhearting, disabled: unhearting }}
-        hitSlop={6}
-        style={styles.saveButtonWrap}>
-        <GlassView radius={18} style={styles.saveButton}>
-          {unhearting ? (
-            <ActivityIndicator size="small" color={colors.textPurple} />
-          ) : (
-            <BookmarkIcon color={colors.text} filled={saved} />
-          )}
-        </GlassView>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -844,10 +606,18 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     height: 70,
     paddingTop: 24,
     paddingBottom: 2,
-    paddingHorizontal: layout.screenPaddingX,
+    paddingLeft: layout.screenPaddingX,
+    paddingRight: layout.screenPaddingX - 10,
+  },
+  searchButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logo: {
     fontFamily: fonts.extraBold,
@@ -872,52 +642,6 @@ const styles = StyleSheet.create({
     marginHorizontal: layout.screenPaddingX,
     marginTop: 2,
     marginBottom: 12,
-  },
-  feedDiscovery: {
-    gap: 8,
-    marginHorizontal: layout.screenPaddingX,
-    marginBottom: 12,
-  },
-  searchBox: {
-    height: 42,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  searchIcon: {
-    fontFamily: fonts.bold,
-    fontSize: 18,
-    color: colors.textSecondary,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 0,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.text,
-  },
-  searchClear: {
-    fontFamily: fonts.medium,
-    fontSize: 22,
-    lineHeight: 24,
-    color: colors.textSecondary,
-  },
-  feedFilterBar: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  feedResultCount: {
-    marginLeft: 'auto',
-    fontFamily: fonts.medium,
-    fontSize: 12,
-    color: colors.textSecondary,
   },
   columns: {
     flexDirection: 'row',
@@ -1049,9 +773,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 16,
   },
-  feedSheetScroll: {
-    maxHeight: 320,
-  },
   sheetChip: {
     height: 38,
     minWidth: 64,
@@ -1075,10 +796,6 @@ const styles = StyleSheet.create({
   sheetChipTextSelected: {
     color: colors.textPurple,
   },
-  photo: {
-    // 사진은 각진 네모(모서리 0).
-    overflow: 'hidden',
-  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -1092,19 +809,5 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 13,
     color: colors.textSecondary,
-  },
-  saveButtonWrap: {
-    position: 'absolute',
-    right: 6,
-    bottom: 6,
-  },
-  saveButton: {
-    // DESIGN.md 4절 예외: 지름 36 동그라미.
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderColor: 'rgba(255,255,255,0.85)',
-    boxShadow: '0 2px 10px rgba(30,20,50,0.12)',
   },
 });
