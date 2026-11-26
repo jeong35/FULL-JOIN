@@ -531,13 +531,13 @@ function ResultCard({
 // '필요'한 옷의 쇼핑 링크. 검색어는 옷마다 다르다(색 + 핏 + 종류, parse_query.md 쇼핑 검색어 규칙).
 // 11/25: 무신사·에이블리·지그재그 세 버튼을 같은 크기로 한 줄에(한 번 누르면 바로 간다).
 // place: 아이템 목록('list')인지 코디 카드('outfit')인지 — 어느 자리 링크를 누르는지 보려고 기록에 남긴다.
-function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; place: 'list' | 'outfit' }) {
+function ShopLinks({ item, links, place, title }: { item: ShownItem; links: Product[]; place: 'list' | 'outfit'; title?: string }) {
   const { id } = useLocalSearchParams<{ id?: string }>();
   return (
     <ShopButtons
       target={item}
       links={links}
-      title={`비슷한 ${kindLabel(item.kind)} 찾기`}
+      title={title ?? `비슷한 ${kindLabel(item.kind)} 찾기`}
       place={place}
       styleImageId={typeof id === 'string' ? id : null}
     />
@@ -672,10 +672,12 @@ function OutfitCard({
           ))}
           {missing.map((piece) => hasKind(piece.item) && (
             <View key={piece.item.item_id} style={styles.needRow}>
-              <Text style={styles.needLabel} numberOfLines={1}>
-                {[piece.item.color, piece.item.kind !== undefined ? kindLabel(piece.item.kind) : null].filter(Boolean).join(' ')} 찾기
-              </Text>
-              <ShopLinks item={piece.item} links={linksFor(piece.item)} place="outfit" />
+              <ShopLinks
+                item={piece.item}
+                links={linksFor(piece.item)}
+                place="outfit"
+                title={`${[piece.item.color, piece.item.kind !== undefined ? kindLabel(piece.item.kind) : null].filter(Boolean).join(' ')} 찾기`}
+              />
             </View>
           ))}
         </View>
@@ -1140,11 +1142,6 @@ const styles = StyleSheet.create({
   },
   needRow: {
     gap: 2,
-  },
-  needLabel: {
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    color: colors.text,
   },
   note: {
     marginTop: 10,

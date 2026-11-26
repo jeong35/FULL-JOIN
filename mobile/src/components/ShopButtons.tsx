@@ -1,5 +1,6 @@
 // 쇼핑몰 버튼(11/25 다시 정함): 무신사 · 에이블리 · 지그재그 세 버튼을 같은 크기로 한 줄에 둔다 — 한 번 누르면 바로 간다.
-// 사진 속 실제 상품 링크가 있으면 그 위에 '사진 속 ○○ 상품 보기'를 따로 둔다.
+// 사진 속 실제 상품 링크가 있으면 '사진 속 ○○ 상품 보기'를 따로 둔다.
+// 11/26: 제목이 있으면 제목 줄 오른쪽에 '사진 속 상품 보기 ›'로 붙여 한 줄로(제목·링크·버튼이 세 줄로 쌓이지 않게).
 // 쇼핑몰에 갔다 돌아오면 샀는지 묻는다(data/purchase.ts, 11/24 팀 결정 15번).
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -39,12 +40,22 @@ export function ShopButtons({ target, links, title, size = 'small', place, style
   };
   return (
     <View style={[styles.wrap, style]}>
-      {title !== undefined && <Text style={styles.title}>{title}</Text>}
-      {exact.map((product) => (
-        <Pressable key={product.url} onPress={() => open(product)} accessibilityRole="link" hitSlop={6} style={styles.exact}>
-          <Text style={styles.exactText}>사진 속 {name} 상품 보기 ›</Text>
-        </Pressable>
-      ))}
+      {title !== undefined ? (
+        <View style={styles.head}>
+          <Text style={[styles.title, styles.flex]} numberOfLines={1}>{title}</Text>
+          {exact.slice(0, 1).map((product) => (
+            <Pressable key={product.url} onPress={() => open(product)} accessibilityRole="link" accessibilityLabel={`사진 속 ${name} 상품 보기`} hitSlop={6}>
+              <Text style={styles.exactText}>사진 속 상품 보기 ›</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        exact.map((product) => (
+          <Pressable key={product.url} onPress={() => open(product)} accessibilityRole="link" hitSlop={6} style={styles.exact}>
+            <Text style={styles.exactText}>사진 속 {name} 상품 보기 ›</Text>
+          </Pressable>
+        ))
+      )}
       <View style={styles.row}>
         {search.map((product) => (
           <Pressable
@@ -63,6 +74,8 @@ export function ShopButtons({ target, links, title, size = 'small', place, style
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  flex: { flex: 1, minWidth: 0 },
   title: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
   exact: { alignSelf: 'flex-start' },
   exactText: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
