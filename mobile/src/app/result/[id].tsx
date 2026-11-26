@@ -509,7 +509,8 @@ function ResultCard({
         </>
       )}
       {error !== null && <Text style={styles.choiceError}>{error}</Text>}
-      {/* 11/24 팀 결정 16번: 사진 속 옷을 이미 갖고 있거나 샀으면 바로 내 옷장에 넣는다(종류·색·핏 미리 채움). */}
+      {/* 11/24 팀 결정 16번: 사진 속 옷을 이미 갖고 있거나 샀으면 바로 내 옷장에 넣는다(종류·색·핏 미리 채움).
+          11/25: 카드 오른쪽 아래 작은 '+ 옷장에 넣기' 버튼으로(같은 옷이 있는 '활용' 카드에는 없음). */}
       {item.gap_status !== '활용' && (
         <Pressable
           onPress={() => {
@@ -517,9 +518,10 @@ function ResultCard({
             addToClosetFrom(item, 'photo');
           }}
           accessibilityRole="button"
+          accessibilityLabel={`${kindLabel(item.kind)} 내 옷장에 넣기`}
           hitSlop={6}
           style={styles.ownIt}>
-          <Text style={styles.ownItText}>이 옷 갖고 있어요 · 내 옷장에 넣기 ›</Text>
+          <Text style={styles.ownItText}>+ 옷장에 넣기</Text>
         </Pressable>
       )}
     </GlassView>
@@ -756,7 +758,7 @@ function GapTag({ status, substitute = false }: { status: GapStatus; substitute?
 }
 
 const styles = StyleSheet.create({
-  ownIt: { alignSelf: 'flex-start', marginTop: 10, marginLeft: 55 },
+  ownIt: { alignSelf: 'flex-end', marginTop: 10, height: 30, paddingHorizontal: 12, borderRadius: 15, borderWidth: 1, borderColor: colors.textPurple, backgroundColor: colors.white, justifyContent: 'center' },
   ownItText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
   container: {
     flex: 1,

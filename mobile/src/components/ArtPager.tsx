@@ -1,8 +1,9 @@
 // 옷 그림 ↔ 내 옷 사진 넘겨 보기(11/22). 옷장 칸·오늘의 룩 칸이 같이 쓴다.
 // - 사진을 넣은 옷만 옆으로 넘어가고, 아래 점 2개로 지금 쪽을 보여 준다. 위아래로 밀면 화면이 스크롤된다.
 // - 보기 방식(그림 · 사진, data/wardrobePhotos.ts)에 따라 첫 장이 그림 또는 사진이다. 보기를 바꾸면 key로 첫 장부터 다시 그린다.
-import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+// - flipOnTap(11/25): 칸이 작아 밀기가 잘 안 될 때를 위해 눌러도 넘어간다(오늘의 룩 칸처럼 눌러서 갈 곳이 없는 자리만).
+import { useRef, useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 
 import type { WardrobeItem } from '@/data/types';
 import type { ClosetView, WardrobePhoto } from '@/data/wardrobePhotos';
@@ -10,7 +11,7 @@ import { colors, fonts } from '@/theme';
 
 import { ItemIcon } from './WardrobeIcon';
 
-export function ArtPager({ item, photo, view, iconSize, photoSize, height, dotsBottom = 4 }: {
+export function ArtPager({ item, photo, view, iconSize, photoSize, height, dotsBottom = 4, flipOnTap = false }: {
   item: WardrobeItem;
   photo: WardrobePhoto | undefined;
   view: ClosetView;
@@ -19,9 +20,11 @@ export function ArtPager({ item, photo, view, iconSize, photoSize, height, dotsB
   /** 넘기는 칸의 높이. 폭은 놓인 자리만큼(onLayout). */
   height: number;
   dotsBottom?: number;
+  flipOnTap?: boolean;
 }) {
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
+  const scroller = useRef<ScrollViewInstance>(null);
   const pages: ('icon' | 'photo')[] = photo === undefined ? ['icon'] : view === 'photo' ? ['photo', 'icon'] : ['icon', 'photo'];
   const art = (p: 'icon' | 'photo') =>
     p === 'photo' && photo !== undefined ? (
@@ -34,6 +37,7 @@ export function ArtPager({ item, photo, view, iconSize, photoSize, height, dotsB
     <View style={[styles.wrap, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {width > 0 && (
         <ScrollView
+          ref={scroller}
           horizontal
           pagingEnabled
           nestedScrollEnabled
@@ -41,10 +45,25 @@ export function ArtPager({ item, photo, view, iconSize, photoSize, height, dotsB
           scrollEventThrottle={16}
           onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
           style={{ width }}>
-          {pages.map((p) => (
-            <View key={p} style={[styles.page, { width, height }]}>
-              {art(p)}
-            </View>
+          {pages.map((p, i) => (
+            flipOnTap ? (
+              <Pressable
+                key={p}
+                onPress={() => {
+                  const next = (i + 1) % pages.length;
+                  scroller.current?.scrollTo({ x: next * width, animated: true });
+                  setPage(next);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={pages[(i + 1) % pages.length] === 'photo' ? '내 옷 사진 보기' : '그림 보기'}
+                style={[styles.page, { width, height }]}>
+                {art(p)}
+              </Pressable>
+            ) : (
+              <View key={p} style={[styles.page, { width, height }]}>
+                {art(p)}
+              </View>
+            )
           ))}
         </ScrollView>
       )}

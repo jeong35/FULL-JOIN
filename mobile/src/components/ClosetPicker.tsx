@@ -78,7 +78,7 @@ export function ClosetPicker({ visible, title, wardrobe, selected, day, onToggle
               <ScrollView contentContainerStyle={styles.list}>
                 {inSlot.map((item) => {
                   const on = selected.includes(item.id);
-                  const gap = day === undefined ? null : tempGap(item.kind, day);
+                  const gap = day === undefined ? null : tempGap(item, day);
                   return (
                     <Pressable
                       key={item.id}

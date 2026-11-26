@@ -7,8 +7,8 @@ import { Image, Platform } from 'react-native';
 
 import { cutoutPhoto, SERVER_HAS_PHOTO_CUTOUT, SERVER_HAS_PHOTO_TAGGING, tagWardrobePhoto } from './api';
 import { canCutoutInBrowser, cutoutInBrowser } from './cutoutWeb';
-import { BASE_COLORS, COLOR_HEX, colorsForKind, fitsForKind, type Color, type Kind, type Slot, type VisualFit } from './catalog';
-import { jpegColor, toLab } from './photoColor';
+import { colorsForKind, fitsForKind, type Color, type Kind, type Slot, type VisualFit } from './catalog';
+import { guessColor, jpegColor } from './photoColor';
 import { appendUniqueBatchValues, removeBatchValue } from './photoBatchCore';
 import type { Season } from './types';
 
@@ -176,26 +176,8 @@ export function clearPhotoDraft() {
 // ── 사진 색 → 색 이름 ──
 // 사진 색(#RRGGBB)과 가장 가까운 색 칩을 고른다. 조명 때문에 밝기는 많이 달라지므로 밝기 차이는 덜 본다(색감 위주).
 
-const LIGHTNESS_WEIGHT = 0.25;
-
-export function guessColor(hex: string | null, kind: Kind | null): Color | null {
-  if (hex === null || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return null;
-  const [l, a, b] = toLab(hex);
-  const candidates = (kind === null ? BASE_COLORS : colorsForKind(kind)).filter(
-    (c): c is Exclude<Color, '멀티' | '기타'> => c !== '멀티' && c !== '기타',
-  );
-  let best: Color | null = null;
-  let bestDistance = Infinity;
-  for (const c of candidates) {
-    const [cl, ca, cb] = toLab(COLOR_HEX[c]);
-    const distance = ((l - cl) * LIGHTNESS_WEIGHT) ** 2 + (a - ca) ** 2 + (b - cb) ** 2;
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = c;
-    }
-  }
-  return best;
-}
+// guessColor는 옷 그림 칠하기(WardrobeIcon)도 같이 쓰려고 photoColor.ts로 옮겼다(11/25).
+export { guessColor };
 
 // 종류를 바꾸면 그 종류에 없는 핏은 비운다. 색은 사진에서 맞춘 색이면 그 종류의 색 칩으로 다시 맞추고,
 // 사람이 고른 색이 그 종류에 없으면 비운다.

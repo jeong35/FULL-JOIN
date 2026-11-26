@@ -1,6 +1,8 @@
 // 조합 만들기. 주소: /combo/{처음 누른 옷장 옷 id}?date=YYYY-MM-DD
 // 추천 탭 '오늘 기온에 맞는 내 옷'에서 옷을 누르면 온다. 그날 날씨로 그 옷과 어울리는 옷 여러 벌을 먼저 골라 두고(suggestSet),
 // 사용자가 옷을 더하거나 빼면 고른 옷들로 만들 수 있는 조합을 전부 다시 보여 준다(combosFromSet). 옷장 옷만 쓴다.
+// 11/25: '이 조합으로 입을래요'를 누르면 그날 입을 룩으로 저장된다(recommendChoices, 룩 id = 옷 id를 + 로 이은 것).
+// 코디 탭 오늘의 룩이 그 조합을 맨 앞에 보여 주고, 오늘의 룩에서 고를 때처럼 알림 창(LookChosenSheet)이 뜬다.
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,12 +12,16 @@ import Svg, { Path } from 'react-native-svg';
 
 import { ClosetPicker, EditToggle } from '@/components/ClosetPicker';
 import { HintBubble } from '@/components/HintBubble';
+import { LookChosenSheet } from '@/components/LookChosenSheet';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel } from '@/data/catalog';
 import { BackButton } from '@/components/ui';
 import { combosFromSet, itemName, setGap, sortItems, suggestSet, type Combo } from '@/data/combos';
 import { dayOfMonth, todayKey, weekday } from '@/data/dates';
+import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
+import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
+import { useSession } from '@/data/session';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
@@ -41,7 +47,15 @@ export default function ComboScreen() {
     setEditing((on) => !on);
   };
   const [showAll, setShowAll] = useState(false);
-  const [chosen, setChosen] = useState<string | null>(null);
+  const userId = useSession()?.userId ?? 'guest';
+  const chosenId = useRecommendationChoices(userId)[date]?.lookId;
+  // 고른 뒤 아래에서 올라오는 '결정!' 창. 닫으면 코디 탭으로 돌아가 오늘의 룩에서 바로 보이게 한다.
+  const [sheet, setSheet] = useState<string | null>(null);
+  const choose = (combo: Combo) => {
+    saveRecommendationChoice(userId, { date, lookId: combo.id, chosenAt: new Date().toISOString(), notificationScheduled: false });
+    track('recommendation_choice', { date, recommendation_type: 'closet' });
+    setSheet(combo.id);
+  };
   const back = () => (router.canGoBack() ? router.back() : router.navigate('/recommend'));
 
   useEffect(() => {
@@ -109,7 +123,7 @@ export default function ComboScreen() {
             {edited === null && <Text style={styles.sub}>{view.day !== undefined ? '날씨에 맞춰 ' : ''}{andParticle(kindLabel(anchor.kind))} 입기 좋은 옷을 골라 뒀어요</Text>}
             <View style={styles.picked}>
               {selected.map((item) => {
-                const warm = view.day === undefined ? null : tempGap(item.kind, view.day);
+                const warm = view.day === undefined ? null : tempGap(item, view.day);
                 return (
                   <View key={item.id} style={styles.pickedItem}>
                     <View style={[styles.pickedTile, item.id === anchor.id && styles.pickedAnchor]}>
@@ -168,7 +182,7 @@ export default function ComboScreen() {
             ) : (
               <>
                 {shown.map((combo, index) => (
-                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor.id} chosen={chosen === combo.id} onChoose={() => setChosen(combo.id)} />
+                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor.id} chosen={chosenId === combo.id} onChoose={() => choose(combo)} />
                 ))}
                 {combos.length > FIRST_SHOWN && (
                   <Pressable onPress={() => setShowAll((open) => !open)} accessibilityRole="button" style={styles.more}>
@@ -190,6 +204,15 @@ export default function ComboScreen() {
         day={view.day}
         onToggle={toggle}
         onClose={() => setPickerOpen(false)}
+      />
+      <LookChosenSheet
+        visible={sheet !== null}
+        date={date}
+        lookId={sheet}
+        onClose={() => {
+          setSheet(null);
+          back();
+        }}
       />
     </SafeAreaView>
   );

@@ -39,6 +39,11 @@ function remote<T>(data: T): Remote<T> {
 let state: State = { wardrobe: remote([]), feed: remote([]), archive: remote([]), saved: {}, hearts: {}, unhearting: {} };
 const listeners = new Set<() => void>();
 
+// 지금 불러와 둔 '모든 저장' 사진(추구미 제안이 같은 스타일 사진 수를 셀 때 쓴다).
+export function getArchiveImages(): readonly ArchiveImage[] {
+  return state.archive.data;
+}
+
 function setState(patch: Partial<State>) {
   state = { ...state, ...patch };
   for (const listener of listeners) listener();
@@ -95,6 +100,36 @@ function sameWardrobeInput(item: WardrobeItem, input: NewWardrobeItem): boolean 
   return item.slot === input.slot && item.kind === input.kind && item.color === input.color &&
     item.visual_fit === input.visual_fit &&
     JSON.stringify(item.seasons ?? []) === JSON.stringify(input.seasons ?? []);
+}
+
+// 옷 고치기(11/25): 서버에 옷을 고치는 경로가 아직 없어서, 고친 옷을 새로 넣고 예전 옷을 지운다(id가 바뀐다).
+// 예전 id로 열린 화면(옷 자세히)이 새 옷을 찾을 수 있게 바뀐 id를 기억한다(currentWardrobeId).
+const replacedIds = new Map<string, string>();
+
+function currentWardrobeId(id: string): string {
+  let current = id;
+  for (let i = 0; i < 20 && replacedIds.has(current); i += 1) current = replacedIds.get(current)!;
+  return current;
+}
+
+// 옷장 목록에서 이 id의 옷(고쳐서 id가 바뀌었으면 바뀐 옷). 목록을 같이 받아야 화면이 목록이 바뀔 때 다시 찾는다.
+export function findWardrobeItem(list: readonly WardrobeItem[], id: string): WardrobeItem | undefined {
+  const current = currentWardrobeId(id);
+  return list.find((item) => item.id === current);
+}
+
+export async function replaceWardrobeItem(oldId: string, input: NewWardrobeItem): Promise<WardrobeItem> {
+  const item = await createWardrobeItem(input);
+  replacedIds.set(oldId, item.id);
+  const swap = (list: readonly WardrobeItem[]) => list.map((x) => (x.id === oldId ? item : x));
+  const data = state.wardrobe.data.some((x) => x.id === oldId) ? swap(state.wardrobe.data) : [item, ...state.wardrobe.data];
+  setState({ wardrobe: { ...state.wardrobe, data }, hearts: {} });
+  try {
+    await deleteWardrobeItem(oldId);
+  } catch {
+    // 예전 옷을 못 지웠으면 다음에 옷장을 다시 불러올 때 둘 다 보인다 — 그때 직접 지우면 된다.
+  }
+  return item;
 }
 
 // POST 응답만 유실됐을 수 있으므로 재시도 전에 서버 옷장을 다시 읽는다.

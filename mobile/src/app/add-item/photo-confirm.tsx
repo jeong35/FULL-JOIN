@@ -300,7 +300,7 @@ function ItemCard({
       {item.kind !== null && (
         <View style={styles.autoIcon}>
           <View style={styles.autoIconBox}>
-            <LookIcon look={null} kind={item.kind} color={item.colorName ?? undefined} fit={item.fit} size={30} tint={photoTint(item.color, item.colorName)} />
+            <LookIcon look={null} kind={item.kind} color={item.colorName ?? undefined} fit={item.fit} size={30} tint={item.colorAuto ? photoTint(item.color, item.colorName) : null} />
           </View>
           <Text style={styles.autoIconText}>그림도 자동으로 만들어져요</Text>
         </View>

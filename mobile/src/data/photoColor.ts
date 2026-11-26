@@ -4,7 +4,7 @@
 // - 옷 그림 칠할 색: 사진 색의 색감은 살리고 밝기는 고른 색 이름 쪽으로 맞춘다(조명 탓에 사진이 어둡거나 밝게 나와서).
 import { decode as decodeJpeg } from 'jpeg-js';
 
-import { COLOR_HEX, type Color } from './catalog';
+import { BASE_COLORS, COLOR_HEX, colorsForKind, type Color, type Kind } from './catalog';
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
@@ -83,4 +83,36 @@ export function photoTint(photoHex: string | null | undefined, color: Color | nu
   if (Math.hypot(pa - ca, pb - cb) > MAX_HUE_GAP || Math.abs(pl - cl) > MAX_LIGHT_GAP) return null;
   // 밝기는 색 이름 쪽 70%, 색감은 사진 쪽 75%
   return fromLab(cl * 0.7 + pl * 0.3, ca * 0.25 + pa * 0.75, cb * 0.25 + pb * 0.75);
+}
+
+// ── 사진 색 → 색 이름 ──
+// 사진 색(#RRGGBB)과 가장 가까운 색 칩을 고른다. 조명 때문에 밝기는 많이 달라지므로 밝기 차이는 덜 본다(색감 위주).
+
+const LIGHTNESS_WEIGHT = 0.25;
+
+export function guessColor(hex: string | null, kind: Kind | null): Color | null {
+  if (hex === null || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return null;
+  const [l, a, b] = toLab(hex);
+  const candidates = (kind === null ? BASE_COLORS : colorsForKind(kind)).filter(
+    (c): c is Exclude<Color, '멀티' | '기타'> => c !== '멀티' && c !== '기타',
+  );
+  let best: Color | null = null;
+  let bestDistance = Infinity;
+  for (const c of candidates) {
+    const [cl, ca, cb] = toLab(COLOR_HEX[c]);
+    const distance = ((l - cl) * LIGHTNESS_WEIGHT) ** 2 + (a - ca) ** 2 + (b - cb) ** 2;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = c;
+    }
+  }
+  return best;
+}
+
+// 옷장 그림에 칠할 색(11/25): 사람이 색 이름을 사진이 짐작한 색과 다르게 골랐으면(예: 사진은 그레이, 사람은 연청)
+// 사람이 고른 색이 먼저 — 사진 색감을 쓰지 않고 색 이름 색 그대로 칠한다.
+export function itemTint(photoHex: string | null | undefined, color: Color | null | undefined, kind: Kind | null): string | null {
+  if (!photoHex || !color) return null;
+  if (guessColor(photoHex, kind) !== color) return null;
+  return photoTint(photoHex, color);
 }

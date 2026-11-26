@@ -10,13 +10,13 @@ import { errorMessage } from '@/data/api';
 import type { Style } from '@/data/catalog';
 import { track } from '@/data/events';
 import { useSession } from '@/data/session';
-import { addTaste, declineTaste, tasteSuggestionText, withEulReul } from '@/data/tasteSuggest';
+import { addTaste, declineTaste, tasteSuggestionText, withEulReul, type TasteSuggestion } from '@/data/tasteSuggest';
 import { colors, fonts } from '@/theme';
 
 const NOTE_MS = 3500;
 
-export function TasteSuggestBubble({ style, onDone, bubbleStyle, noteStyle }: {
-  style: Style | null;
+export function TasteSuggestBubble({ suggestion: suggested, onDone, bubbleStyle, noteStyle }: {
+  suggestion: TasteSuggestion | null;
   onDone: () => void;
   bubbleStyle?: StyleProp<ViewStyle>;
   noteStyle?: StyleProp<ViewStyle>;
@@ -30,10 +30,11 @@ export function TasteSuggestBubble({ style, onDone, bubbleStyle, noteStyle }: {
     return () => clearTimeout(timer);
   }, [note]);
 
-  if (style === null) {
+  if (suggested === null) {
     return note === null ? null : <Text style={[styles.note, noteStyle]}>{note}</Text>;
   }
-  const suggestion = tasteSuggestionText(style, taste);
+  const style = suggested.style;
+  const suggestion = tasteSuggestionText(suggested, taste);
 
   async function accept(picked: Style) {
     onDone();

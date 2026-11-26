@@ -26,7 +26,7 @@ import { NEIGHBOR_STYLES, orderByTaste } from '@/data/feedOrder';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { onHomeTabReselect } from '@/data/homeTab';
 import { useSession } from '@/data/session';
-import { tasteSuggestionFor } from '@/data/tasteSuggest';
+import { tasteSuggestionFor, type TasteSuggestion } from '@/data/tasteSuggest';
 import { heartStyleImage, loadArchive, loadFeed, unheartStyleImage, useArchiveState, useFeedState, useIsUnhearting, useSaved } from '@/data/store';
 import type { ArchiveImage, Season } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
@@ -118,7 +118,7 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
   const openHintOpen = useHintOpen('archive_open');
   const feedTasteOpen = useHintOpen('feed_taste');
   // 추구미 아닌 스타일 사진을 저장하면 그 스타일을 추구미로 저장할지 묻는다(11/24 팀 결정 2번).
-  const [suggest, setSuggest] = useState<Style | null>(null);
+  const [suggest, setSuggest] = useState<TasteSuggestion | null>(null);
 
   function changeFolder(next: Folder) {
     if (next === folder) return;
@@ -238,7 +238,7 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
     }
     track('photo_save_done', { style_image_id: id, place: 'feed', saved_count: Object.keys(saved).length + 1 });
     const image = feed.data.find((candidate) => candidate.id === id);
-    if (image !== undefined) setSuggest(tasteSuggestionFor(image.style));
+    if (image !== undefined) setSuggest(tasteSuggestionFor(image));
     await loadArchive({ force: true });
   }
 
@@ -366,7 +366,7 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
 
       {/* 피드 말풍선은 하나씩: 추구미 제안 → 저장 안내 → (처음 한 번) 추구미로 피드를 바꿨다는 안내. */}
       {folder === '피드' && (
-        <TasteSuggestBubble style={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.hint} noteStyle={styles.tasteNote} />
+        <TasteSuggestBubble suggestion={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.hint} noteStyle={styles.tasteNote} />
       )}
       {folder === '피드' && suggest !== null ? null : folder === '피드' && justSaved && saveHintOpen ? (
         <HintBubble

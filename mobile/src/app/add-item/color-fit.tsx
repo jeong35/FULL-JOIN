@@ -25,7 +25,9 @@ import {
 } from '@/data/catalog';
 import { errorMessage, needsWardrobeUpdate, WARDROBE_UPDATE_MESSAGE, type NewWardrobeItem } from '@/data/api';
 import { track } from '@/data/events';
-import { addWardrobeItem, useWardrobe } from '@/data/store';
+import { addWardrobeItem, replaceWardrobeItem, useWardrobe } from '@/data/store';
+import type { WardrobeItem } from '@/data/types';
+import { removeWardrobePhotos, setWardrobePhoto, useWardrobePhotos } from '@/data/wardrobePhotos';
 import {
   initialSelection,
   isFitGroup,
@@ -35,6 +37,7 @@ import {
   PATTERN_SHAPE_GROUP,
   patternFill,
   patternLabel,
+  selectionFromItem,
   specFor,
   useWardrobeArt,
   visible,
@@ -53,7 +56,10 @@ import { colors, fonts, glass, layout } from '@/theme';
 
 export default function AddItemColorFitScreen() {
   // color·fit·from: 쇼핑몰에서 산 옷(from=purchase)이나 저장한 사진 속 옷(from=photo)을 넣을 때 미리 채우는 값(11/24 팀 결정 15·16번).
-  const params = useLocalSearchParams<{ slot?: string; kind?: string; color?: string; fit?: string; from?: string }>();
+  // edit: 옷 자세히의 '고치기'(11/25) — 그 옷의 지금 값으로 채워 열고, 저장하면 그 옷을 고친다.
+  const params = useLocalSearchParams<{ slot?: string; kind?: string; color?: string; fit?: string; from?: string; edit?: string }>();
+  const wardrobeList = useWardrobe();
+  const editing = typeof params.edit === 'string' ? wardrobeList.find((item) => item.id === params.edit) : undefined;
   const slot = isSlot(params.slot) ? params.slot : null;
   const kind = slot !== null && isKindOfSlot(slot, params.kind) ? params.kind : null;
   const from = params.from === 'purchase' || params.from === 'photo' ? params.from : null;
@@ -84,7 +90,7 @@ export default function AddItemColorFitScreen() {
     );
   }
 
-  return <AddItemForm key={`${slot}-${kind}`} art={art} spec={spec} slot={slot} kind={kind} preset={preset} from={from} />;
+  return <AddItemForm key={`${slot}-${kind}`} art={art} spec={spec} slot={slot} kind={kind} preset={editing ? { color: editing.color, fit: editing.visual_fit ?? undefined } : preset} from={from} editing={editing} />;
 }
 
 const COLOR_COLUMNS = 6;
@@ -100,16 +106,21 @@ function toggle(group: AddItemGroup, current: readonly string[], value: string):
   return current.includes(value) ? [] : [value];
 }
 
-function AddItemForm({ art, spec, slot, kind, preset, from }: {
+function AddItemForm({ art, spec, slot, kind, preset, from, editing }: {
   art: WardrobeArt;
   spec: AddItemSpec;
   slot: Slot;
   kind: Kind;
   preset: { color?: string; fit?: string };
   from: 'purchase' | 'photo' | null;
+  editing?: WardrobeItem;
 }) {
+  // 고치기에서 종류를 그대로 두면 모양·소재·계절까지 그 옷 값 그대로 연다(종류를 바꾸면 색·핏만 가져간다).
+  const sameKind = editing !== undefined && editing.slot === slot && editing.kind === kind;
+  const photos = useWardrobePhotos();
   // 미리 채울 값은 그 칸에 실제로 있는 보기일 때만 고른 것으로 둔다.
   const [sel, setSel] = useState<Record<string, string[]>>(() => {
+    if (sameKind) return Object.fromEntries(Object.entries(selectionFromItem(spec, editing)).map(([title, values]) => [title, [...values]]));
     const initial = initialSelection(spec);
     for (const group of spec.groups) {
       const value = group.role === 'color' ? preset.color : isFitGroup(group) ? preset.fit : undefined;
@@ -118,7 +129,14 @@ function AddItemForm({ art, spec, slot, kind, preset, from }: {
     return initial;
   });
   const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set(
-    spec.groups.filter((group) => (group.role === 'color' && preset.color) || (isFitGroup(group) && preset.fit)).map((group) => group.title),
+    sameKind
+      // 고치기: 그 옷에 실제로 들어 있던 칸만 '고른 것'으로 본다(안 고른 짜임 등은 그대로 안 고른 채로 — 그림이 안 바뀌게).
+      ? spec.groups.filter((group) => group.role === 'color' || isFitGroup(group)
+        || (editing.details !== undefined && group.title in editing.details)
+        || (group.role === 'mat' && (editing.material?.length ?? 0) > 0)
+        || (group.title === '무늬' && (editing.pattern ?? null) !== null)
+        || (group.title === '계절' && (editing.seasons?.length ?? 0) > 0)).map((group) => group.title)
+      : spec.groups.filter((group) => (group.role === 'color' && preset.color) || (isFitGroup(group) && preset.fit)).map((group) => group.title),
   ));
   const [open, setOpen] = useState(false);
   const [materialNote, setMaterialNote] = useState<string | null>(null);
@@ -172,6 +190,23 @@ function AddItemForm({ art, spec, slot, kind, preset, from }: {
     if (saving || color === null || blocked) return;
     setSaving(true);
     setSaveError(null);
+    if (editing !== undefined) {
+      try {
+        const saved = await replaceWardrobeItem(editing.id, { ...draft, color });
+        // 넣어 둔 내 옷 사진은 고친 옷으로 옮긴다.
+        const photo = photos[editing.id];
+        if (photo !== undefined) {
+          const { added_at: _addedAt, ...rest } = photo;
+          setWardrobePhoto(saved.id, rest);
+          removeWardrobePhotos([editing.id]);
+        }
+        router.back();
+      } catch (error) {
+        setSaveError(errorMessage(error));
+        setSaving(false);
+      }
+      return;
+    }
     track('wardrobe_add_submit', { slot, kind, color, fit: fit ?? null });
     try {
       await addWardrobeItem({ ...draft, color });
@@ -198,8 +233,8 @@ function AddItemForm({ art, spec, slot, kind, preset, from }: {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <DetailHeader title="옷 추가" onBack={() => router.back()} />
-      <ProgressSteps current={[2, 3]} />
+      <DetailHeader title={editing ? '옷 고치기' : '옷 추가'} onBack={() => router.back()} />
+      {editing === undefined && <ProgressSteps current={[2, 3]} />}
 
       {from !== null && (
         <InfoBar style={styles.picked}>
@@ -212,7 +247,9 @@ function AddItemForm({ art, spec, slot, kind, preset, from }: {
         right={
           <SmallWhiteButton
             label="바꾸기"
-            onPress={() => (from === null ? router.back() : router.replace({ pathname: '/add-item/kind', params: { slot } }))}
+            onPress={() => (editing !== undefined
+              ? router.replace({ pathname: '/add-item/kind', params: { slot, edit: editing.id } })
+              : from === null ? router.back() : router.replace({ pathname: '/add-item/kind', params: { slot } }))}
           />
         }>
         <LookIcon look={look} kind={kind} color={color ?? undefined} fit={fit} size={34} />
@@ -292,7 +329,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from }: {
           {saveError ?? (blocked ? WARDROBE_UPDATE_MESSAGE : summary)}
         </Text>
         <PrimaryButton
-          label={saving ? '넣는 중…' : '옷장에 넣기'}
+          label={editing ? (saving ? '고치는 중…' : '고친 대로 저장') : saving ? '넣는 중…' : '옷장에 넣기'}
           onPress={save}
           disabled={color === null || blocked || saving}
         />

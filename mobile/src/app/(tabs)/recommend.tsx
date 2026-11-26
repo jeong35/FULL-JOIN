@@ -5,15 +5,13 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Image as PlainImage, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View, type GestureResponderEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { ArtPager, ViewToggle } from '@/components/ArtPager';
 import { GlassView } from '@/components/GlassView';
-import { KindIcon } from '@/components/KindIcon';
 import { LookChosenSheet } from '@/components/LookChosenSheet';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
-import { ShopButtons } from '@/components/ShopButtons';
 import { TabIcon } from '@/components/TabIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
@@ -21,13 +19,12 @@ import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
 import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
-import { buildCombos, type Combo } from '@/data/combos';
+import { buildCombos, harmony, type Combo } from '@/data/combos';
 import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
-import { lookTips, matchOf, MAX_LOOKS, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
+import { lookTips, matchOf, MAX_LOOKS, sortPieces, type Look } from '@/data/recommend';
 import { useSession } from '@/data/session';
-import { shoppingLinksFor } from '@/data/shopping';
-import { loadArchive, loadWardrobe } from '@/data/store';
-import type { WardrobeItem } from '@/data/types';
+import { loadArchive, loadFeed, loadWardrobe, useFeedState } from '@/data/store';
+import type { StyleImage, WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
 import { setClosetView, useClosetView, useWardrobePhotos, type ClosetView, type WardrobePhoto } from '@/data/wardrobePhotos';
 import { SIDO_LIST, type Sido } from '@/data/regions';
@@ -41,8 +38,9 @@ import {
   regionFor,
   setRegion,
   sidoOfRegion,
+  fitsTemp,
+  tempDistance,
   tempGap,
-  tempRangeLabel,
   weatherTip,
   type DayWeather,
   type Region,
@@ -51,8 +49,9 @@ import {
 import { colors, fonts, glass, layout } from '@/theme';
 
 const DAYS = 7;
-// 스크롤을 이만큼 내리면 날씨를 한 줄로 접는다.
-const COLLAPSE_AT = 24;
+// 이만큼만 내려도(손가락으로 밀거나 화면이 움직이면) 날씨를 한 줄로 접는다.
+// 11/26: 내용이 짧아 화면이 안 움직일 때(오늘의 룩 준비 전 등)도 미는 동작만으로 접히게 했다.
+const SCROLL_SLOP = 10;
 
 export default function RecommendScreen() {
   const today = todayKey();
@@ -60,7 +59,6 @@ export default function RecommendScreen() {
   const [selected, setSelected] = useState(today);
   const [hourlyOpen, setHourlyOpen] = useState(false);
   const [lookIndex, setLookIndex] = useState(0);
-  const [almostIndex, setAlmostIndex] = useState(0);
   const [regionOpen, setRegionOpen] = useState(false);
   const userId = useSession()?.userId ?? 'guest';
   // 날짜별로 고른 룩은 계정마다 이 기기에 남긴다(친구분 recommendChoices.ts) — 다시 들어와도 '입기로 했어요'가 그대로.
@@ -73,11 +71,15 @@ export default function RecommendScreen() {
   useEffect(() => {
     if (fromNotification) track('notification_open', { source: 'push' });
   }, [fromNotification]);
-  // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다.
+  // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다(11/26: 조금만 밀어도).
   // 다시 맨 위로 올라와도 작은 채로 두고, 한 줄을 누르면 다시 커진다.
   const [weatherSmall, setWeatherSmall] = useState(false);
   const lastY = useRef(0);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  // 조합 만들기에서 누른 옷(11/25): 그 옷이 들어간 조합으로 오늘의 룩을 다시 만든다. ×로 풀면 원래대로.
+  const [anchorId, setAnchorId] = useState<string | null>(null);
   const expandedAt = useRef(0);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [locating, setLocating] = useState(false);
   // 지역 고르기에서 지금 보고 있는 단계: null = 도·시 고르기, sido만 = 시·군(또는 구·군) 고르기, group까지 = 구 고르기.
   const [regionPath, setRegionPath] = useState<{ sido: Sido; group: RegionChoice | null } | null>(null);
@@ -88,6 +90,7 @@ export default function RecommendScreen() {
   useFocusEffect(useCallback(() => {
     void loadWardrobe();
     void loadArchive();
+    void loadFeed();
   }, []));
   useFocusEffect(useCallback(() => {
     void loadWeather(region);
@@ -120,10 +123,9 @@ export default function RecommendScreen() {
   const pick = (date: string) => {
     setSelected(date);
     setLookIndex(0);
-    setAlmostIndex(0);
+    setAnchorId(null);
   };
   const look = view.looks.length > 0 ? view.looks[lookIndex % view.looks.length] : undefined;
-  const almost = view.almost.length > 0 ? view.almost[almostIndex % view.almost.length] : undefined;
   // 11/24 팀 결정 8번: 저장한 사진으로 다 갖춰지는 룩이 없으면 옷장 옷만으로 고른다 —
   // 고른 날 기온에 맞는 옷만 추려서(기온별 옷차림 표) 상의+하의(또는 원피스), 쌀쌀하면 겉옷까지.
   const closetLooks = useMemo(
@@ -132,18 +134,86 @@ export default function RecommendScreen() {
       : buildCombos({ wardrobe: view.wardrobe, day, max: MAX_LOOKS })),
     [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day],
   );
-
-  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    lastY.current = contentOffset.y;
-    if (weatherSmall) return;
-    // 내용이 짧아 접을 필요가 없으면 접지 않는다.
-    if (contentSize.height - layoutMeasurement.height < 120) return;
-    if (contentOffset.y > expandedAt.current + COLLAPSE_AT) {
-      setWeatherSmall(true);
-      setHourlyOpen(false);
+  const anchor = anchorId === null ? undefined : view.wardrobe.find((item) => item.id === anchorId);
+  const anchorLooks = useMemo(() => {
+    if (anchor === undefined) return [];
+    const fitting = buildCombos({ wardrobe: view.wardrobe, day, anchor, max: MAX_LOOKS });
+    const combos = fitting.length > 0 ? fitting : buildCombos({ wardrobe: view.wardrobe, anchor, max: MAX_LOOKS });
+    // 고른 옷을 큰 칸(첫 칸)에 보여 준다.
+    return combos.map((combo) => ({ ...combo, items: [anchor, ...combo.items.filter((item) => item.id !== anchor.id)] }));
+  }, [anchor, view.wardrobe, day]);
+  // 조합 만들기(/combo)나 오늘의 룩에서 '입을래요'로 고른 옷장 조합(11/25): 그날 오늘의 룩 맨 앞에 둔다.
+  // 룩 id가 옷 id를 + 로 이은 것이라 옷장에서 다시 찾는다(옷이 지워졌으면 없던 걸로).
+  const chosenLookId = choices[selected]?.lookId;
+  const chosenCombo = useMemo((): Combo | undefined => {
+    if (chosenLookId === undefined) return undefined;
+    const items = chosenLookId.split('+').map((id) => view.wardrobe.find((item) => item.id === id));
+    if (items.length === 0 || items.some((item) => item === undefined)) return undefined;
+    const list = items as WardrobeItem[];
+    const result = harmony(list);
+    const tags = [...(result?.tags ?? [])];
+    if (day !== undefined && list.every((item) => fitsTemp(item, day))) tags.push('기온 맞춤');
+    return { id: chosenLookId, items: list, tags, score: result?.score ?? 0 };
+  }, [chosenLookId, view.wardrobe, day]);
+  // 옷장 조합을 새로 고르면(여기서든 조합 만들기에서든) 고른 옷 보기를 풀고 그 조합(맨 앞)을 보여 준다.
+  const [seenChoice, setSeenChoice] = useState(chosenLookId);
+  if (seenChoice !== chosenLookId) {
+    setSeenChoice(chosenLookId);
+    if (chosenCombo !== undefined) {
+      setAnchorId(null);
+      setLookIndex(0);
     }
   }
+  // 11/25 팀 결정(오늘의 룩은 어떻게든 보여 준다): 기온에 딱 맞는 조합이 없으면 기온에서 가장 덜 벗어난 조합을 고르고 안내를 붙인다.
+  const nearLooks = useMemo(() => {
+    if (closetLooks.length > 0 || day === undefined || view.looks.length > 0 || view.pending > 0) return [];
+    if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') return [];
+    const off = (combo: Combo) => combo.items.reduce((sum, item) => sum + tempDistance(item, day), 0);
+    return buildCombos({ wardrobe: view.wardrobe, max: MAX_LOOKS * 4 })
+      .sort((a, b) => off(a) - off(b))
+      .slice(0, MAX_LOOKS);
+  }, [closetLooks.length, view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day]);
+
+  function collapseWeather() {
+    if (weatherSmall) return;
+    setWeatherSmall(true);
+    setHourlyOpen(false);
+  }
+  // 화면이 실제로 내려간 경우.
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    lastY.current = event.nativeEvent.contentOffset.y;
+    if (lastY.current > expandedAt.current + SCROLL_SLOP) collapseWeather();
+  }
+  // 화면이 안 움직여도 아래로 보려고 밀면(손가락을 위로) 접는다. 옆으로 넘기는 줄(조합 만들기·사진 넘기기)은 빼고.
+  // 웹은 nativeEvent가 브라우저 터치 이벤트라 위치가 touches[0]에 있다(앱은 둘 다 있음).
+  function touchPoint(event: GestureResponderEvent) {
+    const point = event.nativeEvent.touches?.[0] ?? event.nativeEvent;
+    return { x: point.pageX, y: point.pageY };
+  }
+  function onTouchStart(event: GestureResponderEvent) {
+    touchStart.current = touchPoint(event);
+  }
+  function onTouchMove(event: GestureResponderEvent) {
+    const start = touchStart.current;
+    if (start === null) return;
+    const now = touchPoint(event);
+    const up = start.y - now.y;
+    const side = Math.abs(now.x - start.x);
+    if (up > SCROLL_SLOP && up > side) collapseWeather();
+  }
+  // 웹(컴퓨터)에서 마우스 휠·트랙패드로 내릴 때.
+  const wheelProps: object = Platform.OS === 'web'
+    ? { onWheel: (event: { deltaY: number }) => { if (event.deltaY > 0) collapseWeather(); } }
+    : {};
+
+  // 오늘의 룩에 보일 것: 고른 옷이 있으면 그 옷 조합 → '입을래요'로 정한 옷장 조합이 있으면 그것부터 → 원래 순서.
+  const defaultClosetLooks = closetLooks.length > 0 ? closetLooks : nearLooks;
+  const shownLook = anchor !== undefined || chosenCombo !== undefined ? undefined : look;
+  const shownClosetLooks = anchor !== undefined
+    ? anchorLooks
+    : chosenCombo !== undefined
+      ? [chosenCombo, ...defaultClosetLooks.filter((combo) => combo.id !== chosenCombo.id)]
+      : defaultClosetLooks;
 
   return (
     <TabScreen
@@ -207,19 +277,33 @@ export default function RecommendScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scroll} onScroll={onScroll} scrollEventThrottle={32}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.scroll}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={() => { touchStart.current = null; }}
+        {...wheelProps}>
         <View style={styles.main}>
           <LookSection
             title={selected === today ? '오늘의 룩' : `${weekday(selected)}요일 룩`}
             view={view}
-            look={look}
-            closetLooks={closetLooks}
+            look={shownLook}
+            closetLooks={shownClosetLooks}
+            near={anchor === undefined && chosenCombo === undefined && closetLooks.length === 0 && nearLooks.length > 0}
+            anchor={anchor}
+            onClearAnchor={() => {
+              setAnchorId(null);
+              setLookIndex(0);
+            }}
             index={lookIndex}
             date={selected}
             chosenId={choices[selected]?.lookId}
             onChoose={(id) => {
               saveRecommendationChoice(userId, { date: selected, lookId: id, chosenAt: new Date().toISOString(), notificationScheduled: false });
-              track('recommendation_choice', { date: selected, recommendation_type: look !== undefined ? 'saved_photo' : 'closet' });
+              track('recommendation_choice', { date: selected, recommendation_type: shownLook !== undefined ? 'saved_photo' : 'closet' });
               if (fromNotification) track('notification_recommendation_reselect', { date: selected });
               setChosenSheet(id);
             }}
@@ -227,11 +311,20 @@ export default function RecommendScreen() {
           />
 
           {/* 11/24 팀 결정 7번: '오늘 기온에 맞는 내 옷'은 빼고, 내 옷으로 조합 만들기를 오늘의 룩 바로 아래로 올렸다. */}
-          {view.wardrobe.length > 0 && <ComboMaker wardrobe={view.wardrobe} day={day} date={selected} />}
-
-          {almost !== undefined && (
-            <AlmostSection almost={almost} index={almostIndex} total={view.almost.length} onNext={() => setAlmostIndex((i) => i + 1)} />
+          {view.wardrobe.length > 0 && (
+            <ComboMaker
+              wardrobe={view.wardrobe}
+              day={day}
+              anchorId={anchor?.id ?? null}
+              onPick={(id) => {
+                setAnchorId((current) => (current === id ? null : id));
+                setLookIndex(0);
+                scrollRef.current?.scrollTo({ y: 0, animated: true });
+              }}
+            />
           )}
+
+          {/* 11/26: '하나만 더하면 완성'은 코디 탭에서 뺐다(같은 내용은 비교 결과 화면에 있음). */}
         </View>
       </ScrollView>
 
@@ -455,11 +548,17 @@ function currentTemp(day: DayWeather): number {
   return match?.temp ?? day.min;
 }
 
-function LookSection({ title, view, look, closetLooks, index, date, chosenId, onChoose, onNext }: {
+// 오늘의 룩을 고르는 순서(11/25 팀 결정 — 오늘의 룩은 어떻게든 보여 준다):
+// ① 저장한 사진 룩 중 내 옷으로 다 되는 것(비슷한 옷·대신 입기 포함) → ② 옷장 옷만으로 기온에 맞는 조합
+// → ③ 기온에서 가장 덜 벗어난 조합 + 안내 → ④ 옷장에 상의·하의(원피스)가 없으면 오늘 기온에 맞는 추구미 피드 사진.
+function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnchor, index, date, chosenId, onChoose, onNext }: {
   title: string;
   view: ReturnType<typeof useRecommendation>;
   look: Look | undefined;
   closetLooks: readonly Combo[];
+  near: boolean;
+  anchor: WardrobeItem | undefined;
+  onClearAnchor: () => void;
   index: number;
   date: string;
   chosenId: string | undefined;
@@ -471,10 +570,19 @@ function LookSection({ title, view, look, closetLooks, index, date, chosenId, on
   const photos = useWardrobePhotos();
   const artView = useClosetView();
   // 이 룩에 사진 넣은 옷이 있으면 그림 | 사진 보기를 고를 수 있다(옷장과 같은 설정).
-  const hasPhoto = look !== undefined && look.pieces.some((piece) => photos[piece.wardrobeItem.id] !== undefined);
+  // 룩에 사진 넣은 옷이 있으면(저장 사진 룩이든 옷장 옷만으로 고른 룩이든) 그림 | 사진을 고를 수 있다(11/25).
+  const shownItems = look !== undefined ? look.pieces.map((piece) => piece.wardrobeItem) : closet?.items ?? [];
+  const hasPhoto = shownItems.some((item) => photos[item.id] !== undefined);
   const addClothes = { label: '옷장에 옷 넣기', onPress: () => router.push('/add-item/kind') };
+  const feed = useFeedState();
+  const tastes = useSession()?.styles ?? [];
+  // 옷장에 상의·하의(또는 원피스)가 없으면 저장 사진 맞춰 보기를 기다리지 않는다(어차피 내 옷으로 다 되는 룩이 없다).
+  const hasBody = view.wardrobe.some((item) => item.slot === '원피스')
+    || (view.wardrobe.some((item) => item.slot === '상의') && view.wardrobe.some((item) => item.slot === '하의'));
+  const ready = view.wardrobeStatus === 'ready' && view.archiveStatus === 'ready' && (view.pending === 0 || !hasBody);
+  const feedLook = look === undefined && closet === undefined && ready && anchor === undefined ? pickFeedLook(feed.data, tastes, view.day) : undefined;
   let empty: { text: string; action?: { label: string; onPress: () => void } } | null = null;
-  if (look === undefined && closet === undefined) {
+  if (look === undefined && closet === undefined && feedLook === undefined) {
     if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') empty = { text: '불러오는 중이에요' };
     else if (view.wardrobe.length === 0) empty = { text: '옷장에 옷을 넣으면 그날 기온에 맞는 룩을 골라 드려요', action: addClothes };
     else if (view.pending > 0) empty = { text: '저장한 사진을 내 옷장과 맞춰 보는 중이에요' };
@@ -495,6 +603,14 @@ function LookSection({ title, view, look, closetLooks, index, date, chosenId, on
         {hasPhoto && <ViewToggle value={artView} onChange={setClosetView} label="룩 옷 보기" />}
         {total > 0 && <Text style={styles.sub}>{(index % total) + 1} / {total}</Text>}
       </View>
+      {anchor !== undefined && (
+        <View style={styles.anchorRow}>
+          <Text style={styles.anchorText} numberOfLines={1}>{anchor.color} {kindLabel(anchor.kind)}로 만든 룩</Text>
+          <Pressable onPress={onClearAnchor} accessibilityRole="button" accessibilityLabel="고른 옷 풀고 원래 추천 보기" hitSlop={8} style={styles.anchorClear}>
+            <Text style={styles.anchorClearText}>원래 추천 ×</Text>
+          </Pressable>
+        </View>
+      )}
       {look !== undefined ? (
         <>
           <GlassView radius={16} style={styles.lookCard}>
@@ -526,9 +642,11 @@ function LookSection({ title, view, look, closetLooks, index, date, chosenId, on
         </>
       ) : closet !== undefined ? (
         <>
-          <ClosetLookCard combo={closet} date={date} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
+          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
           {total > 1 && <Dots total={total} index={index % total} />}
         </>
+      ) : feedLook !== undefined ? (
+        <FeedLookCard image={feedLook} emptyCloset={view.wardrobe.length === 0} onAdd={addClothes.onPress} />
       ) : (
         <GlassView radius={16} style={styles.emptyCard}>
           <Text style={styles.emptyText}>{empty?.text}</Text>
@@ -558,15 +676,24 @@ function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: ()
   );
 }
 
-// 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 옷은 모두 그날 기온에 맞는 옷이다.
-function ClosetLookCard({ combo, date, chosen, onChoose, onNext }: {
+// 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 보통은 모두 그날 기온에 맞는 옷이다.
+// day가 있으면(③ 가장 가까운 조합) 기온에 딱 맞지 않는다는 안내를 붙인다.
+function ClosetLookCard({ combo, date, day, photos, artView, chosen, onChoose, onNext }: {
   combo: Combo;
   date: string;
+  day?: DayWeather;
+  photos: Readonly<Record<string, WardrobePhoto>>;
+  artView: ClosetView;
   chosen: boolean;
   onChoose: () => void;
   onNext?: () => void;
 }) {
   const anchor = combo.items.find((item) => item.slot === '상의' || item.slot === '원피스') ?? combo.items[0];
+  const gaps = day === undefined ? [] : combo.items.map((item) => tempGap(item, day));
+  const nearNote = day === undefined ? null
+    : gaps.includes('추움') ? '오늘 기온에 딱 맞는 옷이 부족해 가장 가까운 옷으로 골랐어요. 겉옷이나 스타킹을 더해 따뜻하게 입어요'
+      : gaps.includes('더움') ? '오늘 기온에 딱 맞는 옷이 부족해 가장 가까운 옷으로 골랐어요. 얇은 옷 위주로 시원하게 입어요'
+        : null;
   return (
     <GlassView radius={16} style={styles.lookCard}>
       <View style={styles.lookHead}>
@@ -587,17 +714,62 @@ function ClosetLookCard({ combo, date, chosen, onChoose, onNext }: {
           </Pressable>
         )}
       </View>
-      <ComboGrid items={combo.items} />
+      <ComboGrid items={combo.items} photos={photos} artView={artView} />
+      {nearNote !== null && (
+        <View style={styles.tipRow}>
+          <Text style={styles.tipLabel}>기온</Text>
+          <Text style={styles.tipRowText}>{nearNote}</Text>
+        </View>
+      )}
       <ChooseRow chosen={chosen} onChoose={onChoose} onNext={onNext} />
     </GlassView>
   );
 }
 
+// ④ 옷장에 상의·하의(원피스)가 없을 때: 추구미 피드 사진 중 오늘 기온에 맞는 옷이 나온 사진(피드는 이미 추구미 순서).
+function pickFeedLook(feed: readonly StyleImage[], tastes: readonly string[], day: DayWeather | undefined): StyleImage | undefined {
+  const liked = tastes.length > 0 ? feed.filter((image) => image.style.some((style) => tastes.includes(style))) : feed;
+  const pool = liked.length > 0 ? liked : feed;
+  const fitsDay = (image: StyleImage) => day === undefined
+    || (image.items ?? []).every((item) => fitsTemp({ kind: item.kind }, day));
+  return pool.find((image) => (image.items?.length ?? 0) > 0 && fitsDay(image)) ?? pool.find(fitsDay) ?? pool[0];
+}
+
+function FeedLookCard({ image, emptyCloset, onAdd }: { image: StyleImage; emptyCloset: boolean; onAdd: () => void }) {
+  const open = () => router.push({ pathname: '/style/[id]', params: { id: image.id } });
+  return (
+    <GlassView radius={16} style={styles.lookCard}>
+      <View style={styles.lookHead}>
+        <View style={styles.flex}>
+          <Text style={styles.sub} numberOfLines={1}>추구미 사진에서 골랐어요 · {image.style.join('·')}</Text>
+          <Text style={styles.lookTitle}>오늘 날씨에 어울리는 룩</Text>
+        </View>
+        <Pressable onPress={open} accessibilityRole="button" style={styles.moreButton}>
+          <Text style={styles.moreText}>자세히</Text>
+          <ChevronRight color={colors.textPurple} />
+        </Pressable>
+      </View>
+      <Pressable onPress={open} accessibilityRole="button" accessibilityLabel="오늘의 룩 사진 자세히 보기">
+        <Image source={{ uri: image.thumbnail_url, cacheKey: image.id }} style={styles.feedLookPhoto} contentFit="cover" />
+      </Pressable>
+      <Text style={styles.tipRowText}>
+        {emptyCloset ? '옷장에 옷을 넣으면' : '옷장에 상의·하의(또는 원피스)를 넣으면'} 이 룩처럼 내 옷으로 입을 룩을 골라 드려요
+      </Text>
+      <View style={styles.actions}>
+        <Pressable onPress={onAdd} accessibilityRole="button" style={styles.choose}>
+          <Text style={styles.chooseText}>옷장에 옷 넣기</Text>
+        </Pressable>
+      </View>
+    </GlassView>
+  );
+}
+
 // 오늘의 룩과 같은 칸 배치(큰 칸 + 오른쪽 두 칸 + 아래 줄), 매치 딱지 없이.
-function ComboGrid({ items }: { items: readonly WardrobeItem[] }) {
+// 사진 넣은 옷은 칸을 옆으로 밀면 그림 ↔ 사진(오늘의 룩 사진 룩과 같음, 11/25).
+function ComboGrid({ items, photos, artView }: { items: readonly WardrobeItem[]; photos: Readonly<Record<string, WardrobePhoto>>; artView: ClosetView }) {
   const tile = (item: WardrobeItem, size: number, style: object) => (
     <View key={item.id} style={[styles.tile, style]}>
-      <ItemIcon item={item} size={size} />
+      <ArtPager key={`${item.id}-${artView}`} item={item} photo={photos[item.id]} view={artView} iconSize={size} photoSize={size} height={size + 14} flipOnTap />
       <View style={styles.tileName}>
         <Text style={styles.tileKind}>{kindLabel(item.kind)}</Text>
         <Text style={styles.tileColor}>{item.color}</Text>
@@ -631,7 +803,7 @@ function LookGrid({ look, photos, artView }: { look: Look; photos: Readonly<Reco
     const mine = piece.wardrobeItem;
     return (
       <View key={mine.id} style={[styles.tile, style]}>
-        <ArtPager key={`${mine.id}-${artView}`} item={mine} photo={photos[mine.id]} view={artView} iconSize={size} photoSize={size} height={size + 14} />
+        <ArtPager key={`${mine.id}-${artView}`} item={mine} photo={photos[mine.id]} view={artView} iconSize={size} photoSize={size} height={size + 14} flipOnTap />
         <MatchBadge match={matchOf(piece)} style={styles.tileBadge} />
         <View style={styles.tileName}>
           <Text style={styles.tileKind}>{kindLabel(mine.kind)}</Text>
@@ -659,14 +831,23 @@ function LookGrid({ look, photos, artView }: { look: Look; photos: Readonly<Reco
 }
 
 // 내 옷으로 조합 만들기: 옷장 옷 하나를 고르면 조합 만들기(/combo/[id])로 간다.
-// 11/24 팀 결정 8번: 고른 날 기온에 맞는 옷만 먼저 보여 주고, 안 맞는 옷은 '기온에 안 맞는 옷도 보기'를 눌러야 나온다.
-function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]; day: DayWeather | undefined; date: string }) {
+// 11/24 팀 결정 8번: 고른 날 기온에 맞는 옷만 먼저 보여 준다. 11/25: '기온에 맞는 옷만 보기'를 토글 스위치로(끄면 다 보임).
+// 옷장을 '사진'으로 보고 있으면 사진 넣은 옷은 사진으로 보인다.
+// 11/25: 옷을 누르면 다른 화면으로 가지 않고, 그 옷으로 위 오늘의 룩을 다시 만든다(더 많은 조합은 룩 카드의 '조합 더').
+function ComboMaker({ wardrobe, day, anchorId, onPick }: {
+  wardrobe: readonly WardrobeItem[];
+  day: DayWeather | undefined;
+  anchorId: string | null;
+  onPick: (id: string) => void;
+}) {
   const [slot, setSlot] = useState<Slot | '전체'>('전체');
   const [showAll, setShowAll] = useState(false);
+  const photos = useWardrobePhotos();
+  const artView = useClosetView();
   const slots = SLOTS.filter((item) => wardrobe.some((piece) => piece.slot === item));
   const inSlot = wardrobe
     .filter((item) => slot === '전체' || item.slot === slot)
-    .map((item) => ({ item, gap: day === undefined ? null : tempGap(item.kind, day) }))
+    .map((item) => ({ item, gap: day === undefined ? null : tempGap(item, day) }))
     .sort((a, b) => Number(a.gap !== null) - Number(b.gap !== null)
       || SLOTS.indexOf(a.item.slot) - SLOTS.indexOf(b.item.slot)
       || a.item.id.localeCompare(b.item.id));
@@ -676,8 +857,24 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
     <View style={styles.section}>
       <View>
         <Text style={styles.h2}>내 옷으로 조합 만들기</Text>
-        <Text style={styles.sub}>{day !== undefined ? `${tempRangeLabel(day)} 기온에 맞는 옷이에요. ` : ''}옷 하나를 고르면 같이 입을 조합을 보여 드려요</Text>
+        <Text style={styles.sub} numberOfLines={1}>옷을 누르면 그 옷으로 오늘의 룩을 만들어 드려요</Text>
       </View>
+      {hidden > 0 && (
+        <View style={styles.tempToggle}>
+          <Text style={styles.tempToggleText} numberOfLines={1}>
+            {day !== undefined ? `${day.min}~${day.max}°에 ` : ''}맞는 옷만 보기{showAll ? '' : <Text style={styles.tempToggleSub}> · {hidden}벌 숨김</Text>}
+          </Text>
+          <Switch
+            value={!showAll}
+            onValueChange={(on) => setShowAll(!on)}
+            trackColor={{ false: colors.line, true: colors.purpleStrong }}
+            thumbColor={colors.white}
+            // 웹(react-native-web)은 켜졌을 때 동그라미 색을 따로 받는다.
+            {...({ activeThumbColor: colors.white } as object)}
+            accessibilityLabel="기온에 맞는 옷만 보기"
+          />
+        </View>
+      )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.makerChips}>
         {(['전체', ...slots] as const).map((item) => {
           const on = item === slot;
@@ -693,12 +890,15 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
           {shown.map(({ item, gap }) => (
             <Pressable
               key={item.id}
-              onPress={() => router.push({ pathname: '/combo/[id]', params: { id: item.id, date } })}
+              onPress={() => onPick(item.id)}
               accessibilityRole="button"
-              accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 조합 만들기`}
+              accessibilityState={{ selected: item.id === anchorId }}
+              accessibilityLabel={`${item.color} ${kindLabel(item.kind)}, 이 옷으로 오늘의 룩 만들기`}
               style={styles.clothesItem}>
-              <View style={styles.clothesTile}>
-                <ItemIcon item={item} size={60} />
+              <View style={[styles.clothesTile, item.id === anchorId && styles.clothesTileOn]}>
+                {artView === 'photo' && photos[item.id] !== undefined
+                  ? <PlainImage source={{ uri: photos[item.id].uri }} style={styles.clothesPhoto} resizeMode="contain" accessibilityLabel={`${kindLabel(item.kind)} 사진`} />
+                  : <ItemIcon item={item} size={60} />}
               </View>
               <Text style={styles.clothesName} numberOfLines={1}>{kindLabel(item.kind)}</Text>
               {gap !== null && <Text style={styles.makerGap}>{gap === '추움' ? '추울 수도' : '더울 수도'}</Text>}
@@ -708,73 +908,6 @@ function ComboMaker({ wardrobe, day, date }: { wardrobe: readonly WardrobeItem[]
       ) : (
         <Text style={styles.sub}>이 날 기온에 맞는 {slot === '전체' ? '옷' : slot}이 아직 없어요</Text>
       )}
-      {hidden > 0 && (
-        <Pressable onPress={() => setShowAll((value) => !value)} accessibilityRole="button" hitSlop={6} style={styles.showAll}>
-          <Text style={styles.showAllText}>{showAll ? '기온에 맞는 옷만 보기' : `기온에 안 맞는 옷 ${hidden}벌도 보기`}</Text>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; index: number; total: number; onNext: () => void }) {
-  const missing = almost.missing;
-  const links = shoppingLinksFor(missing, []);
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHead}>
-        <View style={styles.flex}>
-          <Text style={styles.h2}>하나만 더하면 완성</Text>
-          <Text style={styles.sub}>저장한 사진처럼 입으려면 이것만 있으면 돼요</Text>
-        </View>
-        {total > 1 && (
-          <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel="다른 사진 보기" style={styles.iconButtonSmall}>
-            <RefreshIcon size={18} />
-          </Pressable>
-        )}
-      </View>
-      <GlassView radius={16} style={styles.lookCard}>
-        <View style={styles.lookHead}>
-          <Image source={{ uri: almost.image.thumbnail_url }} style={styles.thumb} contentFit="cover" accessibilityLabel="저장한 사진" />
-          <View style={styles.flex}>
-            <Text style={styles.sub} numberOfLines={1}>저장한 사진 · {almost.image.style.join('·') || almost.image.season}</Text>
-            <Text style={styles.lookTitle}>{missing.kind !== undefined ? kindLabel(missing.kind) : '옷 하나'}만 있으면 완성</Text>
-          </View>
-          <View style={styles.ownPill}><Text style={styles.ownPillText}>내 옷 {almost.owned.length}벌 있어요</Text></View>
-        </View>
-        <View style={styles.almostGrid}>
-          {[...almost.pieces].sort((x, y) => Number(y.type === 'missing') - Number(x.type === 'missing')).map((piece) => {
-            const need = piece.type === 'missing';
-            const kind = need ? piece.item.kind : piece.wardrobeItem.kind;
-            if (kind === undefined) return null;
-            return (
-              <View key={piece.item.item_id} style={[styles.almostTile, need && styles.almostTileNeed]}>
-                <View style={[styles.almostLabel, need && styles.almostLabelNeed]}>
-                  <Text style={[styles.almostLabelText, need && styles.almostLabelTextNeed]}>{need ? '필요해요' : '있어요'}</Text>
-                </View>
-                {need ? (
-                  <KindIcon kind={kind} color={piece.item.color ?? null} fit={piece.item.visual_fit ?? null} size={56} />
-                ) : (
-                  <ItemIcon item={piece.wardrobeItem} size={56} />
-                )}
-                <Text style={[styles.almostName, need && styles.almostNameNeed]} numberOfLines={1}>{kindLabel(kind)}</Text>
-              </View>
-            );
-          })}
-        </View>
-        {/* 11/25: 무신사·에이블리·지그재그 세 버튼을 한 줄에. 갔다 오면 샀는지 묻는다(11/24 팀 결정 15번). */}
-        {missing.kind !== undefined && (
-          <ShopButtons
-            size="big"
-            target={{ slot: missing.slot, kind: missing.kind, color: missing.color, visual_fit: missing.visual_fit }}
-            links={links}
-            title={`비슷한 ${kindLabel(missing.kind)} 찾기`}
-            place="recommend_almost"
-            styleImageId={almost.image.id}
-          />
-        )}
-      </GlassView>
-      {total > 1 && <Dots total={total} index={index % total} />}
     </View>
   );
 }
@@ -843,8 +976,9 @@ const styles = StyleSheet.create({
   compactTemp: { fontFamily: fonts.extraBold, fontSize: 20, letterSpacing: -0.5, color: colors.text },
   compactText: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
   closetThumb: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.purpleTint },
-  showAll: { alignSelf: 'flex-start' },
-  showAllText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
+  tempToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  tempToggleText: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 13, color: colors.text },
+  tempToggleSub: { fontFamily: fonts.regular, color: colors.textSecondary },
   sheetRowLocate: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 56 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
@@ -897,6 +1031,7 @@ const styles = StyleSheet.create({
   tipLabel: { width: 52, fontFamily: fonts.bold, fontSize: 13, lineHeight: 20, color: colors.textPurple },
   tipRowText: { flex: 1, fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, color: colors.text },
   actions: { flexDirection: 'row', gap: 8 },
+  feedLookPhoto: { width: '100%', aspectRatio: 3 / 4, maxHeight: 420, backgroundColor: colors.progressTrack },
   choose: { flex: 1, height: 50, borderRadius: 14, backgroundColor: colors.purpleFill, alignItems: 'center', justifyContent: 'center' },
   chooseDone: { opacity: 0.6 },
   chooseText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onPurpleFill },
@@ -910,6 +1045,12 @@ const styles = StyleSheet.create({
   clothesRow: { gap: 8, paddingHorizontal: layout.screenPaddingX },
   clothesItem: { width: 76, alignItems: 'center', gap: 6 },
   clothesTile: { width: 76, height: 76, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  clothesPhoto: { width: 68, height: 68 },
+  clothesTileOn: { borderWidth: 2, borderColor: colors.textPurple },
+  anchorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  anchorText: { flex: 1, fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
+  anchorClear: { height: 28, paddingHorizontal: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, justifyContent: 'center' },
+  anchorClearText: { fontFamily: fonts.medium, fontSize: 12, color: colors.textSecondary },
   clothesName: { fontFamily: fonts.medium, fontSize: 12, color: colors.text },
   makerChips: { gap: 6, paddingHorizontal: layout.screenPaddingX },
   makerChip: { height: 32, paddingHorizontal: 13, borderRadius: 16, borderWidth: 1, borderColor: glass.border, backgroundColor: glass.background, justifyContent: 'center' },
@@ -918,20 +1059,6 @@ const styles = StyleSheet.create({
   makerChipTextOn: { fontFamily: fonts.bold, color: colors.textPurple },
   makerGap: { marginTop: -4, fontFamily: fonts.regular, fontSize: 10, color: colors.danger },
 
-  ownPill: { height: 26, paddingHorizontal: 9, borderRadius: 7, backgroundColor: colors.purpleTint, justifyContent: 'center' },
-  ownPillText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
-  almostGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, backgroundColor: '#F1EFF7' },
-  almostTile: { width: '31.5%', height: 128, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.white, borderWidth: 1.5, borderColor: 'transparent', alignItems: 'center', justifyContent: 'space-between' },
-  almostTileNeed: { borderStyle: 'dashed', borderColor: colors.purpleStrong, boxShadow: '0 4px 12px rgba(30,20,50,0.10)' },
-  almostLabel: { height: 22, paddingHorizontal: 8, borderRadius: 6, backgroundColor: colors.purpleTint, justifyContent: 'center' },
-  almostLabelNeed: { backgroundColor: colors.textPurple },
-  almostLabelText: { fontFamily: fonts.bold, fontSize: 11, color: colors.textPurple },
-  almostLabelTextNeed: { color: colors.white },
-  almostName: { fontFamily: fonts.bold, fontSize: 12, color: colors.text },
-  almostNameNeed: { color: colors.tagText },
-  shopButton: { height: 48, borderRadius: 14, backgroundColor: colors.purpleFill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  shopRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: -4 },
-  shopLink: { fontFamily: fonts.medium, fontSize: 12, color: colors.textSecondary, textDecorationLine: 'underline' },
 
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(30,20,50,0.3)', justifyContent: 'flex-end' },
   tripEntry: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: glass.background, borderWidth: 1, borderColor: glass.border },
