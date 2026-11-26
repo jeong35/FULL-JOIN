@@ -10,10 +10,8 @@ import Svg, { Path } from 'react-native-svg';
 
 import { ArtPager, ViewToggle } from '@/components/ArtPager';
 import { GlassView } from '@/components/GlassView';
-import { KindIcon } from '@/components/KindIcon';
 import { LookChosenSheet } from '@/components/LookChosenSheet';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
-import { ShopButtons } from '@/components/ShopButtons';
 import { TabIcon } from '@/components/TabIcon';
 import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
@@ -23,9 +21,8 @@ import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
 import { buildCombos, harmony, type Combo } from '@/data/combos';
 import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
-import { lookTips, matchOf, MAX_LOOKS, sortPieces, type AlmostLook, type Look } from '@/data/recommend';
+import { lookTips, matchOf, MAX_LOOKS, sortPieces, type Look } from '@/data/recommend';
 import { useSession } from '@/data/session';
-import { shoppingLinksFor } from '@/data/shopping';
 import { loadArchive, loadFeed, loadWardrobe, useFeedState } from '@/data/store';
 import type { StyleImage, WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
@@ -62,7 +59,6 @@ export default function RecommendScreen() {
   const [selected, setSelected] = useState(today);
   const [hourlyOpen, setHourlyOpen] = useState(false);
   const [lookIndex, setLookIndex] = useState(0);
-  const [almostIndex, setAlmostIndex] = useState(0);
   const [regionOpen, setRegionOpen] = useState(false);
   const userId = useSession()?.userId ?? 'guest';
   // 날짜별로 고른 룩은 계정마다 이 기기에 남긴다(친구분 recommendChoices.ts) — 다시 들어와도 '입기로 했어요'가 그대로.
@@ -127,11 +123,9 @@ export default function RecommendScreen() {
   const pick = (date: string) => {
     setSelected(date);
     setLookIndex(0);
-    setAlmostIndex(0);
     setAnchorId(null);
   };
   const look = view.looks.length > 0 ? view.looks[lookIndex % view.looks.length] : undefined;
-  const almost = view.almost.length > 0 ? view.almost[almostIndex % view.almost.length] : undefined;
   // 11/24 팀 결정 8번: 저장한 사진으로 다 갖춰지는 룩이 없으면 옷장 옷만으로 고른다 —
   // 고른 날 기온에 맞는 옷만 추려서(기온별 옷차림 표) 상의+하의(또는 원피스), 쌀쌀하면 겉옷까지.
   const closetLooks = useMemo(
@@ -330,9 +324,7 @@ export default function RecommendScreen() {
             />
           )}
 
-          {almost !== undefined && (
-            <AlmostSection almost={almost} index={almostIndex} total={view.almost.length} onNext={() => setAlmostIndex((i) => i + 1)} />
-          )}
+          {/* 11/26: '하나만 더하면 완성'은 코디 탭에서 뺐다(같은 내용은 비교 결과 화면에 있음). */}
         </View>
       </ScrollView>
 
@@ -920,68 +912,6 @@ function ComboMaker({ wardrobe, day, anchorId, onPick }: {
   );
 }
 
-function AlmostSection({ almost, index, total, onNext }: { almost: AlmostLook; index: number; total: number; onNext: () => void }) {
-  const missing = almost.missing;
-  const links = shoppingLinksFor(missing, []);
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHead}>
-        <View style={styles.flex}>
-          <Text style={styles.h2}>하나만 더하면 완성</Text>
-          <Text style={styles.sub}>저장한 사진처럼 입으려면 이것만 있으면 돼요</Text>
-        </View>
-        {total > 1 && (
-          <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel="다른 사진 보기" style={styles.iconButtonSmall}>
-            <RefreshIcon size={18} />
-          </Pressable>
-        )}
-      </View>
-      <GlassView radius={16} style={styles.lookCard}>
-        <View style={styles.lookHead}>
-          <Image source={{ uri: almost.image.thumbnail_url }} style={styles.thumb} contentFit="cover" accessibilityLabel="저장한 사진" />
-          <View style={styles.flex}>
-            <Text style={styles.sub} numberOfLines={1}>저장한 사진 · {almost.image.style.join('·') || almost.image.season}</Text>
-            <Text style={styles.lookTitle}>{missing.kind !== undefined ? kindLabel(missing.kind) : '옷 하나'}만 있으면 완성</Text>
-          </View>
-          <View style={styles.ownPill}><Text style={styles.ownPillText}>내 옷 {almost.owned.length}벌 있어요</Text></View>
-        </View>
-        <View style={styles.almostGrid}>
-          {[...almost.pieces].sort((x, y) => Number(y.type === 'missing') - Number(x.type === 'missing')).map((piece) => {
-            const need = piece.type === 'missing';
-            const kind = need ? piece.item.kind : piece.wardrobeItem.kind;
-            if (kind === undefined) return null;
-            return (
-              <View key={piece.item.item_id} style={[styles.almostTile, need && styles.almostTileNeed]}>
-                <View style={[styles.almostLabel, need && styles.almostLabelNeed]}>
-                  <Text style={[styles.almostLabelText, need && styles.almostLabelTextNeed]}>{need ? '필요해요' : '있어요'}</Text>
-                </View>
-                {need ? (
-                  <KindIcon kind={kind} color={piece.item.color ?? null} fit={piece.item.visual_fit ?? null} size={56} />
-                ) : (
-                  <ItemIcon item={piece.wardrobeItem} size={56} />
-                )}
-                <Text style={[styles.almostName, need && styles.almostNameNeed]} numberOfLines={1}>{kindLabel(kind)}</Text>
-              </View>
-            );
-          })}
-        </View>
-        {/* 11/25: 무신사·에이블리·지그재그 세 버튼을 한 줄에. 갔다 오면 샀는지 묻는다(11/24 팀 결정 15번). */}
-        {missing.kind !== undefined && (
-          <ShopButtons
-            size="big"
-            target={{ slot: missing.slot, kind: missing.kind, color: missing.color, visual_fit: missing.visual_fit }}
-            links={links}
-            title={`비슷한 ${kindLabel(missing.kind)} 찾기`}
-            place="recommend_almost"
-            styleImageId={almost.image.id}
-          />
-        )}
-      </GlassView>
-      {total > 1 && <Dots total={total} index={index % total} />}
-    </View>
-  );
-}
-
 function Dots({ total, index }: { total: number; index: number }) {
   return (
     <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -1129,20 +1059,6 @@ const styles = StyleSheet.create({
   makerChipTextOn: { fontFamily: fonts.bold, color: colors.textPurple },
   makerGap: { marginTop: -4, fontFamily: fonts.regular, fontSize: 10, color: colors.danger },
 
-  ownPill: { height: 26, paddingHorizontal: 9, borderRadius: 7, backgroundColor: colors.purpleTint, justifyContent: 'center' },
-  ownPillText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
-  almostGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, backgroundColor: '#F1EFF7' },
-  almostTile: { width: '31.5%', height: 128, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.white, borderWidth: 1.5, borderColor: 'transparent', alignItems: 'center', justifyContent: 'space-between' },
-  almostTileNeed: { borderStyle: 'dashed', borderColor: colors.purpleStrong, boxShadow: '0 4px 12px rgba(30,20,50,0.10)' },
-  almostLabel: { height: 22, paddingHorizontal: 8, borderRadius: 6, backgroundColor: colors.purpleTint, justifyContent: 'center' },
-  almostLabelNeed: { backgroundColor: colors.textPurple },
-  almostLabelText: { fontFamily: fonts.bold, fontSize: 11, color: colors.textPurple },
-  almostLabelTextNeed: { color: colors.white },
-  almostName: { fontFamily: fonts.bold, fontSize: 12, color: colors.text },
-  almostNameNeed: { color: colors.tagText },
-  shopButton: { height: 48, borderRadius: 14, backgroundColor: colors.purpleFill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  shopRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: -4 },
-  shopLink: { fontFamily: fonts.medium, fontSize: 12, color: colors.textSecondary, textDecorationLine: 'underline' },
 
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(30,20,50,0.3)', justifyContent: 'flex-end' },
   tripEntry: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: glass.background, borderWidth: 1, borderColor: glass.border },
