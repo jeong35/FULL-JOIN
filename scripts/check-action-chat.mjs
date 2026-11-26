@@ -18,9 +18,9 @@ assert.equal(ranked[0]?.style_image_id, 'one');
 assert.equal(ranked[0]?.usable_item_count, 1);
 
 assert.equal(explainGarmentMatch({ slot: '하의', kind: '미니스커트', color: '블랙', visual_fit: 'A라인' }, null).summary,
-  '내 옷장에 비교할 미니스커트 후보가 없어요.');
+  '옷장에 등록된 옷 중 활용할 만한 아이템을 찾지 못했어요.');
 assert.equal(explainGarmentMatch({ slot: '상의', kind: '니트', color: '아이보리', visual_fit: '레귤러' }, null).summary,
-  '내 옷장에 비교할 니트 후보가 없어요.');
+  '옷장에 등록된 옷 중 활용할 만한 아이템을 찾지 못했어요.');
 
 assert.equal(chatActionSchema.safeParse({
   action_id: '00000000-0000-4000-8000-000000000000', type: 'OPEN_PRODUCT_SEARCH', label: '찾아보기',

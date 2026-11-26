@@ -52,7 +52,7 @@ test("purchase has no wardrobe match metadata even when a different-color same k
   assert.deepEqual(gapMatchMetadata(source, wardrobe, gap), {
     wardrobe_item_id: null,
     reason_code: "no_candidate",
-    reason: "내 옷장에 비교할 슬랙스 후보가 없어요.",
+    reason: "옷장에 등록된 옷 중 활용할 만한 아이템을 찾지 못했어요.",
   });
 });
 
