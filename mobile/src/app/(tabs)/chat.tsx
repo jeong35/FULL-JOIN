@@ -316,7 +316,7 @@ export default function ChatScreen() {
               {visibleMessages.length === 0 && (
                 <View style={styles.emptyChat}>
                   <Text style={styles.welcomeTitle}>오늘은 어떤 도움이 필요하세요?</Text>
-                  <Text style={styles.emptyChatText}>내 옷장과 취향을 바탕으로 원하는 코디를 찾을 수 있도록 도와드릴게요.</Text>
+                  <Text style={styles.emptyChatText} numberOfLines={1}>내 옷장과 취향으로 원하는 코디를 찾아 드려요</Text>
                   {/* 11/27: 큰 카드 6개가 화면을 꽉 채워 답답해서, 질문만 담은 작은 버튼으로 모아 둔다(설명은 읽어 주기용으로만). */}
                   <View style={styles.examples}>
                     {examples.map((example) => (
