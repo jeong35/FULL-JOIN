@@ -955,6 +955,7 @@ type ActionChatResponse = {
   message: string;
   request_id: string;
   intents: string[];
+  action_intents: string[];
   actions: ChatAction[];
   results: ActionStyleResult[];
   products: Array<{ item_id: string; platform: string; url: string; match_type: "similar" | "exact" }>;
@@ -1320,7 +1321,9 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
     answer,
     message: answer,
     request_id: crypto.randomUUID(),
-    intents: actionIntents,
+    // 기존 사진 상담 클라이언트는 이 필드의 CHAT-01/03 intent를 사용한다.
+    intents: legacy?.intents ?? actionIntents,
+    action_intents: actionIntents,
     actions: uniqueActionDrafts(actionDrafts),
     results,
     products,

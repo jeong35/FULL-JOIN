@@ -207,4 +207,4 @@ npm run publish:style-image -- --image-id IMG-001 --unpublish
 
 ### Action 챗봇 응답 확장
 
-`POST /chat`의 `style_image_id`는 선택값이다. 사진이 있으면 기존 저장 사진 비교와 소유권 검증을 유지하고, 없으면 피드 검색·오늘의 룩 연결·저장 목록·일반 질문을 처리한다. 기존 `answer`, `products`, `comparison`은 유지하며 `message`, `request_id`, `intents`, `results[]`, `actions[]`, `history_persisted`를 추가한다. production에 CHAT-02 migration이 없으면 응답은 정상 반환하되 `conversation_id=null`, `history_persisted=false`다.
+`POST /chat`의 `style_image_id`는 선택값이다. 사진이 있으면 기존 저장 사진 비교와 소유권 검증을 유지하고, 없으면 피드 검색·오늘의 룩 연결·저장 목록·일반 질문을 처리한다. 기존 `answer`, `products`, `comparison`, 사진 상담의 `intents`는 유지하며 `message`, `request_id`, `action_intents`, `results[]`, `actions[]`, `history_persisted`를 추가한다. 사진 없는 신규 요청에서는 `intents`도 Action intent와 동일하다. production에 CHAT-02 migration이 없으면 응답은 정상 반환하되 `conversation_id=null`, `history_persisted=false`다.

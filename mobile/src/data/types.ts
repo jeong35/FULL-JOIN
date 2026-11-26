@@ -126,6 +126,7 @@ export type ChatResult = {
     | 'mixed'
     | 'out_of_scope'
   )[];
+  action_intents?: string[];
   answer_sections?: {
     source: 'wardrobe' | 'saved_photo' | 'product_search' | 'general_advice' | 'system';
     label: string;
