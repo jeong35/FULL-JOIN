@@ -25,7 +25,8 @@ export async function scheduleRecommendationNotification(userId: string, lookId:
     subscribe: async () => {
       const config = await jsonRequest('/config');
       if (typeof config.vapid_public_key !== 'string') throw new Error('missing_vapid_key');
-      const registration = await navigator.serviceWorker.register('/notification-sw.js');
+      await navigator.serviceWorker.register('/notification-sw.js');
+      const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
       const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(config.vapid_public_key) });
       const subscribed = await jsonRequest('/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user_id: userId, subscription: subscription.toJSON(), user_agent: navigator.userAgent }) });

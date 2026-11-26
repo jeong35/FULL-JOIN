@@ -6,9 +6,12 @@ export type NotificationSupport =
 
 export type NotificationSubscriptionIdentity = { subscriptionId: string; accessToken: string };
 export type ScheduledNotification = NotificationSubscriptionIdentity & { scheduleId: string; scheduledFor: string };
+export type NotificationFailureStage = 'permission' | 'subscribe' | 'schedule';
 export type ScheduleResult =
   | { ok: true; value: ScheduledNotification }
-  | { ok: false; reason: 'unsupported' | 'permission_denied' | 'request_failed'; support?: NotificationSupport };
+  | { ok: false; reason: 'unsupported'; support: NotificationSupport }
+  | { ok: false; reason: 'permission_denied' }
+  | { ok: false; reason: 'request_failed'; stage: NotificationFailureStage; error: string };
 export type NotificationScheduleAdapter = {
   support: NotificationSupport;
   requestPermission: () => Promise<'granted' | 'denied' | 'default'>;
@@ -47,15 +50,32 @@ export function formatScheduledTime(value: Date): string {
   return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(value);
 }
 
+function failureError(error: unknown): string {
+  const value = error instanceof Error ? error.message : String(error);
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+  return normalized.slice(0, 80) || 'unknown_error';
+}
+
 export async function scheduleWithAdapter(adapter: NotificationScheduleAdapter, now = new Date()): Promise<ScheduleResult> {
   if (!adapter.support.supported) return { ok: false, reason: 'unsupported', support: adapter.support };
+  let permission: 'granted' | 'denied' | 'default';
   try {
-    if (await adapter.requestPermission() !== 'granted') return { ok: false, reason: 'permission_denied' };
-    const identity = await adapter.subscribe();
+    permission = await adapter.requestPermission();
+  } catch (error) {
+    return { ok: false, reason: 'request_failed', stage: 'permission', error: failureError(error) };
+  }
+  if (permission !== 'granted') return { ok: false, reason: 'permission_denied' };
+  let identity: NotificationSubscriptionIdentity;
+  try {
+    identity = await adapter.subscribe();
+  } catch (error) {
+    return { ok: false, reason: 'request_failed', stage: 'subscribe', error: failureError(error) };
+  }
+  try {
     const schedule = await adapter.schedule(identity, nextDaySameLocalTime(now).toISOString());
     return { ok: true, value: { ...identity, ...schedule } };
-  } catch {
-    return { ok: false, reason: 'request_failed' };
+  } catch (error) {
+    return { ok: false, reason: 'request_failed', stage: 'schedule', error: failureError(error) };
   }
 }
 
