@@ -554,7 +554,7 @@ function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; 
 // 판정은 서버가 한 그대로 두고, 이미 받아 둔 옷장으로 설명만 만든다.
 function missingReason(item: ShownItem, wardrobe: readonly WardrobeItem[]): string {
   const sameKind = wardrobe.filter((w) => w.kind === item.kind);
-  if (sameKind.length === 0) return `옷장에 ${withIGa(item.kind)} 없어요`;
+  if (sameKind.length === 0) return `옷장에 비교할 ${kindLabel(item.kind)} 후보가 없어요`;
   const ownedColors = [...new Set(sameKind.map((w) => w.color))].join('·');
   return `${withEunNeun(item.kind)} 있지만 색이 달라요 (가진 색: ${ownedColors})`;
 }
@@ -567,11 +567,6 @@ function finalConsonant(word: string): number | null {
 function withRo(word: string): string {
   const final = finalConsonant(word);
   return final === null || final === 0 || final === 8 ? `${word}로` : `${word}으로`;
-}
-
-function withIGa(word: string): string {
-  const final = finalConsonant(word);
-  return final === null || final === 0 ? `${word}가` : `${word}이`;
 }
 
 function withEunNeun(word: string): string {
