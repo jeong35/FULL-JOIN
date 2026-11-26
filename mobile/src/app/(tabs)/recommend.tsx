@@ -22,6 +22,7 @@ import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from
 import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
 import { buildCombos, harmony, type Combo } from '@/data/combos';
+import { yesterdayTopNote } from '@/data/recentWear';
 import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
 import { lookTips, matchOf, MAX_LOOKS, sortPieces, type Look } from '@/data/recommend';
 import { useSession } from '@/data/session';
@@ -148,8 +149,8 @@ export default function RecommendScreen() {
   const closetLooks = useMemo(
     () => (view.looks.length > 0 || view.pending > 0 || view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready'
       ? []
-      : buildCombos({ wardrobe: view.wardrobe, day, max: MAX_LOOKS })),
-    [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day],
+      : buildCombos({ wardrobe: view.wardrobe, day, max: MAX_LOOKS, recent: view.recent })),
+    [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day, view.recent],
   );
   const anchor = anchorId === null ? undefined : view.wardrobe.find((item) => item.id === anchorId);
   const anchorLooks = useMemo(() => {
@@ -186,10 +187,10 @@ export default function RecommendScreen() {
     if (closetLooks.length > 0 || day === undefined || view.looks.length > 0 || view.pending > 0) return [];
     if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') return [];
     const off = (combo: Combo) => combo.items.reduce((sum, item) => sum + tempDistance(item, day), 0);
-    return buildCombos({ wardrobe: view.wardrobe, max: MAX_LOOKS * 4 })
+    return buildCombos({ wardrobe: view.wardrobe, max: MAX_LOOKS * 4, recent: view.recent })
       .sort((a, b) => off(a) - off(b))
       .slice(0, MAX_LOOKS);
-  }, [closetLooks.length, view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day]);
+  }, [closetLooks.length, view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day, view.recent]);
 
   function collapseWeather() {
     if (weatherSmall) return;
@@ -614,6 +615,11 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
     }
   }
   const chosen = look !== undefined && chosenId === look.image.id;
+  // 11/27: 어제 입기로 한 룩이 있으면, 오늘 룩의 상의가 어제와 다른지 한 줄로 알려 준다(고른 옷으로 만든 룩은 빼고).
+  const shownForNote = look !== undefined ? look.pieces.map((piece) => piece.wardrobeItem) : closet?.items ?? [];
+  const yesterday = anchor === undefined ? yesterdayTopNote(shownForNote, view.recent) : null;
+  const wearNote = yesterday === '다름' ? '어제와 다른 상의로 골랐어요'
+    : yesterday === '같음' ? '어제와 같은 상의예요. 상의를 더 넣으면 바꿔 가며 골라 드려요' : null;
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -648,6 +654,12 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
             </View>
             <MatchLegend pieces={look.pieces} />
             <LookGrid look={look} photos={photos} artView={artView} />
+            {wearNote !== null && (
+              <View style={styles.tipRow}>
+                <Text style={styles.tipLabel}>어제</Text>
+                <Text style={styles.tipRowText}>{wearNote}</Text>
+              </View>
+            )}
             {lookTips(look.pieces, view.day).map((tip) => (
               <View key={tip.label} style={styles.tipRow}>
                 <Text style={styles.tipLabel}>{tip.label}</Text>
@@ -660,7 +672,7 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
         </>
       ) : closet !== undefined ? (
         <>
-          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
+          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} wearNote={wearNote} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
           {total > 1 && <Dots total={total} index={index % total} />}
         </>
       ) : feedLook !== undefined ? (
@@ -696,10 +708,11 @@ function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: ()
 
 // 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 보통은 모두 그날 기온에 맞는 옷이다.
 // day가 있으면(③ 가장 가까운 조합) 기온에 딱 맞지 않는다는 안내를 붙인다.
-function ClosetLookCard({ combo, date, day, photos, artView, chosen, onChoose, onNext }: {
+function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, chosen, onChoose, onNext }: {
   combo: Combo;
   date: string;
   day?: DayWeather;
+  wearNote?: string | null;
   photos: Readonly<Record<string, WardrobePhoto>>;
   artView: ClosetView;
   chosen: boolean;
@@ -733,6 +746,12 @@ function ClosetLookCard({ combo, date, day, photos, artView, chosen, onChoose, o
         )}
       </View>
       <ComboGrid items={combo.items} photos={photos} artView={artView} />
+      {wearNote !== null && (
+        <View style={styles.tipRow}>
+          <Text style={styles.tipLabel}>어제</Text>
+          <Text style={styles.tipRowText}>{wearNote}</Text>
+        </View>
+      )}
       {nearNote !== null && (
         <View style={styles.tipRow}>
           <Text style={styles.tipLabel}>기온</Text>

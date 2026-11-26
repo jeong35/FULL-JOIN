@@ -4,6 +4,7 @@
 // 옷장에 없는 옷은 룩에 넣지 않는다(AGENTS.md 절대 규칙 5) — 룩의 옷은 모두 buildOutfits가 고른 내 옷이다.
 import { kindLabel, type Slot, type Style } from './catalog';
 import { buildOutfits, type OutfitPiece } from './outfits';
+import { NO_RECENT_WEAR, recentWear, wearPenalty, type RecentWear } from './recentWear';
 import type { Plan } from './plans';
 import { heartStyleImage, type HeartState } from './store';
 import type { ArchiveImage, HeartItem, WardrobeItem } from './types';
@@ -37,6 +38,8 @@ export type Recommendation = {
   almost: AlmostLook[];
   // 아직 옷장 대조 결과를 받는 중인 사진 수.
   pending: number;
+  // 고른 날짜 앞 며칠 동안 입기로 한 옷(11/27). 옷장 조합(buildCombos)에도 같이 쓴다.
+  recent: RecentWear;
 };
 
 export const MAX_LOOKS = 3;
@@ -70,6 +73,9 @@ export function recommend(input: {
   day?: DayWeather;
   plan?: Plan;
   tasteStyles?: readonly Style[];
+  // 날짜별로 '입을래요'로 고른 룩과 지금 고른 날짜(11/27: 최근에 입은 옷은 뒤로).
+  choices?: Readonly<Record<string, { lookId: string }>>;
+  date?: string;
 }): Recommendation {
   const { archive, hearts, wardrobe, day, plan } = input;
   // 약속 무드가 있으면 그것을, 없으면 처음 고른 취향 스타일을 먼저 본다.
@@ -95,14 +101,25 @@ export function recommend(input: {
       almost.push({ image, owned, missing: missing[0].item, pieces: outfit.pieces, styleMatch });
     }
   }
+  // 예전에 고른 룩의 옷: 옷장 조합은 룩 id가 옷 id를 + 로 이은 것, 저장 사진 룩은 그 사진으로 만든 룩의 옷.
+  const photoItems = new Map(looks.map((look) => [look.image.id, look.pieces.map((piece) => piece.wardrobeItem)]));
+  const itemsOf = (lookId: string): WardrobeItem[] | null => {
+    const fromPhoto = photoItems.get(lookId);
+    if (fromPhoto !== undefined) return fromPhoto;
+    const items = lookId.split('+').map((id) => wardrobe.find((item) => item.id === id));
+    return items.every((item): item is WardrobeItem => item !== undefined) ? items : null;
+  };
+  const recent = input.choices !== undefined && input.date !== undefined ? recentWear(input.choices, input.date, itemsOf) : NO_RECENT_WEAR;
+  const penalty = (look: Look) => wearPenalty(look.pieces.map((piece) => piece.wardrobeItem), look.image.id, recent);
   looks.sort((a, b) =>
     Number(b.weatherFit) - Number(a.weatherFit)
+    || penalty(a) - penalty(b)
     || Number(b.styleMatch) - Number(a.styleMatch)
     || count(a.pieces, '대신 입기') - count(b.pieces, '대신 입기')
     || count(a.pieces, '비슷한 옷') - count(b.pieces, '비슷한 옷')
     || bySaved(a.image, b.image));
   almost.sort((a, b) => Number(b.styleMatch) - Number(a.styleMatch) || bySaved(a.image, b.image));
-  return { looks: looks.slice(0, MAX_LOOKS), almost: almost.slice(0, MAX_LOOKS), pending };
+  return { looks: looks.slice(0, MAX_LOOKS), almost: almost.slice(0, MAX_LOOKS), pending, recent };
 }
 
 // 추천 탭을 열 때 최근 저장 사진의 옷장 대조 결과가 없으면 받아 온다(한 장씩 차례로).

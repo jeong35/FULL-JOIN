@@ -6,6 +6,7 @@
 // 같은 입력에 같은 결과: 점수가 같으면 옷 id 순서로 정한다.
 import { kindLabel, type Color } from './catalog';
 import type { WardrobeItem } from './types';
+import { NO_RECENT_WEAR, wearPenalty, type RecentWear } from './recentWear';
 import { fitsTemp, needsOuter, type DayWeather } from './weather';
 
 // 어디에나 받쳐 입기 쉬운 색(데님 포함).
@@ -114,9 +115,10 @@ type BuildInput = {
   anchor?: WardrobeItem; // 이 옷을 꼭 넣는다
   max?: number;
   maxUses?: number; // 같은 옷(고른 옷 제외)이 결과에 나오는 최대 횟수
+  recent?: RecentWear; // 최근 입기로 한 옷(11/27) — 최근에 입은 상의·하의가 든 조합은 뒤로
 };
 
-export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2 }: BuildInput): Combo[] {
+export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recent = NO_RECENT_WEAR }: BuildInput): Combo[] {
   const fits = (item: WardrobeItem) => day === undefined || fitsTemp(item, day);
   const pool = wardrobe.filter((item) => item.id !== anchor?.id && fits(item));
   const tops = pool.filter(isTop);
@@ -151,7 +153,9 @@ export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2 }: Bui
     if (day !== undefined) tags.push('기온 맞춤');
     combos.push({ id: sorted.map((item) => item.id).join('+'), items: sorted, tags, score: result.score });
   }
-  combos.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  // 최근에 입은 옷이 적은 조합 → 어울림 점수 → id 순서(11/27).
+  const penalty = new Map(combos.map((combo) => [combo.id, wearPenalty(combo.items, combo.id, recent)]));
+  combos.sort((a, b) => (penalty.get(a.id) ?? 0) - (penalty.get(b.id) ?? 0) || b.score - a.score || a.id.localeCompare(b.id));
 
   // 3) 같은 옷만 계속 나오지 않게(상의·하의·원피스 하나당 최대 maxUses번) 고른다. 겉옷·신발·가방은 세지 않는다.
   const uses = new Map<string, number>();
