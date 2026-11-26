@@ -4,6 +4,8 @@
 // 11/25 고침: 웹에서 작은 팝업 창으로 열려서(데스크톱) 원래 탭이 가려지지 않아 '돌아옴'을 못 알아채던 문제 —
 // 그냥 새 탭으로 열고, 탭이 다시 보일 때·창이 다시 눌릴 때·폰 브라우저가 탭을 새로 불러왔을 때 모두 묻는다
 // (갔다 온 기록은 이 탭 저장 공간(sessionStorage)에 둬서 새로 불러와도 남는다).
+// 11/26: 한 쇼핑몰만 보고 끝나지 않을 수 있다 — 물을 때 '다른 쇼핑몰도 보기'(나머지 쇼핑몰 버튼)를 같이 보여 주고,
+// 다른 쇼핑몰로 가면 그 쇼핑몰에서 돌아왔을 때 다시 묻는다. 묻는 중에 화면의 쇼핑몰 버튼을 눌러도 물음은 닫힌다.
 import { router, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
@@ -13,7 +15,16 @@ import { colorsForKind, fitsForKind, KINDS_BY_SLOT, SLOTS, type Color, type Kind
 import type { Product } from './types';
 
 export type ShopTarget = { slot?: Slot | null; kind: Kind; color?: Color | null; visual_fit?: VisualFit | null };
-export type PurchaseAsk = { slot: Slot; kind: Kind; color: Color | null; fit: VisualFit | null; platform: string; openedAt: number };
+export type PurchaseAsk = {
+  slot: Slot;
+  kind: Kind;
+  color: Color | null;
+  fit: VisualFit | null;
+  platform: string;
+  openedAt: number;
+  // 같은 옷을 찾는 쇼핑몰 버튼 전부(무신사·에이블리·지그재그). 물을 때 방금 간 곳만 빼고 보여 준다.
+  links?: Product[];
+};
 
 const MIN_AWAY_MS = 3000;
 // 이보다 오래 지나서 돌아오면 묻지 않는다(다른 날 다시 연 경우).
@@ -76,9 +87,10 @@ if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof window !=
   setTimeout(back, 1500);
 }
 
-// 쇼핑몰 링크는 모두 이걸로 연다.
-export async function openShop(target: ShopTarget, product: Product): Promise<void> {
+// 쇼핑몰 링크는 모두 이걸로 연다. links: 같은 옷을 찾는 쇼핑몰 버튼 전부(돌아와서 '다른 쇼핑몰도 보기'에 쓴다).
+export async function openShop(target: ShopTarget, product: Product, links: readonly Product[] = []): Promise<void> {
   const slot = target.slot ?? slotOfKind(target.kind);
+  if (asking !== null) dismissPurchaseAsk();
   savePending(slot === null ? null : {
     slot,
     kind: target.kind,
@@ -86,6 +98,7 @@ export async function openShop(target: ShopTarget, product: Product): Promise<vo
     fit: target.visual_fit ?? null,
     platform: product.match_type === 'exact' ? '쇼핑몰' : product.platform,
     openedAt: Date.now(),
+    links: links.filter((link) => link.match_type === 'similar'),
   });
   if (Platform.OS === 'web') {
     // 작은 팝업 창 대신 새 탭으로(돌아오면 이 탭이 다시 보여서 물을 수 있다).

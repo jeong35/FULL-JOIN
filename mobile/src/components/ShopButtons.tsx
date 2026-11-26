@@ -35,7 +35,7 @@ export function ShopButtons({ target, links, title, size = 'small', place, style
       style_image_id: styleImageId,
       via: 'row',
     });
-    void openShop(target, product);
+    void openShop(target, product, search);
   };
   return (
     <View style={[styles.wrap, style]}>
