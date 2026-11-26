@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { HintBubble } from '@/components/HintBubble';
 import { FeedPhoto, PHOTO_GAP, splitColumns } from '@/components/FeedPhoto';
+import { useTabScrollBottom } from '@/components/tabBarSpace';
 import { BookmarkIcon, SearchIcon } from '@/components/Icons';
 import { TasteSuggestBubble } from '@/components/TasteSuggest';
 import { SmallWhiteButton } from '@/components/ui';
@@ -84,6 +85,7 @@ export default function HomeScreen() {
 }
 
 export function PhotoBoardScreen({ mode }: { mode: Folder }) {
+  const scrollBottom = useTabScrollBottom();
   const feed = useFeedState();
   const archive = useArchiveState();
   const saved = useSaved();
@@ -116,7 +118,6 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
   const [justSaved, setJustSaved] = useState(false);
   const saveHintOpen = useHintOpen('save_compare');
   const openHintOpen = useHintOpen('archive_open');
-  const feedTasteOpen = useHintOpen('feed_taste');
   // 추구미 아닌 스타일 사진을 저장하면 그 스타일을 추구미로 저장할지 묻는다(11/24 팀 결정 2번).
   const [suggest, setSuggest] = useState<TasteSuggestion | null>(null);
 
@@ -364,7 +365,8 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
         )}
       </View>
 
-      {/* 피드 말풍선은 하나씩: 추구미 제안 → 저장 안내 → (처음 한 번) 추구미로 피드를 바꿨다는 안내. */}
+      {/* 피드 말풍선은 하나씩: 추구미 제안 → 저장 안내.
+          11/26: '고른 추구미에 맞춰 피드를 바꿨어요' 말풍선은 뺐다 — 방금 추구미를 고른 사람에게는 굳이 알릴 필요가 없다. */}
       {folder === '피드' && (
         <TasteSuggestBubble suggestion={suggest} onDone={() => setSuggest(null)} bubbleStyle={styles.hint} noteStyle={styles.tasteNote} />
       )}
@@ -375,13 +377,6 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
           actionLabel="저장 보러 가기"
           tail="none"
           onPress={() => changeFolder('모든 저장')}
-          style={styles.hint}
-        />
-      ) : folder === '피드' && feedTasteOpen && taste !== undefined && taste.length > 0 && feed.data.length > 0 ? (
-        <HintBubble
-          id="feed_taste"
-          text={`고른 추구미(${taste.join('·')})에 맞춰 피드를 바꿨어요. 그 스타일 사진부터 먼저 보여 드려요`}
-          tail="none"
           style={styles.hint}
         />
       ) : null}
@@ -423,7 +418,7 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
       <View style={styles.scroll}>
         <Animated.ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
           scrollEventThrottle={16}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}

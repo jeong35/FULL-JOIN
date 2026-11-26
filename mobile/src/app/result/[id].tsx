@@ -515,7 +515,8 @@ function ResultCard({
       )}
       {error !== null && <Text style={styles.choiceError}>{error}</Text>}
       {/* 11/24 팀 결정 16번: 사진 속 옷을 이미 갖고 있거나 샀으면 바로 내 옷장에 넣는다(종류·색·핏 미리 채움).
-          11/25: 카드 오른쪽 아래 작은 '+ 옷장에 넣기' 버튼으로(같은 옷이 있는 '활용' 카드에는 없음). */}
+          11/26: 맨 아래 따로 한 줄이던 버튼을 옷 그림 바로 밑(비어 있던 왼쪽 칸)으로 — 그림 칸과 같은 너비·모서리의 '+ 옷장'.
+          같은 옷이 있는 '활용' 카드에는 없음. */}
       {item.gap_status !== '활용' && (
         <Pressable
           onPress={() => {
@@ -526,7 +527,7 @@ function ResultCard({
           accessibilityLabel={`${kindLabel(item.kind)} 내 옷장에 넣기`}
           hitSlop={6}
           style={styles.ownIt}>
-          <Text style={styles.ownItText}>+ 옷장에 넣기</Text>
+          <Text style={styles.ownItText} numberOfLines={1}>+ 옷장</Text>
         </Pressable>
       )}
     </GlassView>
@@ -536,13 +537,13 @@ function ResultCard({
 // '필요'한 옷의 쇼핑 링크. 검색어는 옷마다 다르다(색 + 핏 + 종류, parse_query.md 쇼핑 검색어 규칙).
 // 11/25: 무신사·에이블리·지그재그 세 버튼을 같은 크기로 한 줄에(한 번 누르면 바로 간다).
 // place: 아이템 목록('list')인지 코디 카드('outfit')인지 — 어느 자리 링크를 누르는지 보려고 기록에 남긴다.
-function ShopLinks({ item, links, place }: { item: ShownItem; links: Product[]; place: 'list' | 'outfit' }) {
+function ShopLinks({ item, links, place, title }: { item: ShownItem; links: Product[]; place: 'list' | 'outfit'; title?: string }) {
   const { id } = useLocalSearchParams<{ id?: string }>();
   return (
     <ShopButtons
       target={item}
       links={links}
-      title={`비슷한 ${kindLabel(item.kind)} 찾기`}
+      title={title ?? `비슷한 ${kindLabel(item.kind)} 찾기`}
       place={place}
       styleImageId={typeof id === 'string' ? id : null}
     />
@@ -672,10 +673,12 @@ function OutfitCard({
           ))}
           {missing.map((piece) => hasKind(piece.item) && (
             <View key={piece.item.item_id} style={styles.needRow}>
-              <Text style={styles.needLabel} numberOfLines={1}>
-                {[piece.item.color, piece.item.kind !== undefined ? kindLabel(piece.item.kind) : null].filter(Boolean).join(' ')} 찾기
-              </Text>
-              <ShopLinks item={piece.item} links={linksFor(piece.item)} place="outfit" />
+              <ShopLinks
+                item={piece.item}
+                links={linksFor(piece.item)}
+                place="outfit"
+                title={`${[piece.item.color, piece.item.kind !== undefined ? kindLabel(piece.item.kind) : null].filter(Boolean).join(' ')} 찾기`}
+              />
             </View>
           ))}
         </View>
@@ -758,8 +761,9 @@ function GapTag({ status, substitute = false }: { status: GapStatus; substitute?
 }
 
 const styles = StyleSheet.create({
-  ownIt: { alignSelf: 'flex-end', marginTop: 10, height: 30, paddingHorizontal: 12, borderRadius: 15, borderWidth: 1, borderColor: colors.textPurple, backgroundColor: colors.white, justifyContent: 'center' },
-  ownItText: { fontFamily: fonts.bold, fontSize: 12, color: colors.textPurple },
+  // 옷 그림 칸(thumb: 왼쪽 10, 위 10, 40×48) 바로 밑, 같은 너비·모서리로.
+  ownIt: { position: 'absolute', left: 10, top: 64, width: 40, height: 26, borderRadius: 8, backgroundColor: colors.purpleTint, alignItems: 'center', justifyContent: 'center' },
+  ownItText: { fontFamily: fonts.bold, fontSize: 10, color: colors.textPurple },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1140,11 +1144,6 @@ const styles = StyleSheet.create({
   },
   needRow: {
     gap: 2,
-  },
-  needLabel: {
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    color: colors.text,
   },
   note: {
     marginTop: 10,

@@ -25,12 +25,13 @@ export const colors = {
 
 // design/DESIGN.md 5절 글라스 효과. 그림자는 CSS 원본 문자열을 boxShadow로 그대로 쓴다.
 export const glass = {
-  background: 'rgba(255,255,255,0.8)',
-  border: '#EFEDF4',
-  shadow: '0 1px 2px rgba(30,20,50,0.05), 0 6px 20px rgba(30,20,50,0.07)',
+  // 11/26 유리 느낌 강화: 더 비치게(0.8 → 0.55), 테두리는 빛 받는 흰 가장자리, 안쪽 위·아래에 얇은 빛.
+  background: 'rgba(255,255,255,0.62)',
+  border: 'rgba(255,255,255,0.95)',
+  shadow: '0 2px 6px rgba(60,40,120,0.06), 0 12px 30px rgba(60,40,120,0.11), inset 1.5px 1.5px 0 rgba(255,255,255,1), inset -1px -1px 0 rgba(120,110,170,0.16), inset 0 -14px 22px rgba(255,255,255,0.55)',
   selectedInnerShadow: '0 1px 4px rgba(30,20,50,0.13)',
   selectedCardShadow: '0 6px 20px rgba(30,20,50,0.12)',
-  blurIntensity: 35,
+  blurIntensity: 40,
 } as const;
 
 // React Native는 fontWeight만으로 굵기별 글꼴 파일을 고르지 못하므로 굵기마다 fontFamily를 따로 쓴다.

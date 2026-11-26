@@ -8,6 +8,7 @@ import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
 import { BottomSheet } from '@/components/PhotoAddParts';
 import { ItemIcon } from '@/components/WardrobeIcon';
+import { useTabBarBottom, useTabScrollBottom } from '@/components/tabBarSpace';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
@@ -35,6 +36,9 @@ const TILE_COLORS = [colors.line, '#E4E1EC'] as const;
 export default function ClosetScreen() {
   const wardrobeState = useWardrobeState();
   const wardrobe = wardrobeState.data;
+  // 11/26 떠 있는 탭바: 맨 아래 여백·아래 말풍선 자리를 탭바 기준으로.
+  const scrollBottom = useTabScrollBottom();
+  const barBottom = useTabBarBottom();
   const loading = wardrobeState.status === 'idle' || wardrobeState.status === 'loading';
   const [filter, setFilter] = useState<Filter>('전체');
   // 11/24 팀 결정 9번: 옷장 화면의 계절 표시(계절 거르기 칩, 옷 칸의 '사계절' 글)는 뺐다. 옷의 계절 값은 그대로 저장한다.
@@ -222,7 +226,7 @@ export default function ClosetScreen() {
       )}
 
       {/* 아래 말풍선이 떠 있으면 마지막 줄 옷이 가려지지 않게 그만큼 더 내려 볼 수 있게 한다. */}
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.grid, showAfterClosetHint && styles.gridUnderHint]}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.grid, { paddingBottom: scrollBottom + (showAfterClosetHint ? 74 : 0) }]}>
         {wardrobe.length === 0 && loading ? (
           <View style={styles.emptyBox}>
             <ActivityIndicator color={colors.textPurple} />
@@ -261,7 +265,7 @@ export default function ClosetScreen() {
           tail="down"
           tailX={width / 10 - layout.screenPaddingX}
           onPress={() => router.navigate('/')}
-          style={styles.hintBottom}
+          style={[styles.hintBottom, { bottom: barBottom + 64 + 12 }]}
         />
       )}
 
@@ -535,9 +539,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPaddingX,
     // 오른쪽 아래 챗봇 버튼(56)에 마지막 줄이 가리지 않게 넉넉히 둔다(11/25).
     paddingBottom: 96,
-  },
-  gridUnderHint: {
-    paddingBottom: 170,
   },
   empty: {
     width: '100%',

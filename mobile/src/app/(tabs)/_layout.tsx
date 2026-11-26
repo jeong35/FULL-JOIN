@@ -1,18 +1,20 @@
 import { Redirect, router, Tabs, usePathname } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
+import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT as BAR_HEIGHT, useTabBarBottom } from '@/components/tabBarSpace';
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
 import { track } from '@/data/events';
 import { emitHomeTabReselect } from '@/data/homeTab';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { hasLoggedInBefore, hasSeenIntro, useSession } from '@/data/session';
 import { loadWardrobeArt } from '@/data/wardrobeLook';
-import { colors, fonts, layout } from '@/theme';
+import { colors, fonts } from '@/theme';
 
 // design/DESIGN.md 6절: 하단 탭 5개, 높이 76 + 위 1px 선, 고른 탭은 보라(textPurple) 굵게, 나머지 #605C6B.
+// 11/26: 바닥에 붙은 탭바 → 화면 위에 떠 있는 둥근 유리 탭바(높이 64, 아래 12 또는 홈 막대만큼 띄움). 크기·여백은 components/tabBarSpace.ts.
 // 11/24 멘토 피드백 반영: 홈 · 저장(전 홈의 '모든 저장') · 코디(전 추천) · 옷장 · 마이.
 // 챗봇은 탭에서 빼고 오른쪽 아래 동그란 버튼으로 연다(챗봇 화면 파일은 그대로 (tabs)/chat.tsx).
 const TABS: { name: string; title: string; icon: TabIconName }[] = [
@@ -22,18 +24,16 @@ const TABS: { name: string; title: string; icon: TabIconName }[] = [
   { name: 'closet', title: '옷장', icon: 'closet' },
   { name: 'my', title: '마이', icon: 'my' },
 ];
-const CHAT_BUTTON_SIZE = 56;
 // 챗봇 버튼 안내 말풍선 너비. 꼬리는 버튼 가운데(오른쪽 끝에서 버튼 반지름만큼 안쪽)를 가리킨다.
 const CHAT_HINT_WIDTH = 264;
 
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
+  const barBottom = useTabBarBottom();
   const session = useSession();
   const pathname = usePathname();
   const chatHintOpen = useHintOpen('chat_button');
-  // 홈 첫 화면에 추구미 안내 말풍선이 떠 있는 동안은 챗봇 말풍선을 같이 띄우지 않는다(말풍선은 한 번에 하나).
-  const feedTasteOpen = useHintOpen('feed_taste');
-  const showChatHint = pathname !== '/chat' && chatHintOpen && (pathname !== '/' || !feedTasteOpen);
+  // 11/26: 홈의 추구미 안내 말풍선(feed_taste)을 빼서, 챗봇 말풍선은 그 말풍선을 기다리지 않는다.
+  const showChatHint = pathname !== '/chat' && chatHintOpen;
 
   // 옷 추가·옷장의 시안 그림(약 880KB)을 앱이 뜨고 조금 뒤에 미리 불러 둔다 — 옷장에 들어갈 때 기다리지 않게(11/19).
   useEffect(() => {
@@ -59,11 +59,11 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.textPurple,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarLabelPosition: 'below-icon',
-        tabBarStyle: [
-          styles.tabBar,
-          { height: layout.tabBarHeight + insets.bottom, paddingBottom: insets.bottom },
-        ],
+        // 11/26: 바닥에 붙은 탭바 → 화면 위에 떠 있는 둥근 유리 탭바(뒤로 내용이 비친다). 고른 탭은 연보라 알약.
+        tabBarStyle: [styles.tabBar, { bottom: barBottom }],
         tabBarItemStyle: styles.tabItem,
+        tabBarActiveBackgroundColor: 'rgba(108, 84, 214, 0.12)',
+        tabBarBackground: () => <GlassView radius={BAR_HEIGHT / 2} tint="rgba(255,255,255,0.72)" style={StyleSheet.absoluteFill} />,
       }}>
       {TABS.map((tab) => (
         <Tabs.Screen
@@ -94,7 +94,11 @@ export default function TabLayout() {
       ))}
       {/* 챗봇은 탭 버튼만 숨긴다. href: null로 숨기면 expo-router 58에서는 '숨긴 탭'이 되어
           /chat으로 가도 첫 탭(홈)으로 돌려보낸다(11/25 확인) — 그래서 버튼 칸만 안 보이게 한다. */}
-      <Tabs.Screen name="chat" options={{ title: '챗봇', tabBarItemStyle: { display: 'none' } }} />
+      {/* 챗봇은 아래 입력칸이 탭바에 가리지 않게 탭바를 떠 있게 하지 않고 화면 아래 자리를 차지하게 둔다. */}
+      <Tabs.Screen
+        name="chat"
+        options={{ title: '챗봇', tabBarItemStyle: { display: 'none' }, tabBarStyle: [styles.tabBar, styles.tabBarInFlow, { marginBottom: barBottom }] }}
+      />
     </Tabs>
     {showChatHint && (
       <HintBubble
@@ -104,7 +108,7 @@ export default function TabLayout() {
         tail="down"
         tailX={CHAT_HINT_WIDTH - CHAT_BUTTON_SIZE / 2}
         onPress={() => router.navigate('/chat')}
-        style={[styles.chatHint, { bottom: layout.tabBarHeight + insets.bottom + 14 + CHAT_BUTTON_SIZE + 12 }]}
+        style={[styles.chatHint, { bottom: barBottom + BAR_HEIGHT + TAB_BAR_GAP + CHAT_BUTTON_SIZE + 12 }]}
       />
     )}
     {pathname !== '/chat' && (
@@ -116,7 +120,8 @@ export default function TabLayout() {
         }}
         accessibilityRole="button"
         accessibilityLabel="챗봇에게 물어보기"
-        style={[styles.chatButton, { bottom: layout.tabBarHeight + insets.bottom + 14 }]}>
+        style={[styles.chatButton, { bottom: barBottom + BAR_HEIGHT + TAB_BAR_GAP }]}>
+        {/* 11/27: 챗봇 버튼은 유리 효과 없이 원래처럼 꽉 찬 연보라. */}
         <TabIcon name="chat" color={colors.onPurpleFill} size={26} />
       </Pressable>
     )}
@@ -146,19 +151,37 @@ const styles = StyleSheet.create({
     boxShadow: '0 4px 14px rgba(30,20,50,0.16)',
   },
   tabBar: {
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    paddingTop: 8,
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    height: BAR_HEIGHT,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 6,
+    borderRadius: BAR_HEIGHT / 2,
+    borderTopWidth: 0,
+    backgroundColor: 'transparent',
     elevation: 0,
     shadowOpacity: 0,
+    boxShadow: '0 10px 30px rgba(30,20,50,0.14)',
+  },
+  tabBarInFlow: {
+    position: 'relative',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginHorizontal: 16,
   },
   tabItem: {
     height: 52,
-    justifyContent: 'flex-start',
+    marginTop: 6,
+    marginHorizontal: 2,
+    borderRadius: 26,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   label: {
     fontSize: 11,
-    marginTop: 4,
+    marginTop: 2,
   },
 });

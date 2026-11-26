@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-nat
 
 import { GlassView } from '@/components/GlassView';
 import { TimeField } from '@/components/TimeField';
+import { useTabScrollBottom } from '@/components/tabBarSpace';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton } from '@/components/ui';
 import { track } from '@/data/events';
@@ -21,6 +22,7 @@ import { colors, fonts, layout } from '@/theme';
 export default function MyScreen() {
   const session = useSession();
   const taste = session?.styles ?? [];
+  const scrollBottom = useTabScrollBottom();
 
   function onLogout() {
     track('logout_click');
@@ -30,7 +32,7 @@ export default function MyScreen() {
 
   return (
     <TabScreen title="마이">
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottom }]}>
         <GlassView radius={16} style={styles.card}>
           <Text style={styles.name}>{session?.nickname || '내 계정'}</Text>
           <Text style={styles.caption}>
