@@ -63,5 +63,5 @@ export function trackScheduleResult(result: ScheduleResult) {
     return;
   }
   if (result.reason === 'permission_denied') track('notification_permission', { result: 'denied', platform: NOTIFY_PLATFORM });
-  track('notification_schedule_failed', { reason: result.reason, platform: NOTIFY_PLATFORM, stage: result.stage ?? null, error: result.error ?? null });
+  track('notification_schedule_failed', { reason: result.reason, platform: NOTIFY_PLATFORM });
 }
