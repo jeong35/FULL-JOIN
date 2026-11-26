@@ -317,11 +317,17 @@ export default function ChatScreen() {
                 <View style={styles.emptyChat}>
                   <Text style={styles.welcomeTitle}>오늘은 어떤 도움이 필요하세요?</Text>
                   <Text style={styles.emptyChatText}>내 옷장과 취향을 바탕으로 원하는 코디를 찾을 수 있도록 도와드릴게요.</Text>
+                  {/* 11/27: 큰 카드 6개가 화면을 꽉 채워 답답해서, 질문만 담은 작은 버튼으로 모아 둔다(설명은 읽어 주기용으로만). */}
                   <View style={styles.examples}>
                     {examples.map((example) => (
-                      <Pressable key={example.question} onPress={() => sendPreset(example.question)} disabled={sending} accessibilityRole="button" style={styles.example}>
-                        <Text style={styles.exampleQuestion}>{example.question}</Text>
-                        <Text style={styles.exampleHelp}>{example.help}</Text>
+                      <Pressable
+                        key={example.question}
+                        onPress={() => sendPreset(example.question)}
+                        disabled={sending}
+                        accessibilityRole="button"
+                        accessibilityHint={example.help}
+                        style={styles.example}>
+                        <Text style={styles.exampleQuestion} numberOfLines={1}>{example.question.replace(/\.$/, '')}</Text>
                       </Pressable>
                     ))}
                   </View>
@@ -502,10 +508,9 @@ const styles = StyleSheet.create({
   welcomeTitle: { textAlign: 'center', fontFamily: fonts.extraBold, fontSize: 20, color: colors.text },
   emptyChatTitle: { textAlign: 'center', fontFamily: fonts.bold, fontSize: 15, color: colors.text },
   emptyChatText: { textAlign: 'center', fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, color: colors.textSecondary },
-  examples: { alignSelf: 'stretch', gap: 8, marginTop: 12 },
-  example: { paddingVertical: 11, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.line, borderRadius: 16, backgroundColor: colors.white },
-  exampleQuestion: { fontFamily: fonts.bold, fontSize: 14, color: colors.textPurple },
-  exampleHelp: { marginTop: 2, fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  examples: { alignSelf: 'stretch', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 18 },
+  example: { height: 38, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.line, borderRadius: 19, backgroundColor: colors.white, justifyContent: 'center' },
+  exampleQuestion: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
   userRow: { alignItems: 'flex-end' },
   userBubble: { maxWidth: 270, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 20, borderBottomRightRadius: 6, backgroundColor: colors.purpleFill },
   bubbleText: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.onPurpleFill },
