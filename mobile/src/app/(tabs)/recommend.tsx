@@ -5,7 +5,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image as PlainImage, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
+import { Image as PlainImage, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View, type GestureResponderEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { ArtPager, ViewToggle } from '@/components/ArtPager';
@@ -52,8 +52,9 @@ import {
 import { colors, fonts, glass, layout } from '@/theme';
 
 const DAYS = 7;
-// 스크롤을 이만큼 내리면 날씨를 한 줄로 접는다.
-const COLLAPSE_AT = 24;
+// 이만큼만 내려도(손가락으로 밀거나 화면이 움직이면) 날씨를 한 줄로 접는다.
+// 11/26: 내용이 짧아 화면이 안 움직일 때(오늘의 룩 준비 전 등)도 미는 동작만으로 접히게 했다.
+const SCROLL_SLOP = 10;
 
 export default function RecommendScreen() {
   const today = todayKey();
@@ -74,7 +75,7 @@ export default function RecommendScreen() {
   useEffect(() => {
     if (fromNotification) track('notification_open', { source: 'push' });
   }, [fromNotification]);
-  // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다.
+  // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다(11/26: 조금만 밀어도).
   // 다시 맨 위로 올라와도 작은 채로 두고, 한 줄을 누르면 다시 커진다.
   const [weatherSmall, setWeatherSmall] = useState(false);
   const lastY = useRef(0);
@@ -82,6 +83,7 @@ export default function RecommendScreen() {
   // 조합 만들기에서 누른 옷(11/25): 그 옷이 들어간 조합으로 오늘의 룩을 다시 만든다. ×로 풀면 원래대로.
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const expandedAt = useRef(0);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [locating, setLocating] = useState(false);
   // 지역 고르기에서 지금 보고 있는 단계: null = 도·시 고르기, sido만 = 시·군(또는 구·군) 고르기, group까지 = 구 고르기.
   const [regionPath, setRegionPath] = useState<{ sido: Sido; group: RegionChoice | null } | null>(null);
@@ -178,17 +180,37 @@ export default function RecommendScreen() {
       .slice(0, MAX_LOOKS);
   }, [closetLooks.length, view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day]);
 
-  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    lastY.current = contentOffset.y;
+  function collapseWeather() {
     if (weatherSmall) return;
-    // 내용이 짧아 접을 필요가 없으면 접지 않는다.
-    if (contentSize.height - layoutMeasurement.height < 120) return;
-    if (contentOffset.y > expandedAt.current + COLLAPSE_AT) {
-      setWeatherSmall(true);
-      setHourlyOpen(false);
-    }
+    setWeatherSmall(true);
+    setHourlyOpen(false);
   }
+  // 화면이 실제로 내려간 경우.
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    lastY.current = event.nativeEvent.contentOffset.y;
+    if (lastY.current > expandedAt.current + SCROLL_SLOP) collapseWeather();
+  }
+  // 화면이 안 움직여도 아래로 보려고 밀면(손가락을 위로) 접는다. 옆으로 넘기는 줄(조합 만들기·사진 넘기기)은 빼고.
+  // 웹은 nativeEvent가 브라우저 터치 이벤트라 위치가 touches[0]에 있다(앱은 둘 다 있음).
+  function touchPoint(event: GestureResponderEvent) {
+    const point = event.nativeEvent.touches?.[0] ?? event.nativeEvent;
+    return { x: point.pageX, y: point.pageY };
+  }
+  function onTouchStart(event: GestureResponderEvent) {
+    touchStart.current = touchPoint(event);
+  }
+  function onTouchMove(event: GestureResponderEvent) {
+    const start = touchStart.current;
+    if (start === null) return;
+    const now = touchPoint(event);
+    const up = start.y - now.y;
+    const side = Math.abs(now.x - start.x);
+    if (up > SCROLL_SLOP && up > side) collapseWeather();
+  }
+  // 웹(컴퓨터)에서 마우스 휠·트랙패드로 내릴 때.
+  const wheelProps: object = Platform.OS === 'web'
+    ? { onWheel: (event: { deltaY: number }) => { if (event.deltaY > 0) collapseWeather(); } }
+    : {};
 
   // 오늘의 룩에 보일 것: 고른 옷이 있으면 그 옷 조합 → '입을래요'로 정한 옷장 조합이 있으면 그것부터 → 원래 순서.
   const defaultClosetLooks = closetLooks.length > 0 ? closetLooks : nearLooks;
@@ -261,7 +283,15 @@ export default function RecommendScreen() {
         </View>
       )}
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} onScroll={onScroll} scrollEventThrottle={32}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.scroll}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={() => { touchStart.current = null; }}
+        {...wheelProps}>
         <View style={styles.main}>
           <LookSection
             title={selected === today ? '오늘의 룩' : `${weekday(selected)}요일 룩`}
