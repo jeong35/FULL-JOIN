@@ -100,3 +100,9 @@ where feature = 'chat';
 현재 기본값은 최소 실제 호출 10건, 실패율 5%, fallback 10%, p95 15초, 하루 예상 비용 5달러다. 이는 제품 정책이 아니라 초기 운영용 실험값이며 baseline 후 조정한다.
 
 운영 migration 적용과 dashboard/alert 생성은 별도 승인 전 수행하지 않는다.
+
+## Action-oriented Chatbot 관측
+
+결정적으로 처리 가능한 코디 검색, 아카이브 조회, 옷장 등록 연결, 추천 탭 이동은 검증된 서버 Tool routing을 우선한다. 기존 사진 분석이 필요한 요청만 기존 LLM 경로를 사용하므로 불필요한 다단계 호출을 추가하지 않는다.
+
+`chat_intent_classified`, `chat_response_received`/`failed`, Action 노출·클릭·실행 이벤트로 분류 및 실행 결과를 관측한다. 서버가 반환하는 Action은 enum과 params schema, 데이터 소유권, URL host allowlist를 통과해야 하며 허용되지 않은 Action은 실행하지 않는다. Tool 결과가 없거나 CHAT-02 기록 migration이 아직 배포되지 않은 환경에서는 실제 조회 결과를 꾸미지 않고 안전한 빈 상태 또는 기존 응답 계약으로 fallback한다.

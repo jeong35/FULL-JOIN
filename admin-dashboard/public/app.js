@@ -134,6 +134,16 @@ function renderActions(actions) {
   if (actions[0]) renderHourly(actions[0]); else $("#action-hourly").innerHTML = empty();
 }
 
+function renderChatActionMetrics(metrics) {
+  $("#chat-action-metrics").innerHTML = [
+    card("챗봇 응답 성공률", pct(metrics.response_success_rate_pct), `${count(metrics.responses)} / ${count(metrics.questions)}건`),
+    card("Action 제안률", pct(metrics.action_offer_rate_pct), `${count(metrics.action_impressions)}회 노출`),
+    card("CTA 클릭률", pct(metrics.action_click_rate_pct), `${count(metrics.action_clicks)}회 클릭`),
+    card("화면 이동 성공률", pct(metrics.navigation_success_rate_pct), `${count(metrics.navigation_successes)}회 성공`),
+    card("목표 행동 완료율", pct(metrics.completion_rate_pct), `${count(metrics.completions)}회 완료 · 실패 ${count(metrics.failures)}회`),
+  ].join("");
+}
+
 function renderRetention(retention) {
   $("#retention-cards").innerHTML = [card("D1 Retention", pct(retention.d1.rate_pct), `${count(retention.d1.retained_users)} / ${count(retention.d1.eligible_users)}명`), card("D7 Retention", pct(retention.d7.rate_pct), `${count(retention.d7.retained_users)} / ${count(retention.d7.eligible_users)}명`), card("재방문 사용자", `${count(payload.journeys.overview.returning_users)}명`, "선택 기간 이전 관측 이력 있음")].join("");
   $("#retention-note").textContent = `${retention.definition}. 예정일이 아직 지나지 않은 사용자는 분모에서 제외하며, 이벤트 누락을 비재방문으로 단정하지 않습니다.`;
@@ -174,7 +184,7 @@ function renderAlerts(alerts) { $("#llm-alerts").innerHTML = alerts.length === 0
 function render(data) {
   payload = data; syncSelect("#app-version", data.journeys.filters.app_versions, "전체"); syncSelect("#analytics-version", data.journeys.filters.analytics_versions, "전체");
   const start = $("#journey-start"); const currentStart = start.value; start.innerHTML = `<option value="__session_start__">세션 첫 행동</option>${data.journeys.filters.available_start_keys.map((key) => `<option value="${escape(key)}">${escape(key)}</option>`).join("")}`; if ([...start.options].some((option) => option.value === currentStart)) start.value = currentStart;
-  renderOverview(data); renderSankey(data.journeys.journey); renderFunnels(data.journeys.sequential_funnels); renderActions(data.journeys.actions); renderRetention(data.journeys.retention); renderNotifications(data.journeys.notification_metrics); renderRecovery(data.historical_recovery); renderLlmOps(data.llmops); renderAlerts(data.alerts ?? []);
+  renderOverview(data); renderSankey(data.journeys.journey); renderFunnels(data.journeys.sequential_funnels); renderChatActionMetrics(data.journeys.chat_action_metrics); renderActions(data.journeys.actions); renderRetention(data.journeys.retention); renderNotifications(data.journeys.notification_metrics); renderRecovery(data.historical_recovery); renderLlmOps(data.llmops); renderAlerts(data.alerts ?? []);
 }
 
 async function refresh() {

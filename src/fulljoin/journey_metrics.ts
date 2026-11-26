@@ -94,13 +94,15 @@ const FUNNELS: readonly FunnelDefinition[] = [
   },
   {
     key: "chat",
-    label: "챗봇 상담",
+    label: "챗봇 목표 행동",
     stages: [
-      { key: "picker", label: "사진 선택 열기", matches: ["chat_picker_open"] },
-      { key: "image", label: "사진 선택", matches: ["chat_image_select"] },
-      { key: "input", label: "입력 시작", matches: ["chat_input_start"] },
-      { key: "send", label: "질문 전송", matches: ["chat_send"] },
-      { key: "response", label: "응답 완료", matches: ["chat_response_done"] },
+      { key: "send", label: "질문 전송", matches: ["chat_message_sent", "chat_send"] },
+      { key: "intent", label: "의도 분류", matches: ["chat_intent_classified"] },
+      { key: "response", label: "응답 성공", matches: ["chat_response_received", "chat_response_done"] },
+      { key: "offer", label: "Action 제안", matches: ["chat_action_impression"] },
+      { key: "click", label: "CTA 클릭", matches: ["chat_action_clicked"] },
+      { key: "navigation", label: "화면 이동", matches: ["chat_action_navigation_success"] },
+      { key: "complete", label: "목표 행동 완료", matches: ["chat_action_completed"] },
     ],
   },
   {
@@ -625,6 +627,43 @@ function buildActions(events: readonly NormalizedEvent[]) {
   })).sort((left, right) => right.events - left.events || left.name.localeCompare(right.name));
 }
 
+function buildChatActionMetrics(events: readonly NormalizedEvent[]) {
+  const count = (name: string) => events.filter((event) => event.name === name).length;
+  const sent = count("chat_message_sent") || count("chat_send");
+  const classified = count("chat_intent_classified");
+  const responses = count("chat_response_received") || count("chat_response_done");
+  const impressions = count("chat_action_impression");
+  const clicks = count("chat_action_clicked");
+  const navigations = count("chat_action_navigation_success");
+  const completions = count("chat_action_completed");
+  const failures = count("chat_action_failed");
+  const grouped = (name: string, property: string) => {
+    const values = new Map<string, number>();
+    for (const event of events.filter((entry) => entry.name === name)) {
+      const value = stringProp(event, property) ?? "unknown";
+      values.set(value, (values.get(value) ?? 0) + 1);
+    }
+    return [...values].map(([key, value]) => ({ key, count: value })).sort((left, right) => right.count - left.count || left.key.localeCompare(right.key));
+  };
+  return {
+    questions: sent,
+    classified,
+    responses,
+    action_impressions: impressions,
+    action_clicks: clicks,
+    navigation_successes: navigations,
+    completions,
+    failures,
+    response_success_rate_pct: percentage(responses, sent),
+    action_offer_rate_pct: percentage(impressions, responses),
+    action_click_rate_pct: percentage(clicks, impressions),
+    navigation_success_rate_pct: percentage(navigations, clicks),
+    completion_rate_pct: percentage(completions, clicks),
+    by_intent: grouped("chat_intent_classified", "intent"),
+    by_action: grouped("chat_action_clicked", "action_type"),
+  };
+}
+
 function buildNotificationMetrics(events: readonly NormalizedEvent[], range: MetricsRange) {
   const usersFor = (name: string, predicate: (event: NormalizedEvent) => boolean = () => true) =>
     new Set(events.filter((event) => event.name === name && event.user_id !== null && predicate(event)).map((event) => event.user_id!));
@@ -706,6 +745,7 @@ export function analyzeJourneys(
     journey: buildJourney(selected, options),
     sequential_funnels: buildSequentialFunnels(selected),
     actions: buildActions(selected),
+    chat_action_metrics: buildChatActionMetrics(selected),
     retention: buildRetention(retentionEvents, range),
     notification_metrics: buildNotificationMetrics(selected, range),
     selected_event_count: selected.length,

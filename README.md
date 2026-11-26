@@ -1,5 +1,7 @@
 # FULL-JOIN
 
+Action-oriented Chatbot의 Intent, Action, 측정 및 배포 경계는 [`docs/ACTION_CHATBOT.md`](docs/ACTION_CHATBOT.md)에 정리되어 있습니다.
+
 2026-2 AI캡스톤디자인 5팀
 소프트웨어학과 202322021 최정인 jeong35@ajou.ac.kr
 소프트웨어학과 202322024 조은재 sein@ajou.ac.kr

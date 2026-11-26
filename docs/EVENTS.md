@@ -511,3 +511,7 @@ order by 1;
 > 근거: `wardrobe_add_done → screen_view(screen=feed)` 전환율과 `screen_leave/app_background`에서 확인했다.  
 > 변경: 홈 탭을 가리키는 다음 행동 힌트를 개선했다.  
 > 결과: 다음 버전에서 이탈률 X% → Y%, 홈 진입까지 중앙시간 A초 → B초로 개선됐다.
+
+## Action-oriented Chatbot 이벤트
+
+`chat_message_sent`, `chat_intent_classified`, `chat_response_received`, `chat_result_impression`, `chat_action_impression`, `chat_action_clicked`, `chat_action_navigation_success`, `chat_action_completed`, `chat_action_failed`, `chat_action_abandoned`, `chat_reminder_accepted`, `chat_reminder_scheduled`, `chat_reminder_opened`를 사용한다. `action_id`, `request_id`, `intent`, `action_type`, `source_screen`, `target_screen`, `result_count`, `latency_ms`, `success`, `failure_reason`만 필요한 범위에서 보낸다. 원본 질문·전체 답변·사진·인증 정보·Push subscription은 보내지 않는다. 화면 이동과 목표 행동 완료는 별개 이벤트다.

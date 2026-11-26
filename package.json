@@ -24,6 +24,7 @@
     "test:admin-metrics": "node --test --test-reporter=spec tests/test_admin_metrics.ts tests/test_journey_metrics.ts tests/test_event_outbox.ts",
     "test:feed-filter": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --test-reporter=spec tests/test_feed_filter.ts",
     "test:photo-batch": "node --test --test-reporter=spec tests/test_photo_batch.ts",
+    "test:action-chat": "node scripts/check-action-chat.mjs",
     "test:notifications": "node --test --test-reporter=spec scripts/check-task4-notifications.ts",
     "test:integration:local": "node scripts/test-local-integration.mjs",
     "test:integration:staging": "FULL_JOIN_INTEGRATION_TARGET=staging node scripts/test-local-integration.mjs",
@@ -44,7 +45,7 @@
     "test:server": "node --test --test-reporter=spec tests/test_server_contract.ts",
     "test:similarity": "node --test --test-reporter=spec tests/test_garment_similarity.ts tests/test_matching_integration.ts",
     "check:mobile": "npm --prefix mobile run typecheck && npm --prefix mobile run lint",
-    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:decision && npm run check:outfits && npm run check:archive && npm run check:chat && npm run check:chat-grounding && npm run check:match-explanations && npm run check:match-reason-ui && npm run check:events && npm run check:weather && npm run check:wardrobe-expansion && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server && npm run test:similarity && npm run test:chat03 && npm run test:llmops && npm run test:llmops-alerts && npm run test:auth-policy && npm run test:api-auth && npm run test:chat-history && npm run test:admin-metrics && npm run test:feed-filter && npm run test:photo-batch"
+    "check": "npm run check:harness && npm run check:analysis-contract && npm run check:product-metadata && npm run check:review-publish && npm run check:heart-response && npm run check:decision && npm run check:outfits && npm run check:archive && npm run check:chat && npm run check:chat-grounding && npm run check:match-explanations && npm run check:match-reason-ui && npm run check:events && npm run check:weather && npm run check:wardrobe-expansion && npm run check:syntax && npm run check:types && npm run test:golden && npm run test:server && npm run test:similarity && npm run test:chat03 && npm run test:llmops && npm run test:llmops-alerts && npm run test:auth-policy && npm run test:api-auth && npm run test:chat-history && npm run test:admin-metrics && npm run test:feed-filter && npm run test:photo-batch && npm run test:action-chat"
   },
   "engines": {
     "node": ">=22.18"

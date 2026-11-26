@@ -10,6 +10,7 @@ import { FeedPhoto, PHOTO_GAP, splitColumns } from '@/components/FeedPhoto';
 import { SearchIcon } from '@/components/Icons';
 import { BackButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage } from '@/data/api';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { track } from '@/data/events';
 import {
   dropOneOptions,
@@ -38,7 +39,7 @@ function editQuery(query: FeedQuery) {
 }
 
 export default function SearchResultsScreen() {
-  const params = useLocalSearchParams<QueryParams>();
+  const params = useLocalSearchParams<QueryParams & { action_id?: string; chat_action_type?: string }>();
   const { styles: styleParam, kind: kindParam, color: colorParam } = params;
   const query = useMemo(
     () => queryFromParams({ styles: styleParam, kind: kindParam, color: colorParam }),
@@ -61,6 +62,10 @@ export default function SearchResultsScreen() {
   const results = useMemo(() => searchImages(feedImages, query), [feedImages, query]);
   const parts = queryParts(query, labelOfKind);
   const loading = feed.data.length === 0 && feed.status !== 'error';
+
+  useEffect(() => {
+    if (!loading && feed.status !== 'error') completeChatAction(params.action_id, params.chat_action_type, 'search_results', { result_count: results.length });
+  }, [feed.status, loading, params.action_id, params.chat_action_type, results.length]);
 
   async function onToggleSave(id: string) {
     setActionError(null);

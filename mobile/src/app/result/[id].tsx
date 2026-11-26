@@ -12,6 +12,7 @@ import { ItemIcon } from '@/components/WardrobeIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { kindLabel, type Kind } from '@/data/catalog';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
@@ -31,7 +32,7 @@ const PHOTO_HEIGHT = 280;
 const SHEET_TOP = 236;
 
 export default function SaveResultScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, action_id, chat_action_type } = useLocalSearchParams<{ id?: string; action_id?: string; chat_action_type?: string }>();
   const imageId = typeof id === 'string' ? id : undefined;
   const image = useStyleImage(imageId);
   const heart = useHeart(imageId);
@@ -63,6 +64,10 @@ export default function SaveResultScreen() {
       comparisonStartedAt.current = null;
     }
   }, [imageId, heart]);
+
+  useEffect(() => {
+    if (heart?.status === 'ready') completeChatAction(action_id, chat_action_type, 'result');
+  }, [action_id, chat_action_type, heart?.status]);
 
   if (imageId === undefined) {
     return (

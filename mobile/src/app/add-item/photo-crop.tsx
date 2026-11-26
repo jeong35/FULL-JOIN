@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +30,7 @@ import { colors, fonts, layout } from '@/theme';
 // 11/22 시안 '사진으로 옷 추가'. 네모를 자동으로 먼저 그려 주는 건 서버(옷 위치 찾기)가 생기면 붙인다.
 
 export default function PhotoCropScreen() {
+  const { action_id, chat_action_type } = useLocalSearchParams<{ action_id?: string; chat_action_type?: string }>();
   const draft = usePhotoDraft();
   const { photos, activeIndex, attachTo } = draft;
   const activePhoto = photos[activeIndex];
@@ -90,7 +91,7 @@ export default function PhotoCropScreen() {
       setCutItems(items);
       const nextIndex = photos.findIndex((photo, index) => index !== processingIndex && photo.status !== 'ready');
       if (nextIndex >= 0) setActivePhoto(nextIndex);
-      else router.push('/add-item/photo-confirm');
+      else router.push({ pathname: '/add-item/photo-confirm', params: { action_id, chat_action_type } });
     } catch {
       setPhotoProcessing(processingIndex, 'failed', '사진 처리 실패');
       setError('사진을 자르지 못했어요. 다른 사진으로 다시 해 주세요');

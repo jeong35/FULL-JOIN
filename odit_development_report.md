@@ -1,5 +1,9 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
+## 2026-11-26 Action-oriented Chatbot
+
+저장 사진 필수 상담을 선택 컨텍스트 기반 Action 챗봇으로 개편했다. 실제 피드·옷장·저장 데이터를 조회하는 결정적 routing, 허용 CTA, 매일 코디 알림 재사용, CTA 완료 계측과 관리자 퍼널을 구현했다. 비교 후보 없음 문구의 한국어 조사도 받침 기준으로 교정했다. 사용자 실측 Result는 아직 미측정이다. production은 닉네임+PIN 호환 API 후보와 Expo 검증 완료 후 반영하며, 보류 중인 Auth/RLS·CHAT-02 migration은 포함하지 않는다.
+
 - 기준 시각: 2026-11-23 KST
 - 조사 대상 저장소: `jeong35/FULL-JOIN`
 - 조사 worktree: `/Users/choijeong-in/.codex/worktrees/kind-expansion-main/FULL-JOIN`

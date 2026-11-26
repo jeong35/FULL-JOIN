@@ -110,7 +110,9 @@ export type ItemDecisionResult = {
 
 export type ChatResult = {
   answer: string;
-  analysis_id_used: string;
+  message?: string;
+  request_id?: string;
+  analysis_id_used: string | null;
   claimed_owned_item_ids: string[];
   products: Product[];
   image_reanalysis_count: 0;
@@ -136,6 +138,47 @@ export type ChatResult = {
     substitute_wardrobe_item_ids: string[];
     match_metadata: MatchMetadata;
   }[];
+  results?: ChatStyleResult[];
+  actions?: ChatAction[];
+  conversation_id?: string | null;
+  history_persisted?: boolean;
+};
+
+export type ChatStyleResult = {
+  style_image_id: string;
+  thumbnail_url: string;
+  style: Style[];
+  source: StyleImageSource;
+  usable_item_count: number;
+  similar_item_count: number;
+  total_item_count: number;
+};
+
+export type ChatAction = {
+  action_id: string;
+  type:
+    | 'OPEN_RECOMMENDATION'
+    | 'OPEN_FILTERED_FEED'
+    | 'OPEN_STYLE_DETAIL'
+    | 'OPEN_COMPARISON'
+    | 'OPEN_WARDROBE'
+    | 'OPEN_WARDROBE_ADD'
+    | 'OPEN_PHOTO_ADD'
+    | 'OPEN_ARCHIVE'
+    | 'OPEN_PRODUCT_SEARCH'
+    | 'OFFER_DAILY_REMINDER'
+    | 'OFFER_WARDROBE_REMINDER'
+    | 'OFFER_STYLE_ALERT'
+    | 'NONE';
+  label: string;
+  params: {
+    style_image_id?: string;
+    styles?: Style[];
+    kind?: Kind | null;
+    color?: Color | null;
+    slot?: Slot | null;
+    url?: string;
+  };
 };
 
 // POST /style-images/{id}/heart. shop~product_url은 사진 출처(쇼핑몰 상품)로, 서버가 줄 때만 온다.

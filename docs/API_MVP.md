@@ -204,3 +204,7 @@ npm run publish:style-image -- --image-id IMG-001 --unpublish
 현재 MVP 서버 계약의 경로는 모두 구현됐다.
 
 정확한 쇼핑몰 링크는 사진 전체가 아니라 분석된 `item_id`에 연결한다. MVP에서는 사진마다 대표 상품을 0~1개 두며, 링크가 없으면 모든 아이템의 `is_representative_product`가 `false`다. DB는 같은 사진에 대표 상품이 둘 생기는 것을 거부한다. 이후에는 다른 아이템에도 `false`로 각자의 정확한 상품 링크를 추가할 수 있다. `shop`·`brand`·`product_name`은 링크에서 추출을 시도하는 선택 정보이며, 추출 실패가 링크 저장을 막지 않는다.
+
+### Action 챗봇 응답 확장
+
+`POST /chat`의 `style_image_id`는 선택값이다. 사진이 있으면 기존 저장 사진 비교와 소유권 검증을 유지하고, 없으면 피드 검색·오늘의 룩 연결·저장 목록·일반 질문을 처리한다. 기존 `answer`, `products`, `comparison`은 유지하며 `message`, `request_id`, `intents`, `results[]`, `actions[]`, `history_persisted`를 추가한다. production에 CHAT-02 migration이 없으면 응답은 정상 반환하되 `conversation_id=null`, `history_persisted=false`다.

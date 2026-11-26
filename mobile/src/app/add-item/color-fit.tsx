@@ -24,6 +24,7 @@ import {
   type VisualFit,
 } from '@/data/catalog';
 import { errorMessage, needsWardrobeUpdate, WARDROBE_UPDATE_MESSAGE, type NewWardrobeItem } from '@/data/api';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { track } from '@/data/events';
 import { addWardrobeItem, replaceWardrobeItem, useWardrobe } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
@@ -57,12 +58,12 @@ import { colors, fonts, glass, layout } from '@/theme';
 export default function AddItemColorFitScreen() {
   // color·fit·from: 쇼핑몰에서 산 옷(from=purchase)이나 저장한 사진 속 옷(from=photo)을 넣을 때 미리 채우는 값(11/24 팀 결정 15·16번).
   // edit: 옷 자세히의 '고치기'(11/25) — 그 옷의 지금 값으로 채워 열고, 저장하면 그 옷을 고친다.
-  const params = useLocalSearchParams<{ slot?: string; kind?: string; color?: string; fit?: string; from?: string; edit?: string }>();
+  const params = useLocalSearchParams<{ slot?: string; kind?: string; color?: string; fit?: string; from?: string; edit?: string; action_id?: string; chat_action_type?: string }>();
   const wardrobeList = useWardrobe();
   const editing = typeof params.edit === 'string' ? wardrobeList.find((item) => item.id === params.edit) : undefined;
   const slot = isSlot(params.slot) ? params.slot : null;
   const kind = slot !== null && isKindOfSlot(slot, params.kind) ? params.kind : null;
-  const from = params.from === 'purchase' || params.from === 'photo' ? params.from : null;
+  const from = params.from === 'purchase' || params.from === 'photo' || params.from === 'chat' ? params.from : null;
   const preset = { color: typeof params.color === 'string' ? params.color : undefined, fit: typeof params.fit === 'string' ? params.fit : undefined };
   const art = useWardrobeArt();
 
@@ -90,7 +91,7 @@ export default function AddItemColorFitScreen() {
     );
   }
 
-  return <AddItemForm key={`${slot}-${kind}`} art={art} spec={spec} slot={slot} kind={kind} preset={editing ? { color: editing.color, fit: editing.visual_fit ?? undefined } : preset} from={from} editing={editing} />;
+  return <AddItemForm key={`${slot}-${kind}`} art={art} spec={spec} slot={slot} kind={kind} preset={editing ? { color: editing.color, fit: editing.visual_fit ?? undefined } : preset} from={from} editing={editing} actionId={params.action_id} chatActionType={params.chat_action_type} />;
 }
 
 const COLOR_COLUMNS = 6;
@@ -106,14 +107,16 @@ function toggle(group: AddItemGroup, current: readonly string[], value: string):
   return current.includes(value) ? [] : [value];
 }
 
-function AddItemForm({ art, spec, slot, kind, preset, from, editing }: {
+function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, chatActionType }: {
   art: WardrobeArt;
   spec: AddItemSpec;
   slot: Slot;
   kind: Kind;
   preset: { color?: string; fit?: string };
-  from: 'purchase' | 'photo' | null;
+  from: 'purchase' | 'photo' | 'chat' | null;
   editing?: WardrobeItem;
+  actionId?: string;
+  chatActionType?: string;
 }) {
   // 고치기에서 종류를 그대로 두면 모양·소재·계절까지 그 옷 값 그대로 연다(종류를 바꾸면 색·핏만 가져간다).
   const sameKind = editing !== undefined && editing.slot === slot && editing.kind === kind;
@@ -213,6 +216,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing }: {
       // 옷장 크기는 활성화(옷 5벌 이상) 목표를 재려고 같이 남긴다.
       const nextSize = wardrobe.length + 1;
       track('wardrobe_add_done', { slot, kind, wardrobe_size: nextSize });
+      completeChatAction(actionId, chatActionType, 'wardrobe_add', { wardrobe_size: nextSize });
       if ([1, 3, 5, 10].includes(nextSize)) {
         const slotsCovered = new Set([...wardrobe.map((item) => item.slot), slot]).size;
         track('wardrobe_milestone', { count: nextSize, slots_covered: slotsCovered });

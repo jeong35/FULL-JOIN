@@ -16,7 +16,8 @@ export const chatHistoryMessageSchema = z.object({
 
 export const chatInputSchema = z.object({
   user_id: z.string().trim().min(1),
-  style_image_id: z.string().trim().min(1),
+  // 사진은 선택 컨텍스트다. 기존 클라이언트의 문자열 계약은 그대로 허용한다.
+  style_image_id: z.string().trim().min(1).nullable().optional(),
   message: z.string().trim().min(1).max(500),
   history: z.array(chatHistoryMessageSchema).max(8).optional(),
 }).strict();

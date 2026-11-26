@@ -19,7 +19,7 @@ const GRID_COLUMNS = 3;
 
 export default function AddItemKindScreen() {
   // edit: 옷 고치기에서 종류를 바꾸러 온 경우(11/25) — 고르면 그 옷 고치기 화면으로 돌아간다.
-  const params = useLocalSearchParams<{ slot?: string; edit?: string }>();
+  const params = useLocalSearchParams<{ slot?: string; edit?: string; action_id?: string; chat_action_type?: string }>();
   const editId = typeof params.edit === 'string' ? params.edit : null;
   const initialSlot = isSlot(params.slot) ? params.slot : '상의';
   const [slot, setSlot] = useState<Slot>(initialSlot);
@@ -47,7 +47,7 @@ export default function AddItemKindScreen() {
   function goNext() {
     if (kind === null) return;
     if (editId !== null) router.replace({ pathname: '/add-item/color-fit', params: { slot, kind, edit: editId } });
-    else router.push({ pathname: '/add-item/color-fit', params: { slot, kind } });
+    else router.push({ pathname: '/add-item/color-fit', params: { slot, kind, action_id: params.action_id, chat_action_type: params.chat_action_type, from: params.action_id ? 'chat' : undefined } });
   }
 
   return (

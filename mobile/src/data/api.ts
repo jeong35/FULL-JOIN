@@ -260,13 +260,13 @@ export function postItemDecision(
 }
 
 export function postChat(
-  styleImageId: string,
+  styleImageId: string | null,
   message: string,
   history: { role: 'user' | 'assistant'; content: string }[] = [],
 ): Promise<ChatResult> {
   return request<ChatResult>('POST', '/chat', {
     user_id: userId(),
-    style_image_id: styleImageId,
+    ...(styleImageId === null ? {} : { style_image_id: styleImageId }),
     message,
     history,
   }, 30_000);
