@@ -1,5 +1,9 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
+## 2026-11-26 Action-oriented Chatbot
+
+저장 사진 필수 상담을 선택 컨텍스트 기반 Action 챗봇으로 개편했다. 실제 피드·옷장·저장 데이터를 조회하는 결정적 routing, 허용 CTA, 매일 코디 알림 재사용, CTA 완료 계측과 관리자 퍼널을 구현했다. 비교 후보 없음 문구의 한국어 조사도 받침 기준으로 교정했다. 사용자 실측 Result는 아직 미측정이다. production은 닉네임+PIN 호환 API 후보와 Expo 검증 완료 후 반영하며, 보류 중인 Auth/RLS·CHAT-02 migration은 포함하지 않는다.
+
 - 기준 시각: 2026-11-23 KST
 - 조사 대상 저장소: `jeong35/FULL-JOIN`
 - 조사 worktree: `/Users/choijeong-in/.codex/worktrees/kind-expansion-main/FULL-JOIN`
@@ -911,3 +915,10 @@ LLMOps·최신 eval
 현재 GitHub main에는 **코사인 A안·MATCH-03·CHAT-01/02/03·Auth/RLS·LLMOps·사진 옷장 등록 UI·local 통합 테스트·local 관리자 대시보드·승인형 release/alert**가 병합돼 있다. Auth와 사진별 영구 대화는 staging에서 실제 API/RLS 검증을 통과했지만 production에는 미배포다. 비교 학습 데이터와 추천 고도화는 아직 구현하지 않았다.
 
 다음 단계는 PR #29의 CI 중복·Supabase job 격리 검증, 모바일 Auth 토큰 전달과 대화 복원/삭제 UI다. production migration과 Edge Function 배포는 별도 승인을 받아 release exact SHA로 수행한다. CHAT-03 live eval은 `docs/EVAL_CHAT03_PROPOSAL.md`의 v2 계약 승인 뒤 갱신한다. 동의·보존·철회 정책 전에는 비교 피드백을 운영에 통합하지 않으며, B안·새 대체 관계·임계값 변경도 계속 보류한다.
+
+### 2026-11-26 Action-oriented Chatbot
+
+- 사진 선택 없이 질문하고 실제 피드·저장 코디·옷장·추천·등록·비교 화면으로 이동하는 구조화 Action 응답과 모바일 UI를 main에 반영했다.
+- Action 노출부터 실제 목표 행동 완료까지 `action_id`로 연결하고 관리자 챗봇 퍼널·Action 지표를 추가했다. 비교 후보가 없을 때 종류명에 잘못된 조사를 붙이지 않는 문구로 고쳤다.
+- 첫 CI가 기존 사진 상담 `intents` 하위 호환 회귀를 발견했고, `action_intents`를 별도 필드로 분리해 수정했다. 최종 SHA `bfba9fca3717575184bf05fa9a8c0cc6d14bebba`의 Verify run `45834567326`은 일반 검사와 로컬 Supabase 통합 검사가 모두 성공했다.
+- 신규 DB migration은 없으며 `notifications` Edge Function v2만 production 배포·config smoke를 완료했다. 기존 nickname+PIN 앱과 충돌하는 미배포 Auth/RLS·CHAT-02 때문에 `api`와 Expo production 배포는 보류했다. 사용자 성과 Result는 아직 미측정이다.

@@ -1,0 +1,31 @@
+version: 1
+status: implementation_fixture
+cases:
+  - id: empty_wardrobe_style_search
+    message: "미니멀 코디 보여줘"
+    expected_intents: [find_style]
+    wardrobe_required: false
+    expected_action: OPEN_FILTERED_FEED
+  - id: empty_wardrobe_similar_product
+    message: "아이보리 카디건 비슷한 상품 찾아줘"
+    expected_intents: [find_similar_item]
+    wardrobe_required: false
+    expected_action: OPEN_PRODUCT_SEARCH
+  - id: empty_wardrobe_owned_outfit
+    message: "내 옷으로 코디 추천해줘"
+    expected_intents: [wardrobe_outfit_search]
+    expected_action: OPEN_PHOTO_ADD
+  - id: today_outfit
+    message: "오늘 뭐 입을까?"
+    expected_intents: [today_outfit]
+    expected_action: OPEN_RECOMMENDATION
+  - id: saved_style_compare
+    message: "전에 저장한 코디 중 지금 입을 수 있는 거 있어?"
+    expected_intents: [compare_saved_style]
+    expected_action: OPEN_ARCHIVE
+  - id: unsupported_style_alert
+    message: "새로운 미니멀 코디가 나오면 알려줘"
+    forbidden_actions: [OFFER_STYLE_ALERT]
+  - id: korean_particle_no_candidate
+    kind: "미니스커트"
+    expected_summary: "내 옷장에 비교할 미니스커트가 없어요."

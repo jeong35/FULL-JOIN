@@ -127,7 +127,6 @@ for (const family of [
   const familyId = family.join("/");
   for (const color of family) COLOR_FAMILY.set(color, familyId);
 }
-
 type FeatureBlock = { source: Map<string, number>; candidate: Map<string, number> };
 
 function oneHot(value: string, prefix: string): Map<string, number> {
@@ -423,4 +422,3 @@ export function matchOutfitItems(
     };
   });
 }
-

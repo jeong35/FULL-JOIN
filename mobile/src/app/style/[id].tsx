@@ -9,6 +9,7 @@ import { KindIcon } from '@/components/KindIcon';
 import { TasteSuggestBubble } from '@/components/TasteSuggest';
 import { BackButton, PrimaryButton, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, fetchStyleImageDetail } from '@/data/api';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { track } from '@/data/events';
 import { kindLabel } from '@/data/catalog';
 import { markHintDone } from '@/data/hints';
@@ -19,7 +20,7 @@ import type { StyleImageDetail, StyleImageDetailItem } from '@/data/types';
 import { colors, fonts, layout } from '@/theme';
 
 export default function StyleDetailScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, action_id, chat_action_type } = useLocalSearchParams<{ id?: string; action_id?: string; chat_action_type?: string }>();
   const imageId = typeof id === 'string' ? id : undefined;
   const saved = useSaved();
   const [detail, setDetail] = useState<StyleImageDetail | null>(null);
@@ -64,6 +65,10 @@ export default function StyleDetailScreen() {
       active = false;
     };
   }, [imageId]);
+
+  useEffect(() => {
+    if (detail !== null) completeChatAction(action_id, chat_action_type, 'style_detail');
+  }, [action_id, chat_action_type, detail]);
 
   if (imageId === undefined) {
     return (

@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { BottomSheet, ColorPicker, KindPicker, PhotoSteps } from '@/components/P
 import { LookIcon } from '@/components/WardrobeIcon';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
 import { errorMessage } from '@/data/api';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { fitsForKind, kindLabel, SEASONS, type Color, type Kind, type Slot, type VisualFit } from '@/data/catalog';
 import { track } from '@/data/events';
 import { clearPhotoDraft, pickPhotos, removeCutItem, setAllCutItems, startPhotoBatch, updateCutItem, usePhotoDraft, withKind, type CutItem } from '@/data/photoAdd';
@@ -26,6 +27,7 @@ import { colors, fonts, glass, layout } from '@/theme';
 type Sheet = { itemId: string; field: 'kind' | 'color' } | null;
 
 export default function PhotoConfirmScreen() {
+  const { action_id, chat_action_type } = useLocalSearchParams<{ action_id?: string; chat_action_type?: string }>();
   const { photos } = usePhotoDraft();
   const items = photos.flatMap((photo) => photo.items);
   const wardrobe = useWardrobe();
@@ -88,6 +90,7 @@ export default function PhotoConfirmScreen() {
         via: 'photo', step: 'batch_done', photo_count: photos.length, item_count: items.length,
         success_count: totalSaved, failure_count: 0, duration_ms: batchClock() - startedAt,
       });
+      completeChatAction(action_id, chat_action_type, 'wardrobe_add', { wardrobe_size: wardrobe.length + newlySaved.length });
       clearPhotoDraft();
       setDone(totalSaved);
       return;

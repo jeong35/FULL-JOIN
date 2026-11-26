@@ -17,6 +17,7 @@ import { useTabScrollBottom } from '@/components/tabBarSpace';
 import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
 import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
@@ -68,11 +69,25 @@ export default function RecommendScreen() {
   // '이 룩으로 입을래요'를 누르면 아래에서 '결정!' 창이 올라온다(11/25, LookChosenSheet). 값 = 고른 룩.
   const [chosenSheet, setChosenSheet] = useState<string | null>(null);
   // 코디 알림을 눌러 들어오면 주소에 ?notification=1이 붙는다 — 한 번 기록하고, 그 뒤 고르면 '알림 뒤 다시 고름'으로 남긴다.
-  const { notification } = useLocalSearchParams<{ notification?: string }>();
+  const { notification, action_id, chat_action_type, source, schedule_id } = useLocalSearchParams<{
+    notification?: string;
+    action_id?: string;
+    chat_action_type?: string;
+    source?: string;
+    schedule_id?: string;
+  }>();
   const fromNotification = notification === '1';
   useEffect(() => {
-    if (fromNotification) track('notification_open', { source: 'push' });
-  }, [fromNotification]);
+    if (!fromNotification) return;
+    track('notification_open', { source: source === 'chat' ? 'chat' : 'push' });
+    if (source === 'chat') {
+      track('chat_reminder_opened', {
+        source_screen: 'notification',
+        target_screen: 'recommendation',
+        schedule_id: schedule_id ?? null,
+      });
+    }
+  }, [fromNotification, schedule_id, source]);
   // 11/24 팀 결정 5번: 날씨는 위에 붙여 두고, 스크롤을 내리면 한 줄로 작아진다(11/26: 조금만 밀어도).
   // 다시 맨 위로 올라와도 작은 채로 두고, 한 줄을 누르면 다시 커진다.
   const [weatherSmall, setWeatherSmall] = useState(false);
@@ -306,6 +321,7 @@ export default function RecommendScreen() {
             onChoose={(id) => {
               saveRecommendationChoice(userId, { date: selected, lookId: id, chosenAt: new Date().toISOString(), notificationScheduled: false });
               track('recommendation_choice', { date: selected, recommendation_type: shownLook !== undefined ? 'saved_photo' : 'closet' });
+              completeChatAction(action_id, chat_action_type, 'recommend', { recommendation_date: selected });
               if (fromNotification) track('notification_recommendation_reselect', { date: selected });
               setChosenSheet(id);
             }}

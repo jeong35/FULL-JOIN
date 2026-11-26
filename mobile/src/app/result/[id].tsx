@@ -12,6 +12,7 @@ import { ItemIcon } from '@/components/WardrobeIcon';
 import { BookmarkIcon } from '@/components/Icons';
 import { BackButton, InfoBar, SmallWhiteButton } from '@/components/ui';
 import { errorMessage, postItemDecision } from '@/data/api';
+import { completeChatAction } from '@/data/chatActionTracking';
 import { kindLabel, type Kind } from '@/data/catalog';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
@@ -31,7 +32,7 @@ const PHOTO_HEIGHT = 280;
 const SHEET_TOP = 236;
 
 export default function SaveResultScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, action_id, chat_action_type } = useLocalSearchParams<{ id?: string; action_id?: string; chat_action_type?: string }>();
   const imageId = typeof id === 'string' ? id : undefined;
   const image = useStyleImage(imageId);
   const heart = useHeart(imageId);
@@ -63,6 +64,10 @@ export default function SaveResultScreen() {
       comparisonStartedAt.current = null;
     }
   }, [imageId, heart]);
+
+  useEffect(() => {
+    if (heart?.status === 'ready') completeChatAction(action_id, chat_action_type, 'result');
+  }, [action_id, chat_action_type, heart?.status]);
 
   if (imageId === undefined) {
     return (
@@ -550,7 +555,7 @@ function ShopLinks({ item, links, place, title }: { item: ShownItem; links: Prod
 // 판정은 서버가 한 그대로 두고, 이미 받아 둔 옷장으로 설명만 만든다.
 function missingReason(item: ShownItem, wardrobe: readonly WardrobeItem[]): string {
   const sameKind = wardrobe.filter((w) => w.kind === item.kind);
-  if (sameKind.length === 0) return `옷장에 ${withIGa(item.kind)} 없어요`;
+  if (sameKind.length === 0) return `옷장에 비교할 ${kindLabel(item.kind)} 후보가 없어요`;
   const ownedColors = [...new Set(sameKind.map((w) => w.color))].join('·');
   return `${withEunNeun(item.kind)} 있지만 색이 달라요 (가진 색: ${ownedColors})`;
 }
@@ -563,11 +568,6 @@ function finalConsonant(word: string): number | null {
 function withRo(word: string): string {
   const final = finalConsonant(word);
   return final === null || final === 0 || final === 8 ? `${word}로` : `${word}으로`;
-}
-
-function withIGa(word: string): string {
-  const final = finalConsonant(word);
-  return final === null || final === 0 ? `${word}가` : `${word}이`;
 }
 
 function withEunNeun(word: string): string {

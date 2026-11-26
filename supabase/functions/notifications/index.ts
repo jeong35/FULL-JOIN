@@ -184,7 +184,7 @@ async function handleDispatch(request: Request): Promise<Response> {
       }, JSON.stringify({
         title: "오늘은 어떤 코디로 입을까요?",
         body: "오딧에서 오늘의 날씨와 내 옷장에 맞는 코디를 골라보세요.",
-        url: `/recommend?notification=1&schedule_id=${encodeURIComponent(schedule.id)}`,
+        url: `/recommend?notification=1&schedule_id=${encodeURIComponent(schedule.id)}${schedule.look_id === "chat-daily-outfit" ? "&source=chat" : ""}`,
       }), { TTL: 60 * 60 * 6, urgency: "normal" });
       await supabase.from("notification_schedules").update({
         status: "pending", scheduled_for: nextDaily(schedule.scheduled_for, schedule.timezone), provider_accepted_at: new Date().toISOString(), updated_at: new Date().toISOString(), error_type: null,

@@ -103,6 +103,10 @@ const KINDS_BY_SLOT: Record<(typeof SLOTS)[number], readonly string[]> = {
   잡화: ACCESSORY_KINDS,
 };
 
+export function slotForKind(kind: string): (typeof SLOTS)[number] | null {
+  return SLOTS.find((slot) => KINDS_BY_SLOT[slot].includes(kind)) ?? null;
+}
+
 export type WardrobeInput = {
   user_id: string;
   slot: (typeof SLOTS)[number];

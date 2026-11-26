@@ -15,7 +15,18 @@ import {
   type StyleImageAnalysis,
 } from "../../../src/fulljoin/analysis.ts";
 import { filterArchive, SEASONS, seasonForSavedAt, type ArchiveRecord, type Season } from "../../../src/fulljoin/archive.ts";
-import { invalidEnumField, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
+import { invalidEnumField, SLOTS, STYLES, wardrobeInputSchema } from "../../../src/fulljoin/catalog.ts";
+import {
+  actionChatRequiresLlm,
+  chatActionSchema,
+  classifyActionChatIntents,
+  extractChatFilters,
+  rankCompatibleStyles,
+  wardrobeRegistrationDraft,
+  type ChatAction,
+  type ChatActionDraft,
+  type CompatibleStyleItem,
+} from "../../../src/fulljoin/action_chat.ts";
 import {
   buildChatResponse,
   chatHistoryQuerySchema,
@@ -929,6 +940,140 @@ async function requestOpenAiChat(input: {
 type ChatAnswerSource = "grounded" | "openai" | "fallback";
 type ChatResponse = ReturnType<typeof buildChatResponse>;
 
+type ActionStyleResult = {
+  style_image_id: string;
+  thumbnail_url: string;
+  style: string[];
+  source: string;
+  usable_item_count: number;
+  similar_item_count: number;
+  total_item_count: number;
+};
+
+type ActionChatResponse = {
+  answer: string;
+  message: string;
+  request_id: string;
+  intents: string[];
+  action_intents: string[];
+  actions: ChatAction[];
+  results: ActionStyleResult[];
+  products: Array<{ item_id: string; platform: string; url: string; match_type: "similar" | "exact" }>;
+  analysis_id_used: string | null;
+  claimed_owned_item_ids: string[];
+  image_reanalysis_count: 0;
+  external_instruction_applied: false;
+  answer_sections?: ChatResponse["answer_sections"];
+  comparison?: ChatResponse["comparison"];
+};
+
+function actionWithId(draft: ChatActionDraft): ChatAction {
+  return chatActionSchema.parse({ ...draft, action_id: crypto.randomUUID() });
+}
+
+function uniqueActionDrafts(drafts: readonly ChatActionDraft[]): ChatAction[] {
+  const seen = new Set<string>();
+  return drafts.flatMap((draft) => {
+    const key = `${draft.type}:${JSON.stringify(draft.params)}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [actionWithId(draft)];
+  }).slice(0, 12);
+}
+
+type ActionStyleRow = {
+  id: string;
+  image_path: string;
+  style: string[];
+  source: string;
+  uploaded_at: string;
+};
+
+async function actionStyleResults(input: {
+  db: SupabaseClient;
+  userId: string;
+  message: string;
+  wardrobe: readonly ChatWardrobeItem[];
+  savedOnly: boolean;
+  compatible: boolean;
+}): Promise<ActionStyleResult[]> {
+  const filters = extractChatFilters(input.message);
+  let savedOrder: string[] | null = null;
+  if (input.savedOnly) {
+    const { data, error } = await input.db.from("hearts")
+      .select("style_image_id,saved_at")
+      .eq("user_id", input.userId)
+      .order("saved_at", { ascending: false })
+      .limit(50);
+    if (error !== null) throw error;
+    savedOrder = (data ?? []).map((row) => String(row.style_image_id));
+    if (savedOrder.length === 0) return [];
+  }
+
+  const { data: imageData, error: imageError } = await input.db.from("style_images")
+    .select("id,image_path,style,source,uploaded_at")
+    .eq("published", true)
+    .order("uploaded_at", { ascending: false })
+    .limit(80);
+  if (imageError !== null) throw imageError;
+  let images = (imageData ?? []) as ActionStyleRow[];
+  if (savedOrder !== null) {
+    const order = new Map(savedOrder.map((id, index) => [id, index]));
+    images = images.filter((image) => order.has(image.id)).sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
+  }
+  if (filters.styles.length > 0) {
+    images = images.filter((image) => filters.styles.every((style) => image.style.includes(style)));
+  }
+  if (images.length === 0) return [];
+
+  const imageIds = images.map((image) => image.id);
+  const { data: itemData, error: itemError } = await input.db.from("style_image_items")
+    .select("style_image_id,item_id,slot,kind,color,visual_fit,visibility")
+    .in("style_image_id", imageIds)
+    .order("item_id");
+  if (itemError !== null) throw itemError;
+  const itemsByImage = new Map<string, CompatibleStyleItem[]>();
+  for (const row of itemData ?? []) {
+    const styleImageId = String(row.style_image_id);
+    const item = {
+      item_id: String(row.item_id),
+      slot: String(row.slot),
+      kind: String(row.kind),
+      color: row.color === null ? null : String(row.color),
+      visual_fit: row.visual_fit === null ? null : String(row.visual_fit),
+      visibility: row.visibility as CompatibleStyleItem["visibility"],
+    };
+    const current = itemsByImage.get(styleImageId) ?? [];
+    current.push(item);
+    itemsByImage.set(styleImageId, current);
+  }
+  if (filters.kind !== null || filters.color !== null) {
+    images = images.filter((image) => (itemsByImage.get(image.id) ?? []).some((item) =>
+      (filters.kind === null || item.kind === filters.kind) &&
+      (filters.color === null || item.color === filters.color)));
+  }
+
+  const scores = input.compatible
+    ? rankCompatibleStyles(images.map((image) => ({ id: image.id, items: itemsByImage.get(image.id) ?? [] })), input.wardrobe, 3)
+    : images.slice(0, 3).map((image) => ({
+      style_image_id: image.id,
+      usable_item_count: 0,
+      similar_item_count: 0,
+      total_item_count: (itemsByImage.get(image.id) ?? []).length,
+    }));
+  const imageById = new Map(images.map((image) => [image.id, image]));
+  return await Promise.all(scores.map(async (score) => {
+    const image = imageById.get(score.style_image_id);
+    if (image === undefined) throw new Error("chat_style_result_missing");
+    return {
+      ...score,
+      thumbnail_url: await signedThumbnail(input.db, image.image_path),
+      style: image.style,
+      source: image.source,
+    };
+  }));
+}
+
 async function recentChatContext(
   db: SupabaseClient,
   userId: string,
@@ -939,6 +1084,7 @@ async function recentChatContext(
     .eq("user_id", userId)
     .eq("style_image_id", styleImageId)
     .maybeSingle();
+  if (conversationError !== null && ["PGRST205", "42P01"].includes(conversationError.code ?? "")) return [];
   if (conversationError !== null) throw conversationError;
   if (conversation === null) return [];
 
@@ -953,10 +1099,13 @@ async function recentChatContext(
 
 async function persistedChatResponse(
   db: SupabaseClient,
-  input: { user_id: string; style_image_id: string; message: string },
-  response: ChatResponse,
+  input: { user_id: string; style_image_id?: string | null | undefined; message: string },
+  response: ActionChatResponse,
   answerSource: ChatAnswerSource,
 ): Promise<Response> {
+  if (input.style_image_id === undefined || input.style_image_id === null) {
+    return json({ ...response, answer_source: answerSource, conversation_id: null, history_persisted: false });
+  }
   const { data: conversationId, error } = await db.rpc("append_chat_exchange", {
     p_user_id: input.user_id,
     p_style_image_id: input.style_image_id,
@@ -965,9 +1114,15 @@ async function persistedChatResponse(
     p_products: response.products,
     p_answer_source: answerSource,
   });
+  // Production has not applied CHAT-02 yet. The action response must remain usable
+  // without silently claiming that history was persisted.
+  if (error !== null && ["PGRST202", "42P01", "42883"].includes(error.code ?? "")) {
+    console.error("Chat history persistence is unavailable", error.code ?? "db_error");
+    return json({ ...response, answer_source: answerSource, conversation_id: null, history_persisted: false });
+  }
   if (error !== null) throw error;
   if (typeof conversationId !== "string") throw new Error("chat_conversation_not_created");
-  return json({ ...response, answer_source: answerSource, conversation_id: conversationId });
+  return json({ ...response, answer_source: answerSource, conversation_id: conversationId, history_persisted: true });
 }
 
 async function handleChatHistory(
@@ -1038,37 +1193,151 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
     return apiError(400, "invalid_chat", input.error.issues[0]?.message ?? "질문을 확인해 주세요", typeof field === "string" ? field : undefined);
   }
 
-  const [{ data: styleImage, error: imageError }, { data: heart, error: heartError }, { data: items, error: itemsError }, { data: wardrobe, error: wardrobeError }] = await Promise.all([
-    db.from("style_images").select("id").eq("id", input.data.style_image_id).maybeSingle(),
-    db.from("hearts").select("style_image_id").eq("user_id", input.data.user_id).eq("style_image_id", input.data.style_image_id).maybeSingle(),
-    db.from("style_image_items")
-      .select("item_id,slot,kind,color,visual_fit,brand,brand_source")
-      .eq("style_image_id", input.data.style_image_id)
-      .order("item_id"),
-    db.from("wardrobe_items")
-      .select("id,slot,kind,color,visual_fit,material,pattern,seasons,details")
-      .eq("user_id", input.data.user_id)
-      .order("id"),
-  ]);
-  if (imageError !== null) throw imageError;
-  if (heartError !== null) throw heartError;
-  if (itemsError !== null) throw itemsError;
+  const { data: wardrobe, error: wardrobeError } = await db.from("wardrobe_items")
+    .select("id,slot,kind,color,visual_fit,material,pattern,seasons,details")
+    .eq("user_id", input.data.user_id)
+    .order("id");
   if (wardrobeError !== null) throw wardrobeError;
-  if (styleImage === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
-  if (heart === null) return apiError(409, "heart_required", "먼저 저장한 사진을 골라 주세요");
-  if (items === null || items.length === 0) return apiError(409, "analysis_required", "저장된 사진 분석 결과가 없어요");
-
-  const chatItems = items as ChatItem[];
   const chatWardrobe = (wardrobe ?? []) as ChatWardrobeItem[];
-  const fallback = buildChatResponse(
-    input.data.style_image_id,
-    input.data.message,
-    chatItems,
-    chatWardrobe,
-  );
-  // 보유 옷·상품 탐색·저장 사진·범위 밖 질문은 구조화 결과로 답한다.
-  // 일반 상담이 포함된 단일/복합 질문만 LLM을 호출하고, 소유권 근거와 분리한다.
-  if (!chatRequiresLlm(fallback.intents)) {
+  const contextImageId = input.data.style_image_id ?? null;
+  let legacy: ChatResponse | null = null;
+  let contextItems: ChatItem[] = [];
+  if (contextImageId !== null) {
+    const [{ data: styleImage, error: imageError }, { data: heart, error: heartError }, { data: items, error: itemsError }] = await Promise.all([
+      db.from("style_images").select("id").eq("id", contextImageId).maybeSingle(),
+      db.from("hearts").select("style_image_id").eq("user_id", input.data.user_id).eq("style_image_id", contextImageId).maybeSingle(),
+      db.from("style_image_items")
+        .select("item_id,slot,kind,color,visual_fit,visibility,brand,brand_source")
+        .eq("style_image_id", contextImageId)
+        .order("item_id"),
+    ]);
+    if (imageError !== null) throw imageError;
+    if (heartError !== null) throw heartError;
+    if (itemsError !== null) throw itemsError;
+    if (styleImage === null) return apiError(404, "style_image_not_found", "해당 피드 사진을 찾을 수 없어요");
+    if (heart === null) return apiError(409, "heart_required", "저장한 사진만 대화 컨텍스트로 선택할 수 있어요");
+    if (items === null || items.length === 0) return apiError(409, "analysis_required", "저장된 사진 분석 결과가 없어요");
+    contextItems = items as ChatItem[];
+    legacy = buildChatResponse(contextImageId, input.data.message, contextItems, chatWardrobe);
+  }
+
+  const actionIntents = classifyActionChatIntents(input.data.message);
+  const filters = extractChatFilters(input.data.message);
+  const registeredSlots = new Set(chatWardrobe.map((item) => item.slot));
+  const missingSlots = SLOTS.filter((slot) => !registeredSlots.has(slot));
+  const actionDrafts: ChatActionDraft[] = [];
+  const answerParts: string[] = legacy === null ? [] : [legacy.answer];
+  let results: ActionStyleResult[] = [];
+  let products = legacy?.products ?? [];
+
+  if (actionIntents.includes("wardrobe_outfit_search")) {
+    if (chatWardrobe.length === 0) {
+      answerParts.push("앱에 등록된 옷이 아직 없어 내 옷장 기준 코디를 비교할 수 없어요. 실제로 옷이 없다는 뜻은 아니며, 사진으로 등록하면 바로 비교할 수 있어요.");
+    } else {
+      results = await actionStyleResults({ db, userId: input.data.user_id, message: input.data.message, wardrobe: chatWardrobe, savedOnly: false, compatible: true });
+      if (results.length > 0) {
+        answerParts.push(`등록된 옷 ${chatWardrobe.length}벌을 기준으로 활용 가능성이 높은 실제 코디 ${results.length}개를 찾았어요. 일부 아이템만 활용 가능한 경우는 전체 착용 가능과 구분해 표시해요.`);
+      } else {
+        answerParts.push("현재 등록 정보로 바로 연결할 수 있는 피드 코디를 찾지 못했어요. 조건을 줄이거나 옷을 더 등록해 보세요.");
+      }
+    }
+    actionDrafts.push({ type: "OPEN_PHOTO_ADD", label: "사진으로 옷 한 번에 등록하기", params: {} });
+    if (missingSlots.length > 0) actionDrafts.push(wardrobeRegistrationDraft(input.data.message, missingSlots));
+  }
+
+  if (actionIntents.includes("find_style")) {
+    if (results.length === 0) {
+      results = await actionStyleResults({ db, userId: input.data.user_id, message: input.data.message, wardrobe: chatWardrobe, savedOnly: false, compatible: false });
+    }
+    const label = filters.styles.length > 0 ? filters.styles.join(" · ") : "요청한";
+    answerParts.push(results.length > 0
+      ? `${label} 조건으로 실제 피드 코디 ${results.length}개를 찾았어요.`
+      : `${label} 조건에 맞는 피드 코디를 찾지 못했어요. 조건을 하나 줄여 다시 찾아보세요.`);
+    actionDrafts.push({ type: "OPEN_FILTERED_FEED", label: `${label} 코디 더 보기`, params: filters });
+  }
+
+  if (actionIntents.includes("browse_saved_styles") || (actionIntents.includes("compare_saved_style") && contextImageId === null)) {
+    if (results.length === 0) {
+      results = await actionStyleResults({ db, userId: input.data.user_id, message: input.data.message, wardrobe: chatWardrobe, savedOnly: true, compatible: false });
+    }
+    if (results.length === 0) answerParts.push("아직 저장한 코디가 없어요. 피드에서 마음에 드는 사진을 먼저 저장해 주세요.");
+    else if (actionIntents.includes("compare_saved_style") && results.length > 1) answerParts.push("비교할 저장 사진을 골라 주세요.");
+    else answerParts.push(`최근 저장한 실제 코디 ${results.length}개를 불러왔어요.`);
+    actionDrafts.push({ type: "OPEN_ARCHIVE", label: "저장한 코디 확인하기", params: {} });
+  }
+
+  if (actionIntents.includes("today_outfit")) {
+    answerParts.push(chatWardrobe.length === 0
+      ? "오늘의 룩은 현재 날씨와 앱에 등록한 옷을 함께 사용해 추천 탭에서 만들어요. 먼저 옷을 등록하면 더 정확히 확인할 수 있어요."
+      : "오늘의 날씨와 등록한 옷을 사용하는 추천 서비스로 연결할게요. 여기서 별도 추천을 만들어 내지는 않아요.");
+    actionDrafts.push({ type: "OPEN_RECOMMENDATION", label: "오늘의 룩 확인하기", params: {} });
+  }
+
+  if (actionIntents.includes("find_similar_item")) {
+    if (contextItems.length === 0 && filters.kind === null) {
+      answerParts.push("어떤 아이템인지 확인할 수 있도록 저장 사진을 선택하거나 종류와 색을 알려 주세요.");
+      actionDrafts.push({ type: "OPEN_ARCHIVE", label: "사진 속 아이템 확인하기", params: {} });
+    } else if (contextItems.length === 0 && filters.kind !== null) {
+      products = similarSearchProducts({ item_id: "chat-query", kind: filters.kind, color: filters.color, visual_fit: null });
+      answerParts.push(`${[filters.color, filters.kind].filter(Boolean).join(" ")} 조건의 검증된 쇼핑몰 검색 링크예요. 실제 상품 재고나 가격을 조회한 결과는 아니에요.`);
+    }
+    for (const product of products.slice(0, 3)) {
+      actionDrafts.push({ type: "OPEN_PRODUCT_SEARCH", label: `${product.platform}에서 찾아보기`, params: { url: product.url } });
+    }
+  }
+
+  if (actionIntents.includes("add_wardrobe_item")) {
+    actionDrafts.push(wardrobeRegistrationDraft(input.data.message, missingSlots));
+    actionDrafts.push({ type: "OPEN_PHOTO_ADD", label: "사진으로 옷 등록하기", params: {} });
+    answerParts.push("옷장 등록 화면에 가능한 선택값을 미리 채워 연결할게요.");
+  }
+
+  if (contextImageId !== null && (actionIntents.includes("compare_saved_style") || legacy?.intents.includes("saved_photo_outfit"))) {
+    actionDrafts.push({ type: "OPEN_COMPARISON", label: "전체 비교 결과 확인하기", params: { style_image_id: contextImageId } });
+  }
+
+  if (actionIntents.includes("notify_today_outfit")) {
+    answerParts.push("지원되는 브라우저라면 내일부터 매일 같은 시간에 코디 알림을 받을 수 있어요. 예약 뒤에는 마이 탭에서 끄거나 시간을 바꿀 수 있어요.");
+    actionDrafts.push({ type: "OFFER_DAILY_REMINDER", label: "내일 같은 시간부터 매일 알려주기", params: {} });
+  }
+  if (actionIntents.includes("notify_new_style")) {
+    answerParts.push("조건에 맞는 새 코디 감지와 발송 인프라는 아직 없어 신규 코디 알림은 예약할 수 없어요.");
+  }
+  if (actionIntents.includes("general_question") && legacy === null) {
+    answerParts.push("일반 패션 조언을 불러오지 못했어요. 잠시 후 다시 질문해 주세요.");
+  }
+  if (actionIntents.includes("out_of_scope") && legacy === null) {
+    answerParts.push("오늘의 룩, 내 옷장 코디, 피드 검색, 저장 코디 비교, 비슷한 상품, 옷 관리에 대해 물어봐 주세요.");
+  }
+
+  for (const result of results) {
+    actionDrafts.push({ type: "OPEN_STYLE_DETAIL", label: "코디 자세히 보기", params: { style_image_id: result.style_image_id } });
+    if (actionIntents.includes("wardrobe_outfit_search")) {
+      actionDrafts.push({ type: "OPEN_COMPARISON", label: "내 옷장과 비교하기", params: { style_image_id: result.style_image_id } });
+    }
+  }
+  const answer = answerParts.filter((part, index, all) => part.trim() !== "" && all.indexOf(part) === index).join(" ");
+  const fallback: ActionChatResponse = {
+    answer,
+    message: answer,
+    request_id: crypto.randomUUID(),
+    // 기존 사진 상담 클라이언트는 이 필드의 CHAT-01/03 intent를 사용한다.
+    intents: legacy?.intents ?? actionIntents,
+    action_intents: actionIntents,
+    actions: uniqueActionDrafts(actionDrafts),
+    results,
+    products,
+    analysis_id_used: contextImageId,
+    claimed_owned_item_ids: legacy?.claimed_owned_item_ids ?? [],
+    image_reanalysis_count: 0,
+    external_instruction_applied: false,
+    ...(legacy?.answer_sections === undefined ? {} : { answer_sections: legacy.answer_sections }),
+    ...(legacy?.comparison === undefined ? {} : { comparison: legacy.comparison }),
+  } as ActionChatResponse;
+
+  // 실제 조회·화면 연결은 결정적으로 처리한다. 일반 패션 조언만 한 번의 LLM 호출을 허용한다.
+  const needsLlm = actionChatRequiresLlm(actionIntents) || (legacy !== null && chatRequiresLlm(legacy.intents));
+  if (!needsLlm) {
     await persistLlmMetric(db, buildLlmOperationMetric({
       feature: "chat",
       response_mode: "grounded",
@@ -1080,7 +1349,7 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
     return await persistedChatResponse(db, input.data, fallback, "grounded");
   }
   try {
-    const storedHistory = await recentChatContext(db, input.data.user_id, input.data.style_image_id);
+    const storedHistory = contextImageId === null ? [] : await recentChatContext(db, input.data.user_id, contextImageId);
     const result = await requestOpenAiChat({
       message: input.data.message,
       history: storedHistory.length > 0 ? storedHistory : input.data.history ?? [],
@@ -1095,7 +1364,13 @@ async function handleChat(request: Request, db: SupabaseClient): Promise<Respons
       usage: result.usage,
       latency_ms: performance.now() - operationStartedAt,
     }));
-    return await persistedChatResponse(db, input.data, withGeneralAdvice(fallback, result.answer), "openai");
+    const llmResponse = legacy !== null && legacy.answer_sections.some((section) => section.source === "general_advice")
+      ? (() => {
+        const updated = withGeneralAdvice(legacy, result.answer);
+        return { ...fallback, answer: updated.answer, message: updated.answer, answer_sections: updated.answer_sections };
+      })()
+      : { ...fallback, answer: result.answer, message: result.answer };
+    return await persistedChatResponse(db, input.data, llmResponse, "openai");
   } catch (error) {
     await persistLlmMetric(db, buildLlmOperationMetric({
       feature: "chat",

@@ -181,3 +181,7 @@ StyleImage ─♡→ 옷장(WardrobeItem)과 대조
 > AC 번호는 한 번 정하면 바꾸지 않는다(번호 순서와 표시 순서가 다른 이유). 필수 MVP AC와 실험 기능 AC14는 모두 판정 가능한 계약 케이스와 연결하되, AC14 결과는 필수 MVP 합격률에 포함하지 않는다. AC9의 매칭 구현 판정 케이스는 `tests/harness/golden_cases.yaml`, 나머지 제품 계약과 AC9의 사용자 선택 의미는 `tests/harness/product_golden_cases.yaml`에 있다. `tests/test_acceptance_contracts_golden.ts`는 SPEC의 AC가 하나라도 케이스와 연결되지 않으면 실패하고, 각 계약 케이스의 정상 예시는 통과하며 결함 예시는 거부되는지 확인한다. 아직 구현되지 않은 기능의 계약 케이스는 구현 완료를 뜻하지 않으며, 기능 구현 시 같은 판정기를 실제 출력에 연결해야 한다.
 > 안 되면 앱이 성립하지 않는 가정(구조화 출력)의 검증: `docs/spikes/structured_output.md`
 > 핵심 기능과 기본 성능을 계속 재는 기준: `evals/README.md`
+
+## Action-oriented Chatbot (2026-11-26)
+
+사진 선택은 선택 컨텍스트이며 질문의 선행 조건이 아니다. 서버는 실제 피드·옷장·저장 데이터만 조회하고 허용된 구조화 Action으로 기존 화면에 연결한다. 사진이나 옷장이 없어도 피드 검색·명시된 상품 조건 검색·저장 목록·일반 패션 질문은 차단하지 않는다. 세부 계약과 측정 정의는 `docs/ACTION_CHATBOT.md`를 따른다.

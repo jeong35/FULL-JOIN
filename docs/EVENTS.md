@@ -455,7 +455,7 @@ group by recommendation;
 | `notification_consent` / `notification_decline` | 제안 동의/거절 | `platform` |
 | `notification_permission` | 브라우저 권한 결과 | `result`, `platform` |
 | `notification_schedule_done` | 서버의 일회성 예약 저장 성공 | `scheduled_for`, `platform` |
-| `notification_schedule_failed` | 미지원·거절·요청 실패 | `reason`, `platform` |
+| `notification_schedule_failed` | 미지원·거절·요청 실패 | `reason`, `platform`, 예외 실패 시 `stage`, `error` |
 | `notification_cancel` | 사용자가 예약 취소 | `platform` |
 | `notification_open` | 알림 클릭 URL로 추천 진입 | `source` |
 | `notification_recommendation_reselect` | 알림 진입 뒤 현재 날짜 코디를 다시 선택 | `date` |
@@ -511,3 +511,7 @@ order by 1;
 > 근거: `wardrobe_add_done → screen_view(screen=feed)` 전환율과 `screen_leave/app_background`에서 확인했다.  
 > 변경: 홈 탭을 가리키는 다음 행동 힌트를 개선했다.  
 > 결과: 다음 버전에서 이탈률 X% → Y%, 홈 진입까지 중앙시간 A초 → B초로 개선됐다.
+
+## Action-oriented Chatbot 이벤트
+
+`chat_message_sent`, `chat_intent_classified`, `chat_response_received`, `chat_result_impression`, `chat_action_impression`, `chat_action_clicked`, `chat_action_navigation_success`, `chat_action_completed`, `chat_action_failed`, `chat_action_abandoned`, `chat_reminder_accepted`, `chat_reminder_scheduled`, `chat_reminder_opened`를 사용한다. `action_id`, `request_id`, `intent`, `action_type`, `source_screen`, `target_screen`, `result_count`, `latency_ms`, `success`, `failure_reason`만 필요한 범위에서 보낸다. 원본 질문·전체 답변·사진·인증 정보·Push subscription은 보내지 않는다. 화면 이동과 목표 행동 완료는 별개 이벤트다.
