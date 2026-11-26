@@ -31,9 +31,8 @@ export default function TabLayout() {
   const session = useSession();
   const pathname = usePathname();
   const chatHintOpen = useHintOpen('chat_button');
-  // 홈 첫 화면에 추구미 안내 말풍선이 떠 있는 동안은 챗봇 말풍선을 같이 띄우지 않는다(말풍선은 한 번에 하나).
-  const feedTasteOpen = useHintOpen('feed_taste');
-  const showChatHint = pathname !== '/chat' && chatHintOpen && (pathname !== '/' || !feedTasteOpen);
+  // 11/26: 홈의 추구미 안내 말풍선(feed_taste)을 빼서, 챗봇 말풍선은 그 말풍선을 기다리지 않는다.
+  const showChatHint = pathname !== '/chat' && chatHintOpen;
 
   // 옷 추가·옷장의 시안 그림(약 880KB)을 앱이 뜨고 조금 뒤에 미리 불러 둔다 — 옷장에 들어갈 때 기다리지 않게(11/19).
   useEffect(() => {
