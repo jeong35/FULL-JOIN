@@ -121,12 +121,8 @@ export default function TabLayout() {
         accessibilityRole="button"
         accessibilityLabel="챗봇에게 물어보기"
         style={[styles.chatButton, { bottom: barBottom + BAR_HEIGHT + TAB_BAR_GAP }]}>
-        {/* 11/26: 챗봇 버튼도 연보라 유리 */}
-        <GlassView radius={CHAT_BUTTON_SIZE / 2} tint="rgba(196,182,246,0.82)" style={StyleSheet.absoluteFill} />
-        {/* 웹에서 아이콘이 유리 층 아래로 숨지 않게 한 번 감싼다(감싼 View가 유리 층보다 뒤에 그려져 위로 올라온다). */}
-        <View pointerEvents="none">
-          <TabIcon name="chat" color={colors.onPurpleFill} size={26} />
-        </View>
+        {/* 11/27: 챗봇 버튼은 유리 효과 없이 원래처럼 꽉 찬 연보라. */}
+        <TabIcon name="chat" color={colors.onPurpleFill} size={26} />
       </Pressable>
     )}
     </View>
@@ -150,6 +146,9 @@ const styles = StyleSheet.create({
     borderRadius: CHAT_BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    // 11/22 색 규칙: 진한 연보라 바탕(purpleFill)은 큰 버튼에만 — 챗봇 버튼도 큰 버튼과 같은 색으로 둔다.
+    backgroundColor: colors.purpleFill,
+    boxShadow: '0 4px 14px rgba(30,20,50,0.16)',
   },
   tabBar: {
     position: 'absolute',
