@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react';
 
 import type { Plan } from './plans';
 import { ensureHearts, recommend, type Recommendation } from './recommend';
+import { useRecommendationChoices } from './recommendChoices';
 import { useSession } from './session';
 import { useArchiveState, useHearts, useWardrobeState, type LoadStatus } from './store';
 import type { WardrobeItem } from './types';
@@ -21,6 +22,7 @@ export type RecommendationView = Recommendation & {
 
 export function useRecommendation(date: string): RecommendationView {
   const session = useSession();
+  const choices = useRecommendationChoices(session?.userId ?? 'guest');
   const wardrobe = useWardrobeState();
   const archive = useArchiveState();
   const hearts = useHearts();
@@ -37,8 +39,8 @@ export function useRecommendation(date: string): RecommendationView {
   }, [wardrobe.status, wardrobe.data, archive.status, archive.data, hearts]);
 
   const result = useMemo(
-    () => recommend({ archive: archive.data, hearts, wardrobe: wardrobe.data, day, plan, tasteStyles: session?.styles }),
-    [archive.data, hearts, wardrobe.data, day, plan, session?.styles],
+    () => recommend({ archive: archive.data, hearts, wardrobe: wardrobe.data, day, plan, tasteStyles: session?.styles, choices, date }),
+    [archive.data, hearts, wardrobe.data, day, plan, session?.styles, choices, date],
   );
 
   return {

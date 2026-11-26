@@ -22,6 +22,7 @@ import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from
 import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
 import { buildCombos, harmony, type Combo } from '@/data/combos';
+import { yesterdayTopNote } from '@/data/recentWear';
 import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
 import { lookTips, matchOf, MAX_LOOKS, sortPieces, type Look } from '@/data/recommend';
 import { useSession } from '@/data/session';
@@ -148,8 +149,8 @@ export default function RecommendScreen() {
   const closetLooks = useMemo(
     () => (view.looks.length > 0 || view.pending > 0 || view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready'
       ? []
-      : buildCombos({ wardrobe: view.wardrobe, day, max: MAX_LOOKS })),
-    [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day],
+      : buildCombos({ wardrobe: view.wardrobe, day, max: MAX_LOOKS, recent: view.recent })),
+    [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day, view.recent],
   );
   const anchor = anchorId === null ? undefined : view.wardrobe.find((item) => item.id === anchorId);
   const anchorLooks = useMemo(() => {
@@ -186,10 +187,10 @@ export default function RecommendScreen() {
     if (closetLooks.length > 0 || day === undefined || view.looks.length > 0 || view.pending > 0) return [];
     if (view.wardrobeStatus !== 'ready' || view.archiveStatus !== 'ready') return [];
     const off = (combo: Combo) => combo.items.reduce((sum, item) => sum + tempDistance(item, day), 0);
-    return buildCombos({ wardrobe: view.wardrobe, max: MAX_LOOKS * 4 })
+    return buildCombos({ wardrobe: view.wardrobe, max: MAX_LOOKS * 4, recent: view.recent })
       .sort((a, b) => off(a) - off(b))
       .slice(0, MAX_LOOKS);
-  }, [closetLooks.length, view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day]);
+  }, [closetLooks.length, view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day, view.recent]);
 
   function collapseWeather() {
     if (weatherSmall) return;
@@ -614,6 +615,11 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
     }
   }
   const chosen = look !== undefined && chosenId === look.image.id;
+  // 11/27: 어제 입기로 한 룩이 있으면, 오늘 룩의 상의가 어제와 다른지 한 줄로 알려 준다(고른 옷으로 만든 룩은 빼고).
+  const shownForNote = look !== undefined ? look.pieces.map((piece) => piece.wardrobeItem) : closet?.items ?? [];
+  const yesterday = anchor === undefined ? yesterdayTopNote(shownForNote, view.recent) : null;
+  const wearNote = yesterday === '다름' ? '어제와 다른 상의로 골랐어요'
+    : yesterday === '같음' ? '어제와 같은 상의예요. 상의를 더 넣으면 바꿔 가며 골라 드려요' : null;
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -648,6 +654,12 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
             </View>
             <MatchLegend pieces={look.pieces} />
             <LookGrid look={look} photos={photos} artView={artView} />
+            {wearNote !== null && (
+              <View style={styles.tipRow}>
+                <Text style={styles.tipLabel}>어제</Text>
+                <Text style={styles.tipRowText}>{wearNote}</Text>
+              </View>
+            )}
             {lookTips(look.pieces, view.day).map((tip) => (
               <View key={tip.label} style={styles.tipRow}>
                 <Text style={styles.tipLabel}>{tip.label}</Text>
@@ -660,7 +672,7 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
         </>
       ) : closet !== undefined ? (
         <>
-          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
+          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} wearNote={wearNote} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
           {total > 1 && <Dots total={total} index={index % total} />}
         </>
       ) : feedLook !== undefined ? (
@@ -696,10 +708,11 @@ function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: ()
 
 // 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 보통은 모두 그날 기온에 맞는 옷이다.
 // day가 있으면(③ 가장 가까운 조합) 기온에 딱 맞지 않는다는 안내를 붙인다.
-function ClosetLookCard({ combo, date, day, photos, artView, chosen, onChoose, onNext }: {
+function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, chosen, onChoose, onNext }: {
   combo: Combo;
   date: string;
   day?: DayWeather;
+  wearNote?: string | null;
   photos: Readonly<Record<string, WardrobePhoto>>;
   artView: ClosetView;
   chosen: boolean;
@@ -733,6 +746,12 @@ function ClosetLookCard({ combo, date, day, photos, artView, chosen, onChoose, o
         )}
       </View>
       <ComboGrid items={combo.items} photos={photos} artView={artView} />
+      {wearNote !== null && (
+        <View style={styles.tipRow}>
+          <Text style={styles.tipLabel}>어제</Text>
+          <Text style={styles.tipRowText}>{wearNote}</Text>
+        </View>
+      )}
       {nearNote !== null && (
         <View style={styles.tipRow}>
           <Text style={styles.tipLabel}>기온</Text>
@@ -955,7 +974,8 @@ function TempIcon() {
   return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M8 4v12M5 13l3 3 3-3M16 20V8M13 11l3-3 3 3" /></Svg>;
 }
 function RefreshIcon({ size = 20 }: { size?: number }) {
-  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><Path d="M20 11a8 8 0 1 0-2.3 5.7" /><Path d="M20 4v7h-7" /></Svg>;
+  // 11/27: 화살표 끝이 꺾쇠처럼 떨어져 보이던 그림 → 흔히 쓰는 '다시' 모양(동그라미 + 오른쪽 위 화살촉).
+  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><Path d="M21 3v5h-5" /></Svg>;
 }
 
 const styles = StyleSheet.create({
@@ -1033,10 +1053,11 @@ const styles = StyleSheet.create({
   lookTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.text },
   moreButton: { height: 32, paddingLeft: 10, paddingRight: 8, borderRadius: 9, backgroundColor: colors.white, boxShadow: glass.selectedInnerShadow, flexDirection: 'row', alignItems: 'center', gap: 2 },
   moreText: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
-  grid: { gap: 2, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
+  // 11/27: 반투명 칸 사이 선이 흐릿하게 어긋나 보여서, 칸은 흰색으로 꽉 채우고 사이 선(2px)은 연한 보랏빛 회색으로 또렷하게.
+  grid: { gap: 2, borderRadius: 12, overflow: 'hidden', backgroundColor: '#ECE9F4' },
   gridRow: { flexDirection: 'row', gap: 2 },
   gridColumn: { flex: 1, gap: 2 },
-  tile: { backgroundColor: 'rgba(255,255,255,0.55)', alignItems: 'center', justifyContent: 'center' },
+  tile: { backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   tileBig: { flex: 1, height: 250, paddingBottom: 18 },
   tileSmall: { height: 124, paddingLeft: 48 },
   tileBottom: { flex: 1, height: 96, paddingLeft: 52 },
