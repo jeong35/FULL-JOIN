@@ -455,7 +455,7 @@ group by recommendation;
 | `notification_consent` / `notification_decline` | 제안 동의/거절 | `platform` |
 | `notification_permission` | 브라우저 권한 결과 | `result`, `platform` |
 | `notification_schedule_done` | 서버의 일회성 예약 저장 성공 | `scheduled_for`, `platform` |
-| `notification_schedule_failed` | 미지원·거절·요청 실패 | `reason`, `platform` |
+| `notification_schedule_failed` | 미지원·거절·요청 실패 | `reason`, `platform`, `stage`(요청 실패 단계: permission·subscribe·schedule), `error`(오류 이름·문구 80자까지) |
 | `notification_cancel` | 사용자가 예약 취소 | `platform` |
 | `notification_open` | 알림 클릭 URL로 추천 진입 | `source` |
 | `notification_recommendation_reselect` | 알림 진입 뒤 현재 날짜 코디를 다시 선택 | `date` |

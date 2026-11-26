@@ -38,7 +38,7 @@ test('구독 식별자를 사용해 다음 날 일회성 예약을 만든다', a
 
 test('서버 실패는 코디 선택을 막지 않는 실패 결과로 반환한다', async () => {
   const result = await scheduleWithAdapter({ support: { supported: true }, requestPermission: async () => 'granted', subscribe: async () => { throw new Error('network'); }, schedule: async () => { throw new Error('not called'); } });
-  assert.deepEqual(result, { ok: false, reason: 'request_failed' });
+  assert.deepEqual(result, { ok: false, reason: 'request_failed', stage: 'subscribe', error: 'network' });
 });
 
 test('알림 취소 성공과 실패를 구분한다', async () => {

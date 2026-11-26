@@ -25,7 +25,10 @@ export async function scheduleRecommendationNotification(userId: string, lookId:
     subscribe: async () => {
       const config = await jsonRequest('/config');
       if (typeof config.vapid_public_key !== 'string') throw new Error('missing_vapid_key');
-      const registration = await navigator.serviceWorker.register('/notification-sw.js');
+      await navigator.serviceWorker.register('/notification-sw.js');
+      // 11/26: 사파리(아이폰 홈 화면 앱 포함)는 서비스 워커가 '활성'이 되기 전에 구독하면
+      // "Subscribing for push requires an active service worker"로 실패한다 — 활성이 될 때까지 기다린 뒤 구독한다.
+      const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
       const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(config.vapid_public_key) });
       const subscribed = await jsonRequest('/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user_id: userId, subscription: subscription.toJSON(), user_agent: navigator.userAgent }) });
