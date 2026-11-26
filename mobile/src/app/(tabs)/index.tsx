@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { HintBubble } from '@/components/HintBubble';
 import { FeedPhoto, PHOTO_GAP, splitColumns } from '@/components/FeedPhoto';
+import { useTabScrollBottom } from '@/components/tabBarSpace';
 import { BookmarkIcon, SearchIcon } from '@/components/Icons';
 import { TasteSuggestBubble } from '@/components/TasteSuggest';
 import { SmallWhiteButton } from '@/components/ui';
@@ -84,6 +85,7 @@ export default function HomeScreen() {
 }
 
 export function PhotoBoardScreen({ mode }: { mode: Folder }) {
+  const scrollBottom = useTabScrollBottom();
   const feed = useFeedState();
   const archive = useArchiveState();
   const saved = useSaved();
@@ -416,7 +418,7 @@ export function PhotoBoardScreen({ mode }: { mode: Folder }) {
       <View style={styles.scroll}>
         <Animated.ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
           scrollEventThrottle={16}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}

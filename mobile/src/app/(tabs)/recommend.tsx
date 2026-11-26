@@ -13,6 +13,7 @@ import { GlassView } from '@/components/GlassView';
 import { LookChosenSheet } from '@/components/LookChosenSheet';
 import { MatchBadge, MatchLegend, WeatherIcon } from '@/components/LookParts';
 import { TabIcon } from '@/components/TabIcon';
+import { useTabScrollBottom } from '@/components/tabBarSpace';
 import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
@@ -56,6 +57,7 @@ const SCROLL_SLOP = 10;
 export default function RecommendScreen() {
   const today = todayKey();
   const days = nextDays(today, DAYS);
+  const scrollBottom = useTabScrollBottom();
   const [selected, setSelected] = useState(today);
   const [hourlyOpen, setHourlyOpen] = useState(false);
   const [lookIndex, setLookIndex] = useState(0);
@@ -279,7 +281,7 @@ export default function RecommendScreen() {
 
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottom }]}
         onScroll={onScroll}
         scrollEventThrottle={32}
         onTouchStart={onTouchStart}
@@ -1015,10 +1017,10 @@ const styles = StyleSheet.create({
   lookTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.text },
   moreButton: { height: 32, paddingLeft: 10, paddingRight: 8, borderRadius: 9, backgroundColor: colors.white, boxShadow: glass.selectedInnerShadow, flexDirection: 'row', alignItems: 'center', gap: 2 },
   moreText: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
-  grid: { gap: 2, backgroundColor: colors.line, borderWidth: 2, borderColor: colors.line },
+  grid: { gap: 2, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
   gridRow: { flexDirection: 'row', gap: 2 },
   gridColumn: { flex: 1, gap: 2 },
-  tile: { backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  tile: { backgroundColor: 'rgba(255,255,255,0.55)', alignItems: 'center', justifyContent: 'center' },
   tileBig: { flex: 1, height: 250, paddingBottom: 18 },
   tileSmall: { height: 124, paddingLeft: 48 },
   tileBottom: { flex: 1, height: 96, paddingLeft: 52 },
@@ -1044,7 +1046,7 @@ const styles = StyleSheet.create({
   bleed: { marginHorizontal: -layout.screenPaddingX },
   clothesRow: { gap: 8, paddingHorizontal: layout.screenPaddingX },
   clothesItem: { width: 76, alignItems: 'center', gap: 6 },
-  clothesTile: { width: 76, height: 76, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  clothesTile: { width: 76, height: 76, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', boxShadow: 'inset 0 1px 0 #FFFFFF, 0 4px 12px rgba(60,40,120,0.08)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   clothesPhoto: { width: 68, height: 68 },
   clothesTileOn: { borderWidth: 2, borderColor: colors.textPurple },
   anchorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
