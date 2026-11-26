@@ -180,8 +180,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  // 11/27: 아이콘(28)+글자가 알약 안 칸(52 - 위아래 5)보다 커서 글자가 아래 끝에 붙어 보였다 → 글자 줄 높이를 14로, 위 간격 0.
   label: {
     fontSize: 11,
-    marginTop: 2,
+    lineHeight: 14,
+    marginTop: 0,
   },
 });
