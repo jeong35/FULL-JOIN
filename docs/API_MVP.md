@@ -56,7 +56,7 @@
 
 ## 하트와 빈 옷장
 
-하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 각 `items[]`에는 갭 판정뿐 아니라 결과 화면에 필요한 `slot`, `kind`, `color`, `visual_fit`, `visibility`, 근거가 있는 상품 식별 정보가 함께 온다. 옷장이 있으면 선택적 `match_metadata`가 `{ "wardrobe_item_id", "reason_code", "reason" }` 형태로 추가된다. 이 ID는 반드시 같은 응답의 `wardrobe_item_ids` 첫 후보이거나, 후보가 없는 `구매`에서는 `null`이다. `reason`은 종류·색·핏 기준의 한 줄 설명이며 유사도 숫자는 공개하지 않는다. 기존 필드는 바뀌지 않으므로 구버전 클라이언트는 새 필드를 무시할 수 있다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 대표상품이 있으면 응답 최상위의 `shop`, `product_name`, `product_url`로 정확한 상품 페이지를 제공한다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
+하트 요청은 `{ "user_id": "demo-user" }`를 받는다. 각 `items[]`에는 갭 판정뿐 아니라 결과 화면에 필요한 `slot`, `kind`, `color`, `visual_fit`, `visibility`, 근거가 있는 상품 식별 정보가 함께 온다. 옷장이 있으면 선택적 `match_metadata`가 `{ "wardrobe_item_id", "reason_code", "reason" }` 형태로 추가된다. 이 ID는 반드시 같은 응답의 `wardrobe_item_ids` 첫 후보이거나, 후보가 없는 `구매`에서는 `null`이다. `reason`은 실제 종류·색·핏의 일치·차이만 간결하게 설명하며 유사도 숫자는 공개하지 않는다. 동적인 한국어 조사가 필요한 값은 공통 종성 판별을 사용하고, 발음을 확정할 수 없는 값은 조사 없는 문장으로 표현한다. 기존 필드는 바뀌지 않으므로 구버전 클라이언트는 새 필드를 무시할 수 있다. 옷장이 비어 있으면 갭 분석을 실행하지 않고 각 `gap_status`를 `null`로 반환하며 `옷장을 등록하면 가진 옷과 맞춰 드려요`를 함께 준다. 대표상품이 있으면 응답 최상위의 `shop`, `product_name`, `product_url`로 정확한 상품 페이지를 제공한다. 하트 취소는 `hearts` 행을 삭제하므로 아카이브 대상에서도 빠진다.
 
 ## 비슷한 아이템 선택
 

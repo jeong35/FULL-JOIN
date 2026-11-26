@@ -7,6 +7,8 @@ import {
   SLOTS,
   VISUAL_FITS,
 } from "./catalog.ts";
+import { withKoreanParticle } from "./korean.ts";
+import { isApprovedSubstituteKind } from "./substitute_kinds.ts";
 
 export type GarmentDetails = Readonly<Record<string, string | readonly string[] | undefined>>;
 
@@ -230,8 +232,23 @@ function evidenceStatus(
   return "different";
 }
 
-function garmentLabel(item: ComparableGarment): string {
-  return [item.color, item.visual_fit, item.kind].filter((value) => value !== null).join(" ");
+function differenceSummary(
+  evidence: ReadonlyMap<MatchEvidence["feature"], MatchEvidenceStatus>,
+  candidate: ComparableGarment,
+): string {
+  const color = evidence.get("color");
+  const fit = evidence.get("visual_fit");
+  if (color === "different" && fit === "different" && candidate.color !== null && candidate.visual_fit !== null) {
+    return `같은 종류의 옷이 있지만, 내 옷은 ${withKoreanParticle(`${candidate.color}·${candidate.visual_fit}`, "이라/라")} 색상과 핏이 달라요.`;
+  }
+  if (color === "different" && candidate.color !== null) {
+    const prefix = fit === "same" ? "종류와 핏은 같지만" : "같은 종류의 옷이 있지만";
+    return `${prefix}, 내 옷은 ${withKoreanParticle(candidate.color, "이라/라")} 색상이 달라요.`;
+  }
+  if (fit === "different" && candidate.visual_fit !== null) {
+    return `같은 종류의 옷이 있지만, 내 옷은 ${withKoreanParticle(candidate.visual_fit, "이라/라")} 핏이 달라요.`;
+  }
+  return "같은 종류의 옷이 있지만 일부 속성이 달라요.";
 }
 
 export function explainGarmentMatch(
@@ -242,7 +259,7 @@ export function explainGarmentMatch(
   if (candidate === null) {
     return {
       code: "no_candidate",
-      summary: `내 옷장에 비교할 ${source.kind ?? "아이템"} 후보가 없어요.`,
+      summary: "옷장에 등록된 옷 중 활용할 만한 아이템을 찾지 못했어요.",
       evidence: [],
     };
   }
@@ -253,45 +270,57 @@ export function explainGarmentMatch(
     { feature: "visual_fit", status: evidenceStatus("visual_fit", source.visual_fit, candidate.visual_fit), source_value: source.visual_fit, candidate_value: candidate.visual_fit },
   ];
   const byFeature = new Map(evidence.map((entry) => [entry.feature, entry.status]));
-  const label = garmentLabel(candidate) || "옷장 아이템";
-
   if (byFeature.get("kind") === "different") {
+    const approved = isApprovedSubstituteKind(source.kind, candidate.kind);
     return {
       code: "kind_substitute",
-      summary: `내 옷장의 ${label}을 대체 후보로 찾았어요. 사진 아이템과 종류가 달라 실루엣이나 활용 방식이 달라질 수 있어요.`,
+      summary: approved
+        ? "종류는 다르지만 대신 활용할 수 있는 옷이에요."
+        : "종류가 달라 같은 용도로 활용할 수 있는지 확인이 필요해요.",
       evidence,
     };
   }
   if (gapStatus === "구매") {
     return {
       code: "attribute_difference",
-      summary: `내 옷장에 같은 종류의 ${label}이 있지만 사진 아이템과 색이나 핏이 달라 새로 찾기로 분류했어요.`,
+      summary: differenceSummary(byFeature, candidate),
       evidence,
     };
   }
   if (byFeature.get("color") === "similar") {
-    const fitSuffix = byFeature.get("visual_fit") === "different"
-      ? ` 사진은 ${source.visual_fit ?? "핏 미상"}, 내 옷은 ${candidate.visual_fit ?? "핏 미상"}이라 실루엣이 달라질 수 있어요.`
+    const colorDetail = candidate.color === null
+      ? ""
+      : ` 내 옷의 색상은 ${withKoreanParticle(candidate.color, "이에요/예요")}.`;
+    const fitDetail = byFeature.get("visual_fit") === "different" && candidate.visual_fit !== null
+      ? ` 핏은 ${withKoreanParticle(candidate.visual_fit, "이라/라")} 실루엣이 달라질 수 있어요.`
       : "";
     return {
       code: "color_similar",
-      summary: `같은 종류의 ${label}이 있어요. 사진의 ${source.color ?? "색 미상"}과 가까운 색 계열이에요.${fitSuffix}`,
+      summary: `종류가 같고 색상도 비슷해요.${colorDetail}${fitDetail}`,
       evidence,
     };
   }
   if (byFeature.get("visual_fit") === "different") {
+    const fitSummary = candidate.visual_fit === null
+      ? "핏이 달라 실루엣이 달라질 수 있어요."
+      : `내 옷은 ${withKoreanParticle(candidate.visual_fit, "이라/라")} 실루엣이 달라질 수 있어요.`;
     return {
       code: "fit_difference",
-      summary: `같은 종류와 색의 ${label}이 있어요. 사진은 ${source.visual_fit ?? "핏 미상"}, 내 옷은 ${candidate.visual_fit ?? "핏 미상"}이라 실루엣이 달라질 수 있어요.`,
+      summary: `종류와 색은 같지만, ${fitSummary}`,
       evidence,
     };
   }
   if ([...byFeature.values()].every((status) => status === "same" || status === "unknown")) {
-    return { code: "exact", summary: `내 옷장의 ${label}을 활용할 수 있어요.`, evidence };
+    const summary = byFeature.get("visual_fit") === "same"
+      ? "종류와 색, 핏이 모두 같아 활용할 수 있어요."
+      : byFeature.get("color") === "same"
+        ? "종류와 색이 같아요."
+        : "같은 종류의 옷을 활용할 수 있어요.";
+    return { code: "exact", summary, evidence };
   }
   return {
     code: "attribute_difference",
-    summary: `내 옷장에 같은 종류의 ${label}이 있지만 사진 아이템과 색이나 핏이 달라요.`,
+    summary: differenceSummary(byFeature, candidate),
     evidence,
   };
 }

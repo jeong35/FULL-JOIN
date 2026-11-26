@@ -9,52 +9,15 @@ import {
   scoreGarmentSimilarity,
   type GarmentSimilarityConfig,
 } from "./garment_similarity.ts";
+import { substituteKindsFor } from "./substitute_kinds.ts";
+
+export { SUBSTITUTE_KIND_PAIRS, substituteKindsFor } from "./substitute_kinds.ts";
 
 export const MAX_OUTFITS = 3;
 
 // 대체할 수 있는 가까운 종류 짝(양쪽 방향). 같은 부위 목록 안에서만 고른다.
 // 재킷↔레더재킷, 로퍼↔플랫슈즈는 '서로 대신 입을 수 없어 나눈' 종류라 넣지 않는다(parse_query.md slot·kind 표).
 // mobile/src/data/outfits.ts의 표와 같아야 한다.
-export const SUBSTITUTE_KIND_PAIRS = [
-  ["민소매", "반소매티셔츠"],
-  ["반소매티셔츠", "긴소매티셔츠"],
-  ["셔츠", "블라우스"],
-  ["니트", "맨투맨"],
-  ["맨투맨", "후드"],
-  ["슬랙스", "코튼팬츠"],
-  ["데님팬츠", "코튼팬츠"],
-  ["카고팬츠", "코튼팬츠"],
-  ["미디스커트", "롱스커트"],
-  ["미니원피스", "미디원피스"],
-  ["미디원피스", "롱원피스"],
-  ["트렌치코트", "코트"],
-  ["트위드자켓", "재킷"],
-  ["퍼자켓", "무스탕"],
-  ["퍼코트", "코트"],
-  ["숏코트", "코트"],
-  ["하프코트", "코트"],
-  ["롱코트", "코트"],
-  ["숏코트", "트렌치코트"],
-  ["하프코트", "트렌치코트"],
-  ["롱코트", "트렌치코트"],
-  ["점퍼", "야상"],
-  ["숏패딩", "롱패딩"],
-  ["샌들", "슬리퍼"],
-  ["숄더백", "토트백"],
-  ["숄더백", "크로스백"],
-  ["토트백", "에코백"],
-] as const;
-
-const SUBSTITUTE_KINDS = new Map<string, Set<string>>();
-for (const [a, b] of SUBSTITUTE_KIND_PAIRS) {
-  SUBSTITUTE_KINDS.set(a, (SUBSTITUTE_KINDS.get(a) ?? new Set()).add(b));
-  SUBSTITUTE_KINDS.set(b, (SUBSTITUTE_KINDS.get(b) ?? new Set()).add(a));
-}
-
-export function substituteKindsFor(kind: string): string[] {
-  return [...(SUBSTITUTE_KINDS.get(kind) ?? [])];
-}
-
 export type SubstituteSourceItem = {
   kind: string;
   color: string | null;
@@ -97,9 +60,9 @@ export function findSubstitutes(
   item: SubstituteSourceItem,
   wardrobe: readonly SubstituteWardrobeItem[],
 ): Substitute[] {
-  const kinds = SUBSTITUTE_KINDS.get(item.kind);
+  const kinds = new Set(substituteKindsFor(item.kind));
   const itemColor = item.color;
-  if (kinds === undefined || !isComparableColor(itemColor)) return [];
+  if (kinds.size === 0 || !isComparableColor(itemColor)) return [];
   return wardrobe
     .filter((candidate) => kinds.has(candidate.kind))
     .flatMap((candidate): Array<Substitute & { similarity: number }> => {
