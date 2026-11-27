@@ -116,9 +116,10 @@ type BuildInput = {
   max?: number;
   maxUses?: number; // 같은 옷(고른 옷 제외)이 결과에 나오는 최대 횟수
   recent?: RecentWear; // 최근 입기로 한 옷(11/27) — 최근에 입은 상의·하의가 든 조합은 뒤로
+  outer?: WardrobeItem; // 이 겉옷을 그대로 쓴다(11/27: 조합 만들기에서 옷을 골라도 보던 룩의 겉옷은 그대로)
 };
 
-export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recent = NO_RECENT_WEAR }: BuildInput): Combo[] {
+export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recent = NO_RECENT_WEAR, outer }: BuildInput): Combo[] {
   const fits = (item: WardrobeItem) => day === undefined || fitsTemp(item, day);
   const pool = wardrobe.filter((item) => item.id !== anchor?.id && fits(item));
   const tops = pool.filter(isTop);
@@ -140,10 +141,13 @@ export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recen
 
   // 2) 겉옷·신발·가방을 차례로 채운다.
   const wantsOuter = anchor?.slot !== '아우터' && day !== undefined && needsOuter(day);
+  const keepOuter = anchor?.slot !== '아우터' && outer !== undefined && outer.id !== anchor?.id ? outer : undefined;
   const combos: Combo[] = [];
   for (const base of bases) {
     let items = base;
-    if (wantsOuter) items = addBest(items, outers);
+    // 정해 둔 겉옷이 있으면 그대로(색이 너무 안 맞아 조합이 안 되면 그때만 다른 겉옷).
+    if (keepOuter !== undefined && harmony([...items, keepOuter]) !== null) items = [...items, keepOuter];
+    else if (wantsOuter) items = addBest(items, outers);
     if (anchor?.slot !== '신발') items = addBest(items, shoes);
     if (anchor?.slot !== '가방') items = addBest(items, bags);
     const result = harmony(items);

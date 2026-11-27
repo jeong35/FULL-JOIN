@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -8,12 +8,12 @@ import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
 import { BottomSheet } from '@/components/PhotoAddParts';
 import { ItemIcon } from '@/components/WardrobeIcon';
-import { TAB_BAR_GAP, TAB_BAR_HEIGHT, useTabBarBottom, useTabScrollBottom } from '@/components/tabBarSpace';
+import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT, useTabBarBottom, useTabScrollBottom } from '@/components/tabBarSpace';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { track } from '@/data/events';
-import { useHintOpen } from '@/data/hints';
+import { useHintOpen, useShowingHint } from '@/data/hints';
 import { pickPhotos, startPhotoBatch } from '@/data/photoAdd';
 import { loadArchive, loadWardrobe, removeWardrobeItems, useArchiveState, useWardrobeState } from '@/data/store';
 import type { Season, WardrobeItem } from '@/data/types';
@@ -54,6 +54,9 @@ export default function ClosetScreen() {
   const emptyHintOpen = useHintOpen('closet_empty');
   const afterClosetHintOpen = useHintOpen('home_after_closet');
   const swipeHintOpen = useHintOpen('closet_swipe');
+  // 지우기 칸이 떠 있는 동안은 챗봇 말풍선을 띄우지 않는다(11/27, 같은 자리라 겹쳐 보임).
+  const focused = useIsFocused();
+  useShowingHint(editing && focused);
   const photos = useWardrobePhotos();
   const view = useClosetView();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -226,7 +229,7 @@ export default function ClosetScreen() {
       )}
 
       {/* 아래 말풍선이 떠 있으면 마지막 줄 옷이 가려지지 않게 그만큼 더 내려 볼 수 있게 한다. */}
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.grid, { paddingBottom: scrollBottom + (showAfterClosetHint ? 74 : 0) }]}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.grid, { paddingBottom: scrollBottom + (showAfterClosetHint ? 100 : 0) + (editing ? 120 : 0) }]}>
         {wardrobe.length === 0 && loading ? (
           <View style={styles.emptyBox}>
             <ActivityIndicator color={colors.textPurple} />
@@ -270,7 +273,7 @@ export default function ClosetScreen() {
       )}
 
       {editing && (
-        <View style={styles.deleteBar}>
+        <View style={[styles.deleteBar, { bottom: barBottom + TAB_BAR_HEIGHT + TAB_BAR_GAP }]}>
           {confirming && !deleting ? (
             // 지우기 전에 한 번 더 묻는다. 지운 옷은 되돌릴 수 없다(동료 피드백 11/14).
             <>
@@ -522,10 +525,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 14,
   },
+  // 11/27: 오른쪽 아래 챗봇 버튼(오른쪽 16 + 56)이 말풍선 끝을 가려서, 버튼 왼쪽까지만.
   hintBottom: {
     position: 'absolute',
     left: layout.screenPaddingX,
-    right: layout.screenPaddingX,
+    right: 16 + CHAT_BUTTON_SIZE + 10,
     bottom: 12,
   },
   scroll: {
@@ -726,12 +730,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
   },
+  // 11/27: 떠 있는 탭바 뒤에 가려지던 지우기 칸을 탭바 위로 띄운다(챗봇 버튼 왼쪽까지, 옷장 말풍선과 같은 자리).
   deleteBar: {
-    paddingHorizontal: layout.screenPaddingX,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.background,
+    position: 'absolute',
+    left: layout.screenPaddingX,
+    right: 16 + CHAT_BUTTON_SIZE + 10,
+    padding: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    boxShadow: '0 8px 24px rgba(30,20,50,0.12)',
   },
   deleteButton: {
     height: 48,

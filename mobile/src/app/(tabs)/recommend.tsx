@@ -96,6 +96,8 @@ export default function RecommendScreen() {
   const scrollRef = useRef<ScrollViewInstance>(null);
   // 조합 만들기에서 누른 옷(11/25): 그 옷이 들어간 조합으로 오늘의 룩을 다시 만든다. ×로 풀면 원래대로.
   const [anchorId, setAnchorId] = useState<string | null>(null);
+  // 옷을 고를 때 보던 룩의 겉옷(11/27): 고른 옷으로 룩을 다시 만들어도 겉옷은 그대로 둔다.
+  const [keptOuterId, setKeptOuterId] = useState<string | null>(null);
   const expandedAt = useRef(0);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -153,13 +155,13 @@ export default function RecommendScreen() {
     [view.looks.length, view.pending, view.wardrobeStatus, view.archiveStatus, view.wardrobe, day, view.recent],
   );
   const anchor = anchorId === null ? undefined : view.wardrobe.find((item) => item.id === anchorId);
+  const keptOuter = keptOuterId === null ? undefined : view.wardrobe.find((item) => item.id === keptOuterId);
   const anchorLooks = useMemo(() => {
     if (anchor === undefined) return [];
-    const fitting = buildCombos({ wardrobe: view.wardrobe, day, anchor, max: MAX_LOOKS });
-    const combos = fitting.length > 0 ? fitting : buildCombos({ wardrobe: view.wardrobe, anchor, max: MAX_LOOKS });
-    // 고른 옷을 큰 칸(첫 칸)에 보여 준다.
-    return combos.map((combo) => ({ ...combo, items: [anchor, ...combo.items.filter((item) => item.id !== anchor.id)] }));
-  }, [anchor, view.wardrobe, day]);
+    const fitting = buildCombos({ wardrobe: view.wardrobe, day, anchor, max: MAX_LOOKS, outer: keptOuter });
+    // 11/27: 고른 옷을 큰 칸으로 옮기지 않는다 — 칸 배치(겉옷 큰 칸, 상의·하의 오른쪽)는 원래 룩과 같게.
+    return fitting.length > 0 ? fitting : buildCombos({ wardrobe: view.wardrobe, anchor, max: MAX_LOOKS, outer: keptOuter });
+  }, [anchor, view.wardrobe, day, keptOuter]);
   // 조합 만들기(/combo)나 오늘의 룩에서 '입을래요'로 고른 옷장 조합(11/25): 그날 오늘의 룩 맨 앞에 둔다.
   // 룩 id가 옷 id를 + 로 이은 것이라 옷장에서 다시 찾는다(옷이 지워졌으면 없던 걸로).
   const chosenLookId = choices[selected]?.lookId;
@@ -232,6 +234,11 @@ export default function RecommendScreen() {
     : chosenCombo !== undefined
       ? [chosenCombo, ...defaultClosetLooks.filter((combo) => combo.id !== chosenCombo.id)]
       : defaultClosetLooks;
+  // 지금 오늘의 룩에 보이는 겉옷(조합 만들기에서 옷을 고를 때 그대로 두려고).
+  const shownItems = shownLook !== undefined
+    ? shownLook.pieces.map((piece) => piece.wardrobeItem)
+    : shownClosetLooks.length > 0 ? shownClosetLooks[lookIndex % shownClosetLooks.length].items : [];
+  const shownOuterId = shownItems.find((item) => item.slot === '아우터')?.id ?? null;
 
   return (
     <TabScreen
@@ -337,6 +344,7 @@ export default function RecommendScreen() {
               anchorId={anchor?.id ?? null}
               onPick={(id) => {
                 setAnchorId((current) => (current === id ? null : id));
+                setKeptOuterId(shownOuterId);
                 setLookIndex(0);
                 scrollRef.current?.scrollTo({ y: 0, animated: true });
               }}
@@ -570,6 +578,13 @@ function currentTemp(day: DayWeather): number {
 // 오늘의 룩을 고르는 순서(11/25 팀 결정 — 오늘의 룩은 어떻게든 보여 준다):
 // ① 저장한 사진 룩 중 내 옷으로 다 되는 것(비슷한 옷·대신 입기 포함) → ② 옷장 옷만으로 기온에 맞는 조합
 // → ③ 기온에서 가장 덜 벗어난 조합 + 안내 → ④ 옷장에 상의·하의(원피스)가 없으면 오늘 기온에 맞는 추구미 피드 사진.
+// 받침이 없거나 ㄹ받침이면 '로', 그 밖의 받침이면 '으로'(맨투맨으로 · 슬랙스로 · 레더재킷으로).
+function withEuRo(word: string): string {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  const final = code >= 0 && code <= 11171 ? code % 28 : 0;
+  return `${word}${final === 0 || final === 8 ? '로' : '으로'}`;
+}
+
 function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnchor, index, date, chosenId, onChoose, onNext }: {
   title: string;
   view: ReturnType<typeof useRecommendation>;
@@ -629,7 +644,7 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
       </View>
       {anchor !== undefined && (
         <View style={styles.anchorRow}>
-          <Text style={styles.anchorText} numberOfLines={1}>{anchor.color} {kindLabel(anchor.kind)}로 만든 룩</Text>
+          <Text style={styles.anchorText} numberOfLines={1}>{anchor.color} {withEuRo(kindLabel(anchor.kind))} 만든 룩</Text>
           <Pressable onPress={onClearAnchor} accessibilityRole="button" accessibilityLabel="고른 옷 풀고 원래 추천 보기" hitSlop={8} style={styles.anchorClear}>
             <Text style={styles.anchorClearText}>원래 추천 ×</Text>
           </Pressable>

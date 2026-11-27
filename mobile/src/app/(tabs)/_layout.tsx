@@ -8,7 +8,7 @@ import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT as BAR_HEIGHT, TAB_BAR_SI
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
 import { track } from '@/data/events';
 import { emitHomeTabReselect } from '@/data/homeTab';
-import { markHintDone, useHintOpen } from '@/data/hints';
+import { markHintDone, useHintOpen, useOtherHintShown } from '@/data/hints';
 import { hasLoggedInBefore, hasSeenIntro, useSession } from '@/data/session';
 import { loadWardrobeArt } from '@/data/wardrobeLook';
 import { colors, fonts } from '@/theme';
@@ -34,7 +34,9 @@ export default function TabLayout() {
   const chatOpening = useRef(false);
   const chatHintOpen = useHintOpen('chat_button');
   // 11/26: 홈의 추구미 안내 말풍선(feed_taste)을 빼서, 챗봇 말풍선은 그 말풍선을 기다리지 않는다.
-  const showChatHint = pathname !== '/chat' && chatHintOpen;
+  // 11/27: 화면에 다른 말풍선이 떠 있으면(옷장 '홈으로 가기' 등) 겹치지 않게 그게 닫힐 때까지 기다린다.
+  const otherHintShown = useOtherHintShown();
+  const showChatHint = pathname !== '/chat' && chatHintOpen && !otherHintShown;
 
   // 옷 추가·옷장의 시안 그림(약 880KB)을 앱이 뜨고 조금 뒤에 미리 불러 둔다 — 옷장에 들어갈 때 기다리지 않게(11/19).
   useEffect(() => {
