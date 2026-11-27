@@ -14,6 +14,10 @@ assert.deepEqual(classifyActionChatIntents('이 사진이랑 비슷한 옷 내 �
 assert.deepEqual(classifyActionChatIntents('내 옷장과 비교하고 비슷한 상품도 찾아줘.', { hasSelectedPhoto: true }), [
   'find_similar_item', 'compare_saved_style',
 ]);
+assert.deepEqual(classifyActionChatIntents('이 코디에서 부족한 옷 알려줘.', { hasSelectedPhoto: true }), ['compare_saved_style']);
+assert.deepEqual(classifyActionChatIntents('비슷한 옷 구매할 수 있는 곳 찾아줘.'), ['find_similar_item']);
+assert.deepEqual(classifyActionChatIntents('오늘 입을 코디랑 부족한 옷 살 곳 알려줘.'), ['today_outfit', 'find_similar_item']);
+assert.deepEqual(classifyActionChatIntents('오늘 날씨에 반팔 괜찮을까?'), ['today_outfit']);
 assert.deepEqual(extractChatFilters('아이보리 가디건과 미니멀 코디'), { styles: ['미니멀'], kind: '카디건', color: '아이보리' });
 
 const ranked = rankCompatibleStyles([

@@ -79,14 +79,16 @@ export function extractChatFilters(message: string): ChatFilters {
 export function classifyActionChatIntents(message: string, context: { hasSelectedPhoto?: boolean } = {}): ActionChatIntent[] {
   const intents: ActionChatIntent[] = [];
   const normalized = message.replace(/\s+/g, " ").trim();
-  const wantsNotification = /(알림|알려\s*줘|알려\s*주세요|추천받)/u.test(normalized);
-  const wantsToday = /오늘.*(뭐\s*입|입을|코디|옷)|지금.*뭐\s*입|오늘의\s*룩/u.test(normalized);
+  const wantsNotification = /(알림|추천받|(?:매일|내일|아침|저녁).*(?:알려\s*줘|알려\s*주세요))/u.test(normalized);
+  const wantsToday = /오늘.*(뭐\s*입|입을|코디|옷)|오늘.*날씨.*(반팔|긴팔|아우터|겉옷|재킷|코트|패딩)|지금.*뭐\s*입|오늘의\s*룩/u.test(normalized);
   const wantsOwned = /(내\s*옷|옷장|가지고\s*있는|등록한).*(코디|입을|추천|찾)/u.test(normalized);
-  const hasExplicitShoppingTarget = /(상품|제품|쇼핑몰|구매|사고\s*싶|살\s*옷|링크)/u.test(normalized);
-  const wantsSimilar = hasExplicitShoppingTarget && /(비슷한|유사한|찾|추천|보여)/u.test(normalized);
+  const hasExplicitShoppingTarget = /(상품|제품|쇼핑몰|구매|사고\s*싶|살\s*(?:옷|곳)|링크)/u.test(normalized);
+  const wantsSimilar = hasExplicitShoppingTarget && /(비슷한|유사한|찾|추천|보여|알려|살\s*곳)/u.test(normalized);
   const wantsPhotoAnalysis = /(이\s*사진|사진\s*속).*(무슨\s*옷|아이템|분석)/u.test(normalized);
-  const wantsPhotoWardrobeMatch = context.hasSelectedPhoto === true && wantsOwned &&
-    /(이\s*사진|사진\s*속|비슷한|유사한|비교|활용|입을\s*수)/u.test(normalized);
+  const wantsPhotoWardrobeMatch = context.hasSelectedPhoto === true && (
+    (wantsOwned && /(이\s*사진|사진\s*속|비슷한|유사한|비교|활용|입을\s*수)/u.test(normalized)) ||
+    (/(이\s*사진|사진\s*속|이\s*코디)/u.test(normalized) && /(비슷한|유사한|부족한|필요한|비교|활용|입을\s*수|찾)/u.test(normalized))
+  );
   const wantsAdd = /(등록|추가|옷장에\s*넣)/u.test(normalized) && /(옷|상의|하의|아우터|신발|가방|카디건|가디건|니트|팬츠|스커트)/u.test(normalized);
   const wantsSaved = /(저장한|전에\s*저장|아카이브)/u.test(normalized);
   const wantsCompare = /(비교|처럼\s*입|활용|입을\s*수)/u.test(normalized) && /(사진|저장)/u.test(normalized);

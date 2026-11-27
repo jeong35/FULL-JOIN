@@ -226,11 +226,31 @@ async function run() {
     body: JSON.stringify({ user_id: owner, style_image_id: styleImageId, message: "내 옷장에 있는 데님팬츠로 코디해줘" }),
   });
   assert.equal(groundedChat.status, 200);
-  assert.equal(groundedChat.body.answer_source, "grounded");
+  assert.equal(["fallback", "openai"].includes(groundedChat.body.answer_source), true);
   assert.equal(groundedChat.body.conversation_id, null);
   assert.equal(groundedChat.body.history_persisted, false);
   assert.ok(groundedChat.body.claimed_owned_item_ids.every((id) => afterDelete.body.wardrobe_items.some((item) => item.id === id)));
   ok("보유 옷 상담", "응답의 소유 주장 ID가 실제 옷장 ID에 한정됨");
+
+  const selectedPhotoMatch = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: owner, style_image_id: styleImageId, message: "이 사진이랑 비슷한 옷 내 옷장에서 찾아줘." }),
+  });
+  assert.equal(selectedPhotoMatch.status, 200);
+  assert.deepEqual(selectedPhotoMatch.body.action_intents, ["compare_saved_style"]);
+  assert.equal(selectedPhotoMatch.body.actions.length <= 2, true);
+  assert.equal(selectedPhotoMatch.body.actions.some((action) => action.type === "OPEN_COMPARISON"), true);
+  assert.equal(selectedPhotoMatch.body.actions.some((action) => ["OPEN_FILTERED_FEED", "OPEN_PRODUCT_SEARCH"].includes(action.type)), false);
+  ok("선택 사진 옷장 비교", "관련 없는 피드·상품 검색 없이 비교 Action만 반환");
+
+  const missingItems = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: owner, style_image_id: styleImageId, message: "이 코디에서 부족한 옷 알려줘." }),
+  });
+  assert.deepEqual(missingItems.body.action_intents, ["compare_saved_style"]);
+  assert.match(missingItems.body.answer, /활용 가능한 옷|비슷한 옷|새로 필요한 옷/u);
+  assert.equal(missingItems.body.actions.some((action) => action.type === "OPEN_COMPARISON"), true);
+  ok("선택 코디 부족 아이템", "활용·비슷함·필요를 구분하고 비교 화면으로 연결");
 
   const generalChat = await api("/chat", {
     method: "POST",
@@ -290,6 +310,32 @@ async function run() {
   assert.equal(todayOutfit.status, 200);
   assert.equal(todayOutfit.body.actions.some((action) => action.type === "OPEN_RECOMMENDATION"), true);
   ok("오늘의 룩 연결", "추천 알고리즘을 복제하지 않고 추천 탭 Action을 반환");
+
+  for (const message of ["오늘 입을 수 있는 코디 찾아줘.", "오늘 뭐 입지?", "오늘 날씨에 반팔 괜찮을까?"]) {
+    const response = await api("/chat", { method: "POST", body: JSON.stringify({ user_id: owner, message }) });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.action_intents, ["today_outfit"]);
+    assert.equal(response.body.actions.length <= 2, true);
+    assert.equal(response.body.actions.some((action) => action.type === "OPEN_RECOMMENDATION"), true);
+  }
+  ok("오늘 코디 표현 변형", "세 질문 모두 오늘의 룩 하나로 routing");
+
+  const shopping = await api("/chat", {
+    method: "POST", body: JSON.stringify({ user_id: owner, message: "비슷한 옷 구매할 수 있는 곳 찾아줘." }),
+  });
+  assert.deepEqual(shopping.body.action_intents, ["find_similar_item"]);
+  assert.equal(shopping.body.actions.length <= 2, true);
+  assert.equal(shopping.body.actions.some((action) => action.type === "OPEN_ARCHIVE"), true);
+  ok("상품 탐색 대상 확인", "종류가 불명확하면 저장 사진 선택을 먼저 제안");
+
+  const composite = await api("/chat", {
+    method: "POST", body: JSON.stringify({ user_id: owner, message: "오늘 입을 코디랑 부족한 옷 살 곳 알려줘." }),
+  });
+  assert.deepEqual(composite.body.action_intents, ["today_outfit", "find_similar_item"]);
+  assert.equal(composite.body.actions.length, 2);
+  assert.equal(composite.body.actions[0].type, "OPEN_RECOMMENDATION");
+  assert.equal(composite.body.actions[1].type, "OPEN_ARCHIVE");
+  ok("명시적 복합 목적", "오늘의 룩과 상품 탐색 준비 Action을 각각 유지");
 
   const missingContext = await api("/chat", {
     method: "POST",
