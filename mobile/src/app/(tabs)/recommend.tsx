@@ -1054,7 +1054,8 @@ const styles = StyleSheet.create({
   moreButton: { height: 32, paddingLeft: 10, paddingRight: 8, borderRadius: 9, backgroundColor: colors.white, boxShadow: glass.selectedInnerShadow, flexDirection: 'row', alignItems: 'center', gap: 2 },
   moreText: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPurple },
   // 11/27: 반투명 칸 사이 선이 흐릿하게 어긋나 보여서, 칸은 흰색으로 꽉 채우고 사이 선(2px)은 연한 보랏빛 회색으로 또렷하게.
-  grid: { gap: 2, borderRadius: 12, overflow: 'hidden', backgroundColor: '#ECE9F4' },
+  // 11/27: 흰 칸과 흰 카드 바탕이 맞닿는 바깥쪽은 경계가 사라져 보여서, 바깥에도 안쪽 선과 같은 2px 테두리.
+  grid: { gap: 2, borderRadius: 12, overflow: 'hidden', backgroundColor: '#ECE9F4', borderWidth: 2, borderColor: '#ECE9F4' },
   gridRow: { flexDirection: 'row', gap: 2 },
   gridColumn: { flex: 1, gap: 2 },
   tile: { backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
