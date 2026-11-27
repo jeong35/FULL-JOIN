@@ -7,7 +7,7 @@
 import { kindLabel, type Color } from './catalog';
 import type { WardrobeItem } from './types';
 import { NO_RECENT_WEAR, wearPenalty, type RecentWear } from './recentWear';
-import { fitsTemp, needsOuter, type DayWeather } from './weather';
+import { fitsTemp, needsOuter, seasonMismatch, type DayWeather } from './weather';
 
 // 어디에나 받쳐 입기 쉬운 색(데님 포함).
 const NEUTRALS: ReadonlySet<Color> = new Set<Color>([
@@ -109,6 +109,11 @@ function addBest(items: WardrobeItem[], candidates: readonly WardrobeItem[]): Wa
   return best;
 }
 
+// 조합 안 옷들의 '그날과 안 맞게 고른 계절' 수 합(weather.ts seasonMismatch). 날씨를 모르면 0.
+function seasonOff(items: readonly WardrobeItem[], day: DayWeather | undefined): number {
+  return day === undefined ? 0 : items.reduce((sum, item) => sum + seasonMismatch(item, day), 0);
+}
+
 type BuildInput = {
   wardrobe: readonly WardrobeItem[];
   day?: DayWeather | undefined;
@@ -116,9 +121,10 @@ type BuildInput = {
   max?: number;
   maxUses?: number; // 같은 옷(고른 옷 제외)이 결과에 나오는 최대 횟수
   recent?: RecentWear; // 최근 입기로 한 옷(11/27) — 최근에 입은 상의·하의가 든 조합은 뒤로
+  outer?: WardrobeItem; // 이 겉옷을 그대로 쓴다(11/27: 조합 만들기에서 옷을 골라도 보던 룩의 겉옷은 그대로)
 };
 
-export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recent = NO_RECENT_WEAR }: BuildInput): Combo[] {
+export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recent = NO_RECENT_WEAR, outer }: BuildInput): Combo[] {
   const fits = (item: WardrobeItem) => day === undefined || fitsTemp(item, day);
   const pool = wardrobe.filter((item) => item.id !== anchor?.id && fits(item));
   const tops = pool.filter(isTop);
@@ -140,10 +146,13 @@ export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recen
 
   // 2) 겉옷·신발·가방을 차례로 채운다.
   const wantsOuter = anchor?.slot !== '아우터' && day !== undefined && needsOuter(day);
+  const keepOuter = anchor?.slot !== '아우터' && outer !== undefined && outer.id !== anchor?.id ? outer : undefined;
   const combos: Combo[] = [];
   for (const base of bases) {
     let items = base;
-    if (wantsOuter) items = addBest(items, outers);
+    // 정해 둔 겉옷이 있으면 그대로(색이 너무 안 맞아 조합이 안 되면 그때만 다른 겉옷).
+    if (keepOuter !== undefined && harmony([...items, keepOuter]) !== null) items = [...items, keepOuter];
+    else if (wantsOuter) items = addBest(items, outers);
     if (anchor?.slot !== '신발') items = addBest(items, shoes);
     if (anchor?.slot !== '가방') items = addBest(items, bags);
     const result = harmony(items);
@@ -153,9 +162,12 @@ export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recen
     if (day !== undefined) tags.push('기온 맞춤');
     combos.push({ id: sorted.map((item) => item.id).join('+'), items: sorted, tags, score: result.score });
   }
-  // 최근에 입은 옷이 적은 조합 → 어울림 점수 → id 순서(11/27).
+  // 최근에 입은 옷이 적은 조합 → 그날 계절에 딱 맞게 고른 옷이 많은 조합(사계절 옷은 뒤로) → 어울림 점수 → id 순서(11/27).
   const penalty = new Map(combos.map((combo) => [combo.id, wearPenalty(combo.items, combo.id, recent)]));
-  combos.sort((a, b) => (penalty.get(a.id) ?? 0) - (penalty.get(b.id) ?? 0) || b.score - a.score || a.id.localeCompare(b.id));
+  const offSeason = new Map(combos.map((combo) => [combo.id, seasonOff(combo.items, day)]));
+  combos.sort((a, b) => (penalty.get(a.id) ?? 0) - (penalty.get(b.id) ?? 0)
+    || (offSeason.get(a.id) ?? 0) - (offSeason.get(b.id) ?? 0)
+    || b.score - a.score || a.id.localeCompare(b.id));
 
   // 3) 같은 옷만 계속 나오지 않게(상의·하의·원피스 하나당 최대 maxUses번) 고른다. 겉옷·신발·가방은 세지 않는다.
   const uses = new Map<string, number>();
@@ -186,14 +198,30 @@ export function sortItems(items: readonly WardrobeItem[]): WardrobeItem[] {
 
 // 고른 옷으로 만들 수 있는 조합 전부(점수 순). 사용자가 직접 고른 옷이라 기온으로 거르지 않고,
 // 겉옷을 여러 벌 골랐으면 겉옷마다 따로 조합을 만든다. 신발·가방은 그 조합에 가장 어울리는 것.
-export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather | undefined): Combo[] {
-  const tops = selected.filter(isTop);
-  const bottoms = selected.filter(isBottom);
-  const onePieces = selected.filter(isOnePiece);
-  const outers = selected.filter((item) => item.slot === '아우터');
-  const shoes = selected.filter((item) => item.slot === '신발');
-  const bags = selected.filter((item) => item.slot === '가방');
-  const bodies = [...tops.flatMap((top) => bottoms.map((bottom) => [top, bottom])), ...onePieces.map((piece) => [piece])];
+// fixed 옷과 같은 자리라 같이 못 입는 옷인지(11/27): 상의를 정했으면 다른 상의·원피스, 원피스면 상의·하의·다른 원피스,
+// 겉옷·신발·가방이면 같은 부위의 다른 옷.
+export function competesWith(fixed: WardrobeItem, item: WardrobeItem): boolean {
+  if (item.id === fixed.id) return false;
+  if (isOnePiece(fixed)) return isTop(item) || isBottom(item) || isOnePiece(item);
+  if (isTop(fixed)) return isTop(item) || isOnePiece(item);
+  if (isBottom(fixed)) return isBottom(item) || isOnePiece(item);
+  return item.slot === fixed.slot;
+}
+
+// fixed: 꼭 넣을 옷(11/27: 코디 탭 '내 옷으로 조합 만들기'에서 고른 옷). 그 자리는 이 옷만 쓴다.
+export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather | undefined, fixed?: WardrobeItem): Combo[] {
+  const only = (items: WardrobeItem[], pick: (item: WardrobeItem) => boolean) =>
+    fixed !== undefined && pick(fixed) ? [fixed] : items;
+  const fixedBody = fixed !== undefined && (isTop(fixed) || isBottom(fixed) || isOnePiece(fixed));
+  const tops = only(selected.filter(isTop), isTop);
+  const bottoms = only(selected.filter(isBottom), isBottom);
+  const onePieces = fixedBody && !isOnePiece(fixed) ? [] : only(selected.filter(isOnePiece), isOnePiece);
+  const outers = only(selected.filter((item) => item.slot === '아우터'), (item) => item.slot === '아우터');
+  const shoes = only(selected.filter((item) => item.slot === '신발'), (item) => item.slot === '신발');
+  const bags = only(selected.filter((item) => item.slot === '가방'), (item) => item.slot === '가방');
+  const bodies = fixed !== undefined && isOnePiece(fixed)
+    ? [[fixed]]
+    : [...tops.flatMap((top) => bottoms.map((bottom) => [top, bottom])), ...onePieces.map((piece) => [piece])];
   const outerChoices: WardrobeItem[][] = outers.length === 0 ? [[]] : outers.map((outer) => [outer]);
   const combos: Combo[] = [];
   for (const body of bodies) {
@@ -209,7 +237,8 @@ export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather
       combos.push({ id: sorted.map((item) => item.id).join('+'), items: sorted, tags, score: result.score + (tags.includes('기온 맞춤') ? 1 : 0) });
     }
   }
-  return combos.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  const offSeason = new Map(combos.map((combo) => [combo.id, seasonOff(combo.items, day)]));
+  return combos.sort((a, b) => (offSeason.get(a.id) ?? 0) - (offSeason.get(b.id) ?? 0) || b.score - a.score || a.id.localeCompare(b.id));
 }
 
 // 고른 옷으로 조합이 하나도 안 나올 때 무엇이 모자란지.

@@ -4,11 +4,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
-import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT as BAR_HEIGHT, useTabBarBottom } from '@/components/tabBarSpace';
+import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT as BAR_HEIGHT, TAB_BAR_SIDE, useTabBarBottom } from '@/components/tabBarSpace';
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
 import { track } from '@/data/events';
 import { emitHomeTabReselect } from '@/data/homeTab';
-import { markHintDone, useHintOpen } from '@/data/hints';
+import { markHintDone, useHintOpen, useOtherHintShown } from '@/data/hints';
 import { hasLoggedInBefore, hasSeenIntro, useSession } from '@/data/session';
 import { loadWardrobeArt } from '@/data/wardrobeLook';
 import { colors, fonts } from '@/theme';
@@ -34,7 +34,12 @@ export default function TabLayout() {
   const chatOpening = useRef(false);
   const chatHintOpen = useHintOpen('chat_button');
   // 11/26: 홈의 추구미 안내 말풍선(feed_taste)을 빼서, 챗봇 말풍선은 그 말풍선을 기다리지 않는다.
-  const showChatHint = pathname !== '/chat' && chatHintOpen;
+  // 11/27: 화면에 다른 말풍선이 떠 있으면(옷장 '홈으로 가기' 등) 겹치지 않게 그게 닫힐 때까지 기다린다.
+  const otherHintShown = useOtherHintShown();
+  // 11/27(친구분 의견): 옷 넣기 → 사진 저장 → 비교 말풍선을 다 본 뒤에 챗봇을 알려 준다.
+  // 비교 결과를 한 번 열면(또는 '사진 눌러 비교' 말풍선을 닫으면) archive_open이 끝난 것으로 남는다.
+  const compareFlowDone = !useHintOpen('archive_open');
+  const showChatHint = pathname !== '/chat' && chatHintOpen && compareFlowDone && !otherHintShown;
 
   // 옷 추가·옷장의 시안 그림(약 880KB)을 앱이 뜨고 조금 뒤에 미리 불러 둔다 — 옷장에 들어갈 때 기다리지 않게(11/19).
   useEffect(() => {
@@ -177,14 +182,15 @@ const styles = StyleSheet.create({
     zIndex: 32,
     elevation: 14,
   },
+  // 11/27: 양옆 21(토스와 같음) — 카드(16)보다 살짝 안쪽이라 떠 있는 게 더 보인다.
   tabBar: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: TAB_BAR_SIDE,
+    right: TAB_BAR_SIDE,
     height: BAR_HEIGHT,
     paddingTop: 0,
     paddingBottom: 0,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: BAR_HEIGHT / 2,
     borderTopWidth: 0,
     backgroundColor: 'transparent',
@@ -192,11 +198,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     boxShadow: '0 10px 30px rgba(30,20,50,0.14)',
   },
+  // 선택 알약: 탭바 안쪽 위아래·양끝 4(토스와 같음).
   tabItem: {
-    height: 52,
-    marginTop: 6,
-    marginHorizontal: 2,
-    borderRadius: 26,
+    height: BAR_HEIGHT - 8,
+    marginTop: 4,
+    marginHorizontal: 0,
+    borderRadius: (BAR_HEIGHT - 8) / 2,
     justifyContent: 'center',
     overflow: 'hidden',
   },

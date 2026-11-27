@@ -1,6 +1,6 @@
 // 다음 할 일 말풍선(힌트). 한 화면에서 할 일을 마치면 다음 할 일을 말풍선으로 알려 준다(11/10 선배 피드백).
 // 다음 할 일을 한 번 하거나 ×로 닫으면 그 말풍선은 다시 띄우지 않는다. 계정마다 따로, 이 브라우저에만 기억한다.
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
 import { getSession, useSession } from './session';
 
@@ -64,4 +64,41 @@ function subscribe(listener: () => void) {
 export function useHintOpen(id: HintId): boolean {
   const account = useSession()?.userId ?? 'guest';
   return useSyncExternalStore(subscribe, () => !isDone(account, id), () => false);
+}
+
+// ── 말풍선은 한 번에 하나씩(11/27) ──
+// 챗봇 버튼 말풍선은 탭 화면 위에 떠 있어서, 그 화면의 다른 말풍선(옷장 '홈으로 가기' 등)과 겹쳤다.
+// 지금 보이는 화면에 다른 말풍선이 떠 있으면 챗봇 말풍선은 그 말풍선이 닫힐 때까지 기다린다.
+const shownBubbles = new Set<symbol>();
+const shownListeners = new Set<() => void>();
+
+function emitShown() {
+  for (const listener of shownListeners) listener();
+}
+
+// 말풍선이 지금 보이는 화면에 떠 있는 동안 세어 둔다(HintBubble이 부른다).
+export function useShowingHint(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const token = Symbol('hint');
+    shownBubbles.add(token);
+    emitShown();
+    return () => {
+      shownBubbles.delete(token);
+      emitShown();
+    };
+  }, [active]);
+}
+
+export function useOtherHintShown(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      shownListeners.add(listener);
+      return () => {
+        shownListeners.delete(listener);
+      };
+    },
+    () => shownBubbles.size > 0,
+    () => false,
+  );
 }
