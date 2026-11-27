@@ -687,7 +687,7 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
         </>
       ) : closet !== undefined ? (
         <>
-          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} wearNote={wearNote} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} position={position} />
+          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} wearNote={wearNote} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} position={position} pickedId={anchor?.id} />
         </>
       ) : feedLook !== undefined ? (
         <FeedLookCard image={feedLook} emptyCloset={view.wardrobe.length === 0} onAdd={addClothes.onPress} />
@@ -725,7 +725,7 @@ function ChooseRow({ date, chosen, onChoose, onNext, position }: { date: string;
 
 // 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 보통은 모두 그날 기온에 맞는 옷이다.
 // day가 있으면(③ 가장 가까운 조합) 기온에 딱 맞지 않는다는 안내를 붙인다.
-function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, chosen, onChoose, onNext, position }: {
+function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, chosen, onChoose, onNext, position, pickedId }: {
   combo: Combo;
   date: string;
   day?: DayWeather;
@@ -736,8 +736,9 @@ function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, ch
   onChoose: () => void;
   onNext?: () => void;
   position?: string;
+  // 코디 탭 '내 옷으로 조합 만들기'에서 고른 옷(11/27). 있으면 '조합 더'가 그 옷을 꼭 넣고, 없으면 기준 옷 없이 전부.
+  pickedId?: string;
 }) {
-  const anchor = combo.items.find((item) => item.slot === '상의' || item.slot === '원피스') ?? combo.items[0];
   const gaps = day === undefined ? [] : combo.items.map((item) => tempGap(item, day));
   const nearNote = day === undefined ? null
     : gaps.includes('추움') ? '오늘 기온에 딱 맞는 옷이 부족해 가장 가까운 옷으로 골랐어요. 겉옷이나 스타킹을 더해 따뜻하게 입어요'
@@ -753,9 +754,9 @@ function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, ch
           <Text style={styles.sub} numberOfLines={1}>내 옷장에서 골랐어요{combo.tags.includes('기온 맞춤') ? ' · 기온 맞춤' : ''}</Text>
           <Text style={styles.lookTitle}>가진 옷 {combo.items.length}벌로 완성</Text>
         </View>
-        {anchor !== undefined && (
+        {combo.items.length > 0 && (
           <Pressable
-            onPress={() => router.push({ pathname: '/combo/[id]', params: { id: anchor.id, date } })}
+            onPress={() => router.push({ pathname: '/combo/[id]', params: { id: pickedId ?? 'all', date } })}
             accessibilityRole="button"
             style={styles.moreButton}>
             <Text style={styles.moreText}>조합 더</Text>

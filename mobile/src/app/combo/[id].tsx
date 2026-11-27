@@ -1,5 +1,5 @@
 // 조합 만들기. 주소: /combo/{처음 누른 옷장 옷 id}?date=YYYY-MM-DD
-// 추천 탭 '오늘 기온에 맞는 내 옷'에서 옷을 누르면 온다. 그날 날씨로 그 옷과 어울리는 옷 여러 벌을 먼저 골라 두고(suggestSet),
+// 코디 탭 오늘의 룩 '조합 더'에서 온다(11/27): /combo/all은 기준 옷 없이 그날 기온에 맞는 내 옷 전부, /combo/{옷 id}는 '내 옷으로 조합 만들기'에서 고른 그 옷을 꼭 넣고 나머지는 전부.
 // 사용자가 옷을 더하거나 빼면 고른 옷들로 만들 수 있는 조합을 전부 다시 보여 준다(combosFromSet). 옷장 옷만 쓴다.
 // 11/25: '이 조합으로 입을래요'를 누르면 그날 입을 룩으로 저장된다(recommendChoices, 룩 id = 옷 id를 + 로 이은 것).
 // 코디 탭 오늘의 룩이 그 조합을 맨 앞에 보여 주고, 오늘의 룩에서 고를 때처럼 알림 창(LookChosenSheet)이 뜬다.
@@ -16,7 +16,7 @@ import { LookChosenSheet } from '@/components/LookChosenSheet';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel } from '@/data/catalog';
 import { BackButton } from '@/components/ui';
-import { combosFromSet, itemName, setGap, sortItems, suggestSet, type Combo } from '@/data/combos';
+import { combosFromSet, competesWith, itemName, setGap, sortItems, type Combo } from '@/data/combos';
 import { codiDayLabel, dayOfMonth, todayKey, weekday } from '@/data/dates';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
@@ -25,7 +25,7 @@ import { useSession } from '@/data/session';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import type { WardrobeItem } from '@/data/types';
 import { useRecommendation } from '@/data/useRecommendation';
-import { loadWeather, tempGap } from '@/data/weather';
+import { fitsTemp, loadWeather, tempGap } from '@/data/weather';
 import { colors, fonts, glass, layout } from '@/theme';
 
 const FIRST_SHOWN = 6;
@@ -35,7 +35,9 @@ export default function ComboScreen() {
   const { id, date: dateParam } = useLocalSearchParams<{ id: string; date?: string }>();
   const date = typeof dateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayKey();
   const view = useRecommendation(date);
-  const anchor = view.wardrobe.find((item) => item.id === id);
+  // 11/27: /combo/all = 기준 옷 없이 오늘 기온에 맞는 내 옷 전부로 / 옷 id = 코디 탭에서 사용자가 고른 그 옷을 꼭 넣고.
+  const allMode = id === 'all';
+  const anchor = allMode ? undefined : view.wardrobe.find((item) => item.id === id);
   // null이면 추천대로(날씨·옷장이 바뀌면 같이 바뀐다). 한 번이라도 더하거나 빼면 그때부터 사용자가 고른 목록.
   const [edited, setEdited] = useState<string[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -66,13 +68,18 @@ export default function ComboScreen() {
     void loadWeather(view.region);
   }, [view.region]);
 
-  const suggested = useMemo(
-    () => (anchor === undefined ? [] : suggestSet(anchor, view.wardrobe, view.day)),
-    [anchor, view.wardrobe, view.day],
-  );
+  // 처음 담아 둘 옷: 그날 기온에 맞는 내 옷 전부(고른 옷은 기온과 상관없이 넣는다). 다양한 조합이 나오게(11/27).
+  const suggested = useMemo(() => {
+    if (!allMode && anchor === undefined) return [];
+    const fitting = view.wardrobe.filter((item) => item.id === anchor?.id
+      || ((view.day === undefined || fitsTemp(item, view.day)) && (anchor === undefined || !competesWith(anchor, item))));
+    return sortItems(fitting);
+  }, [allMode, anchor, view.wardrobe, view.day]);
   const selectedIds = useMemo(() => edited ?? suggested.map((item) => item.id), [edited, suggested]);
   const selected = useMemo(() => sortItems(view.wardrobe.filter((item) => selectedIds.includes(item.id))), [view.wardrobe, selectedIds]);
-  const combos = useMemo(() => combosFromSet(selected, view.day), [selected, view.day]);
+  // 고른 옷을 '수정'에서 빼면 그때부터는 고른 옷 없이 전부.
+  const fixed = anchor !== undefined && selectedIds.includes(anchor.id) ? anchor : undefined;
+  const combos = useMemo(() => combosFromSet(selected, view.day, fixed), [selected, view.day, fixed]);
   const shown = showAll ? combos : combos.slice(0, FIRST_SHOWN);
   const gap = combos.length === 0 ? setGap(selected) : null;
   // 저장한 사진 룩 중에 고른 옷만으로 입을 수 있는 것.
@@ -98,7 +105,7 @@ export default function ComboScreen() {
         </View>
       </View>
 
-      {anchor === undefined ? (
+      {!allMode && anchor === undefined ? (
         <View style={styles.pad}>
           <Text style={styles.body}>{view.wardrobeStatus === 'ready' ? '이 옷을 옷장에서 찾지 못했어요' : '옷장을 불러오는 중이에요'}</Text>
         </View>
@@ -120,13 +127,19 @@ export default function ComboScreen() {
                 <EditToggle editing={editing} onPress={toggleEditing} />
               </View>
             </View>
-            {edited === null && <Text style={styles.sub}>{view.day !== undefined ? '날씨에 맞춰 ' : ''}{andParticle(kindLabel(anchor.kind))} 입기 좋은 옷을 골라 뒀어요</Text>}
+            {edited === null && (
+              <Text style={styles.sub}>
+                {anchor !== undefined
+                  ? `${andParticle(kindLabel(anchor.kind))} 입을 ${view.day !== undefined ? '오늘 기온에 맞는 ' : ''}옷을 다 담았어요`
+                  : `${view.day !== undefined ? '오늘 기온에 맞는 ' : ''}내 옷을 다 담았어요`}
+              </Text>
+            )}
             <View style={styles.picked}>
               {selected.map((item) => {
                 const warm = view.day === undefined ? null : tempGap(item, view.day);
                 return (
                   <View key={item.id} style={styles.pickedItem}>
-                    <View style={[styles.pickedTile, item.id === anchor.id && styles.pickedAnchor]}>
+                    <View style={[styles.pickedTile, item.id === anchor?.id && styles.pickedAnchor]}>
                       <ItemIcon item={item} size={48} />
                       {editing && (
                         <Pressable onPress={() => toggle(item.id)} accessibilityRole="button" accessibilityLabel={`${kindLabel(item.kind)} 빼기`} hitSlop={6} style={styles.remove}>
@@ -182,7 +195,7 @@ export default function ComboScreen() {
             ) : (
               <>
                 {shown.map((combo, index) => (
-                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor.id} day={codiDayLabel(date)} chosen={chosenId === combo.id} onChoose={() => choose(combo)} />
+                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor?.id ?? null} day={codiDayLabel(date)} chosen={chosenId === combo.id} onChoose={() => choose(combo)} />
                 ))}
                 {combos.length > FIRST_SHOWN && (
                   <Pressable onPress={() => setShowAll((open) => !open)} accessibilityRole="button" style={styles.more}>
@@ -222,7 +235,7 @@ function ComboCard({ combo, index, anchorId, day, chosen, onChoose }: {
   combo: Combo;
   index: number;
   day: string;
-  anchorId: string;
+  anchorId: string | null;
   chosen: boolean;
   onChoose: () => void;
 }) {

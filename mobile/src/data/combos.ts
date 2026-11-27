@@ -190,14 +190,30 @@ export function sortItems(items: readonly WardrobeItem[]): WardrobeItem[] {
 
 // 고른 옷으로 만들 수 있는 조합 전부(점수 순). 사용자가 직접 고른 옷이라 기온으로 거르지 않고,
 // 겉옷을 여러 벌 골랐으면 겉옷마다 따로 조합을 만든다. 신발·가방은 그 조합에 가장 어울리는 것.
-export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather | undefined): Combo[] {
-  const tops = selected.filter(isTop);
-  const bottoms = selected.filter(isBottom);
-  const onePieces = selected.filter(isOnePiece);
-  const outers = selected.filter((item) => item.slot === '아우터');
-  const shoes = selected.filter((item) => item.slot === '신발');
-  const bags = selected.filter((item) => item.slot === '가방');
-  const bodies = [...tops.flatMap((top) => bottoms.map((bottom) => [top, bottom])), ...onePieces.map((piece) => [piece])];
+// fixed 옷과 같은 자리라 같이 못 입는 옷인지(11/27): 상의를 정했으면 다른 상의·원피스, 원피스면 상의·하의·다른 원피스,
+// 겉옷·신발·가방이면 같은 부위의 다른 옷.
+export function competesWith(fixed: WardrobeItem, item: WardrobeItem): boolean {
+  if (item.id === fixed.id) return false;
+  if (isOnePiece(fixed)) return isTop(item) || isBottom(item) || isOnePiece(item);
+  if (isTop(fixed)) return isTop(item) || isOnePiece(item);
+  if (isBottom(fixed)) return isBottom(item) || isOnePiece(item);
+  return item.slot === fixed.slot;
+}
+
+// fixed: 꼭 넣을 옷(11/27: 코디 탭 '내 옷으로 조합 만들기'에서 고른 옷). 그 자리는 이 옷만 쓴다.
+export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather | undefined, fixed?: WardrobeItem): Combo[] {
+  const only = (items: WardrobeItem[], pick: (item: WardrobeItem) => boolean) =>
+    fixed !== undefined && pick(fixed) ? [fixed] : items;
+  const fixedBody = fixed !== undefined && (isTop(fixed) || isBottom(fixed) || isOnePiece(fixed));
+  const tops = only(selected.filter(isTop), isTop);
+  const bottoms = only(selected.filter(isBottom), isBottom);
+  const onePieces = fixedBody && !isOnePiece(fixed) ? [] : only(selected.filter(isOnePiece), isOnePiece);
+  const outers = only(selected.filter((item) => item.slot === '아우터'), (item) => item.slot === '아우터');
+  const shoes = only(selected.filter((item) => item.slot === '신발'), (item) => item.slot === '신발');
+  const bags = only(selected.filter((item) => item.slot === '가방'), (item) => item.slot === '가방');
+  const bodies = fixed !== undefined && isOnePiece(fixed)
+    ? [[fixed]]
+    : [...tops.flatMap((top) => bottoms.map((bottom) => [top, bottom])), ...onePieces.map((piece) => [piece])];
   const outerChoices: WardrobeItem[][] = outers.length === 0 ? [[]] : outers.map((outer) => [outer]);
   const combos: Combo[] = [];
   for (const body of bodies) {
