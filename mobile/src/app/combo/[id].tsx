@@ -17,7 +17,7 @@ import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel } from '@/data/catalog';
 import { BackButton } from '@/components/ui';
 import { combosFromSet, itemName, setGap, sortItems, suggestSet, type Combo } from '@/data/combos';
-import { dayOfMonth, todayKey, weekday } from '@/data/dates';
+import { codiDayLabel, dayOfMonth, todayKey, weekday } from '@/data/dates';
 import { track } from '@/data/events';
 import { markHintDone, useHintOpen } from '@/data/hints';
 import { saveRecommendationChoice, useRecommendationChoices } from '@/data/recommendChoices';
@@ -182,7 +182,7 @@ export default function ComboScreen() {
             ) : (
               <>
                 {shown.map((combo, index) => (
-                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor.id} chosen={chosenId === combo.id} onChoose={() => choose(combo)} />
+                  <ComboCard key={combo.id} combo={combo} index={index} anchorId={anchor.id} day={codiDayLabel(date)} chosen={chosenId === combo.id} onChoose={() => choose(combo)} />
                 ))}
                 {combos.length > FIRST_SHOWN && (
                   <Pressable onPress={() => setShowAll((open) => !open)} accessibilityRole="button" style={styles.more}>
@@ -218,9 +218,10 @@ export default function ComboScreen() {
   );
 }
 
-function ComboCard({ combo, index, anchorId, chosen, onChoose }: {
+function ComboCard({ combo, index, anchorId, day, chosen, onChoose }: {
   combo: Combo;
   index: number;
+  day: string;
   anchorId: string;
   chosen: boolean;
   onChoose: () => void;
@@ -244,7 +245,7 @@ function ComboCard({ combo, index, anchorId, chosen, onChoose }: {
       </View>
       <Text style={styles.names}>{combo.items.map(itemName).join(' + ')}</Text>
       <Pressable onPress={onChoose} disabled={chosen} accessibilityRole="button" style={[styles.choose, chosen && styles.chooseDone]}>
-        <Text style={styles.chooseText}>{chosen ? '이 조합으로 입기로 했어요' : '이 조합으로 입을래요'}</Text>
+        <Text style={styles.chooseText}>{chosen ? `${day} 코디로 정했어요` : `${day} 코디로 정하기`}</Text>
       </Pressable>
     </View>
   );

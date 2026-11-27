@@ -47,3 +47,10 @@ export function nowLabel(now = new Date()): string {
   const h = now.getHours();
   return `지금 ${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}시`;
 }
+
+// 코디 정하기 버튼에 쓰는 날 이름(11/27): 오늘 · 내일 · 금요일 → '오늘 코디로 정하기'.
+export function codiDayLabel(key: string, today = todayKey()): string {
+  if (key === today) return '오늘';
+  if (key === addDays(today, 1)) return '내일';
+  return `${weekday(key)}요일`;
+}

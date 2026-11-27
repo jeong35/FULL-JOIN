@@ -18,7 +18,7 @@ import { TabScreen } from '@/components/TabScreen';
 import { ItemIcon } from '@/components/WardrobeIcon';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
 import { completeChatAction } from '@/data/chatActionTracking';
-import { dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
+import { codiDayLabel, dayOfMonth, longDateLabel, nextDays, nowLabel, todayKey, weekday } from '@/data/dates';
 import { track } from '@/data/events';
 import type { Plan } from '@/data/plans';
 import { buildCombos, harmony, type Combo } from '@/data/combos';
@@ -682,7 +682,7 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
                 <Text style={styles.tipRowText}>{tip.text}</Text>
               </View>
             ))}
-            <ChooseRow chosen={chosen} onChoose={() => onChoose(look.image.id)} onNext={total > 1 ? onNext : undefined} position={position} />
+            <ChooseRow date={date} chosen={chosen} onChoose={() => onChoose(look.image.id)} onNext={total > 1 ? onNext : undefined} position={position} />
           </GlassView>
         </>
       ) : closet !== undefined ? (
@@ -705,11 +705,13 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
   );
 }
 
-function ChooseRow({ chosen, onChoose, onNext, position }: { chosen: boolean; onChoose: () => void; onNext?: () => void; position?: string }) {
+function ChooseRow({ date, chosen, onChoose, onNext, position }: { date: string; chosen: boolean; onChoose: () => void; onNext?: () => void; position?: string }) {
+  // 11/27: '이 룩으로 입을래요' → '오늘 코디로 정하기'(다른 날은 '내일'·'화요일').
+  const day = codiDayLabel(date);
   return (
     <View style={styles.actions}>
       <Pressable onPress={onChoose} disabled={chosen} accessibilityRole="button" accessibilityState={{ disabled: chosen }} style={[styles.choose, chosen && styles.chooseDone]}>
-        <Text style={styles.chooseText}>{chosen ? '이 룩으로 입기로 했어요' : '이 룩으로 입을래요'}</Text>
+        <Text style={styles.chooseText}>{chosen ? `${day} 코디로 정했어요` : `${day} 코디로 정하기`}</Text>
       </Pressable>
       {onNext !== undefined && (
         <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={position === undefined ? '다음 룩 보기' : `다음 룩 보기, 지금 ${position}`} style={styles.iconButton}>
@@ -774,7 +776,7 @@ function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, ch
           <Text style={styles.tipRowText}>{nearNote}</Text>
         </View>
       )}
-      <ChooseRow chosen={chosen} onChoose={onChoose} onNext={onNext} position={position} />
+      <ChooseRow date={date} chosen={chosen} onChoose={onChoose} onNext={onNext} position={position} />
     </GlassView>
   );
 }
