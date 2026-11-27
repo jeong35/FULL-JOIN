@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlassView } from '@/components/GlassView';
 import { HintBubble } from '@/components/HintBubble';
-import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT as BAR_HEIGHT, useTabBarBottom } from '@/components/tabBarSpace';
+import { CHAT_BUTTON_SIZE, TAB_BAR_GAP, TAB_BAR_HEIGHT as BAR_HEIGHT, TAB_BAR_SIDE, useTabBarBottom } from '@/components/tabBarSpace';
 import { TabIcon, type TabIconName } from '@/components/TabIcon';
 import { track } from '@/data/events';
 import { emitHomeTabReselect } from '@/data/homeTab';
@@ -177,15 +177,15 @@ const styles = StyleSheet.create({
     zIndex: 32,
     elevation: 14,
   },
-  // 11/27: 양옆도 20 — 카드(16)보다 살짝 안쪽이라 떠 있는 게 더 보인다.
+  // 11/27: 양옆 21(토스와 같음) — 카드(16)보다 살짝 안쪽이라 떠 있는 게 더 보인다.
   tabBar: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    left: TAB_BAR_SIDE,
+    right: TAB_BAR_SIDE,
     height: BAR_HEIGHT,
     paddingTop: 0,
     paddingBottom: 0,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: BAR_HEIGHT / 2,
     borderTopWidth: 0,
     backgroundColor: 'transparent',
@@ -193,11 +193,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     boxShadow: '0 10px 30px rgba(30,20,50,0.14)',
   },
+  // 선택 알약: 탭바 안쪽 위아래·양끝 4(토스와 같음).
   tabItem: {
-    height: 52,
-    marginTop: 6,
-    marginHorizontal: 2,
-    borderRadius: 26,
+    height: BAR_HEIGHT - 8,
+    marginTop: 4,
+    marginHorizontal: 0,
+    borderRadius: (BAR_HEIGHT - 8) / 2,
     justifyContent: 'center',
     overflow: 'hidden',
   },

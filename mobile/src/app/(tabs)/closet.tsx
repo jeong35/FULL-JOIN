@@ -8,7 +8,7 @@ import { ColorSwatch } from '@/components/ColorSwatch';
 import { HintBubble } from '@/components/HintBubble';
 import { BottomSheet } from '@/components/PhotoAddParts';
 import { ItemIcon } from '@/components/WardrobeIcon';
-import { useTabBarBottom, useTabScrollBottom } from '@/components/tabBarSpace';
+import { TAB_BAR_GAP, TAB_BAR_HEIGHT, useTabBarBottom, useTabScrollBottom } from '@/components/tabBarSpace';
 import { TabScreen } from '@/components/TabScreen';
 import { SmallWhiteButton, TextTabs } from '@/components/ui';
 import { kindLabel, SLOTS, type Slot } from '@/data/catalog';
@@ -265,7 +265,7 @@ export default function ClosetScreen() {
           tail="down"
           tailX={width / 10 - layout.screenPaddingX}
           onPress={() => router.navigate('/')}
-          style={[styles.hintBottom, { bottom: barBottom + 64 + 12 }]}
+          style={[styles.hintBottom, { bottom: barBottom + TAB_BAR_HEIGHT + TAB_BAR_GAP }]}
         />
       )}
 
