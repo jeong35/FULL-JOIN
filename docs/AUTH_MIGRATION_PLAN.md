@@ -1,5 +1,13 @@
 # Supabase Auth 전환 및 사용자 격리 계획
 
+> 2026-11-27 결정: 기존 닉네임+PIN UI를 유지하는 Private Beta 세션 계약을 먼저 적용한다. `PRIVATE_BETA_POLICY.md`가 현재 정본이며 소셜 로그인·자동 데이터 이전은 후속 출시 범위다.
+
+## 선택한 최소 인증 방식
+
+팀이 베타 계정을 사전 생성한다. `scripts/provision-beta-account.mjs`가 무작위 내부 이메일·비밀번호의 Supabase Auth 사용자를 만들고 PIN bcrypt hash만 `beta_accounts`에 연결한다. 로그인 endpoint는 5회/15분 제한으로 PIN을 검증한 뒤 일회성 magic-link token을 서버 내부에서 교환해 access/refresh session을 반환한다. 공개 가입·이메일 UI·소셜 로그인은 만들지 않는다.
+
+기존 `u-...` 데이터는 보존하지만 Auth UUID로 자동 연결하지 않는다. 소유권을 안전하게 확인할 수 있는 운영 절차가 합의되기 전에는 신규 베타 계정은 빈 데이터로 시작한다.
+
 ## 현재 상태와 위험
 
 운영 API는 아직 이전 공개 버전이다. 개발 브랜치에서는 함수 내부 JWT 검증, subject 기반 요청 검증과 owner RLS를 구현해 로컬 A/B 격리를 통과했다. 정식 로그인 UI와 운영 배포는 별도 승인 대상이다.

@@ -1,5 +1,11 @@
 # 오딧(FULL-JOIN) 개발 현황 종합 보고서
 
+> 2026-11-27 현재 정책은 `docs/PRIVATE_BETA_POLICY.md`가 정본이다. 아래의 이전 배포·staging·테스트 기록은 당시 사실이며 현재 배포 승인을 뜻하지 않는다.
+
+## 2026-11-27 Private Beta 정책·인증 후보
+
+정식 출시 준비와 제품 기능 배포를 분리했다. 닉네임+PIN UI를 유지하되 팀이 사전 생성한 베타 계정만 서버의 rate-limited bcrypt 검증을 거쳐 Supabase Auth 세션을 받는다. URL 사용자 전환과 client-generated user ID는 제거했다. CHAT-02는 일반 챗봇과 분리해 active migration 밖으로 이동했다. production migration과 배포는 미승인·미적용 상태다.
+
 ## 2026-11-26 Action-oriented Chatbot
 
 저장 사진 필수 상담을 선택 컨텍스트 기반 Action 챗봇으로 개편했다. 실제 피드·옷장·저장 데이터를 조회하는 결정적 routing, 허용 CTA, 매일 코디 알림 재사용, CTA 완료 계측과 관리자 퍼널을 구현했다. 비교 후보 없음 문구의 한국어 조사도 받침 기준으로 교정했다. 사용자 실측 Result는 아직 미측정이다. production은 닉네임+PIN 호환 API 후보와 Expo 검증 완료 후 반영하며, 보류 중인 Auth/RLS·CHAT-02 migration은 포함하지 않는다.
