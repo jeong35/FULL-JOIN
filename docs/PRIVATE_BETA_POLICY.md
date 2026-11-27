@@ -23,7 +23,7 @@
 
 Provisioning 예시(값은 shell history와 저장소에 남기지 않는다): `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/provision-beta-account.mjs <닉네임> <4자리PIN>`. 운영자는 전달 대상과 Auth UUID만 별도 접근 제한 기록에 남긴다.
 
-사진별 채팅 기록은 `CHAT_HISTORY_ENABLED=true`이고 별도 migration이 승인된 환경에서만 사용할 수 있다. 기본 Private Beta에서는 `history_persisted=false`, `/chat/history`는 501을 반환하며 일반 상담·Action은 계속 동작한다. deferred SQL은 `docs/deferred-migrations/`에 보관한다.
+사진별 채팅 기록은 `CHAT_HISTORY_ENABLED=true`이고 별도 migration이 승인된 환경에서만 사용할 수 있다. 기본 Private Beta에서는 `history_persisted=false`, `/chat/history`는 501을 반환하며 일반 상담·Action은 계속 동작한다. 실제 DDL은 `docs/deferred-migrations/`에 보관하고, staging의 과거 migration history와 충돌하지 않도록 active 경로의 같은 버전 파일은 no-op으로 유지한다.
 
 ## 배포 기준
 

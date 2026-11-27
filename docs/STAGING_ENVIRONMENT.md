@@ -1,6 +1,6 @@
 # Supabase staging 환경
 
-> Private Beta 후보 기준은 `PRIVATE_BETA_POLICY.md`가 우선한다. CHAT-02는 active migration에서 제외하고 synthetic A/B Auth 계정으로 일반 챗봇과 격리를 검증한다.
+> Private Beta 후보 기준은 `PRIVATE_BETA_POLICY.md`가 우선한다. CHAT-02 DDL은 deferred로 두고 active migration에는 history 정합용 no-op만 유지하며, synthetic A/B Auth 계정으로 일반 챗봇과 격리를 검증한다.
 
 ## 대상
 

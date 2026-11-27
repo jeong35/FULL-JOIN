@@ -27,7 +27,7 @@ npm ci
 ./node_modules/.bin/supabase start
 ```
 
-`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. Private Beta 후보는 production 적용 16개에 Auth `202611230001`과 베타 계정 `202611270001`을 더한 18개다. CHAT-02는 `docs/deferred-migrations/`로 분리했다.
+`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. Private Beta 후보는 production 적용 16개에 Auth `202611230001`, CHAT-02 history 정합용 no-op `202611230003`, 베타 계정 `202611270001`을 더한 19개 파일이다. 실제 CHAT-02 DDL은 `docs/deferred-migrations/`로 분리했다.
 
 로컬 주소는 CLI가 출력한다. 기본값은 다음과 같다.
 
@@ -67,7 +67,7 @@ curl -i http://127.0.0.1:54321/functions/v1/api/health
 
 성공 조건:
 
-- active migration 18개가 local target에 모두 표시되고 CHAT-02가 pending 목록에 포함되지 않아야 한다.
+- active migration 19개가 local target에 표시되고 `202611230003`은 테이블을 만들지 않는 no-op이어야 한다.
 - `supabase/seed.sql`이 오류 없이 적용된다.
 - seed는 `demo-analytics-*`, `smoke-*` 합성 사용자만 포함하며 사용자 사진·대화 원문·운영 데이터는 포함하지 않는다.
 

@@ -1,0 +1,5 @@
+-- Intentionally no-op in the Private Beta migration line.
+-- Staging applied the earlier CHAT-02 DDL under this version, while production did not.
+-- Keep the version to avoid remote-history drift, but do not create chat history tables.
+-- The deferred, unapplied production DDL is preserved at:
+-- docs/deferred-migrations/202611230003_chat_conversations.sql
