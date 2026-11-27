@@ -177,10 +177,11 @@ const styles = StyleSheet.create({
     zIndex: 32,
     elevation: 14,
   },
+  // 11/27: 양옆도 20 — 카드(16)보다 살짝 안쪽이라 떠 있는 게 더 보인다.
   tabBar: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 20,
+    right: 20,
     height: BAR_HEIGHT,
     paddingTop: 0,
     paddingBottom: 0,

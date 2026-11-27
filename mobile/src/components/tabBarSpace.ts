@@ -6,9 +6,12 @@ export const TAB_BAR_HEIGHT = 64;
 export const TAB_BAR_GAP = 12;
 export const CHAT_BUTTON_SIZE = 56;
 
-// 탭바 아래 끝이 화면 아래에서 떨어진 거리(아이폰 홈 막대가 있으면 그만큼).
+// 탭바 아래 끝이 화면 아래에서 떨어진 거리.
+// 11/27: 12는 아이폰 홈 막대 위에 붙어 보여서, 토스처럼 바닥에서 20쯤 띄운다.
+// 홈 막대 자리(앱에서 34)가 잡히면 막대와 살짝 겹쳐도 되게 34 - 12 = 22.
+export const TAB_BAR_LIFT = 20;
 export function useTabBarBottom(): number {
-  return Math.max(useSafeAreaInsets().bottom, TAB_BAR_GAP);
+  return Math.max(useSafeAreaInsets().bottom - TAB_BAR_GAP, TAB_BAR_LIFT);
 }
 
 // 탭 화면 스크롤 맨 아래 여백: 마지막 내용이 탭바와 그 위 챗봇 버튼에 가리지 않게.
