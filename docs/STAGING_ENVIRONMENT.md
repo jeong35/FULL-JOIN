@@ -1,5 +1,7 @@
 # Supabase staging 환경
 
+> Private Beta 후보 기준은 `PRIVATE_BETA_POLICY.md`가 우선한다. CHAT-02는 active migration에서 제외하고 synthetic A/B Auth 계정으로 일반 챗봇과 격리를 검증한다.
+
 ## 대상
 
 - 프로젝트: `full-join-staging`
@@ -14,6 +16,8 @@ DB 비밀번호는 저장소나 `.env`에 쓰지 않고 macOS Keychain의 servic
 ## 2026-11-23 기준 상태
 
 - main 기준 migration 15개에 Auth `202611230001`과 CHAT-02 `202611230003`을 더한 17개를 dry-run 후 적용했다.
+
+위 문장은 과거 staging 이력이다. 신규 Private Beta 후보는 migration 차이를 다시 dry-run하며, CHAT-02 테이블이 staging에 남아 있어도 기본 `CHAT_HISTORY_ENABLED=false`로 사용하지 않는다.
 - `supabase/seed.sql`은 local 전용이므로 staging에 적용하지 않았다.
 - API Edge Function은 `codex/chat-history@bd70fe4b79f13dd96eb80f4b58d42b01113186a4`로 배포했다. gateway는 공개 health와 사용자 API를 한 함수에서 제공하기 위해 `verify_jwt=false`를 유지하지만, 사용자 경로는 함수 내부 `auth.getUser` 검증을 통과해야 한다.
 - release metadata의 `RELEASE_GIT_SHA`와 `/health` 응답 SHA가 일치함을 `scripts/verify-release.mjs`로 확인했다.
@@ -35,7 +39,7 @@ secret 값은 문서·workflow log·모바일 bundle에 넣지 않는다. PR #25
 
 ## 검증 순서
 
-1. `supabase migration list --remote`로 17개 이력을 확인한다.
+1. `supabase migration list --remote`로 실제 이력과 후보 active migration을 대조한다.
 2. `FULL_JOIN_STAGING_*` 환경변수를 런타임에만 주입하고 `npm run test:integration:staging`을 실행한다.
 3. synthetic Auth 사용자 A/B로 401·403·RLS와 사진별 저장·pagination·삭제를 확인한다.
 4. 테스트 사용자와 fixture만 제거하고 운영 승인을 별도로 받는다.

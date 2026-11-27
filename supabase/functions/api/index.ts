@@ -6,6 +6,7 @@ import {
   userRouteRequiresAuth,
 } from "../../../src/fulljoin/api_auth.ts";
 import { AccessControlError } from "../../../src/fulljoin/auth_policy.ts";
+import { betaLoginInputSchema, betaLoginResultSchema } from "../../../src/fulljoin/beta_auth.ts";
 
 import {
   analyzeInputSchema,
@@ -90,6 +91,7 @@ const MAX_PRODUCT_PAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini-2025-04-14";
 const ANALYSIS_PROMPT_VERSION = "style-analysis-v1";
 const CHAT_PROMPT_VERSION = "chat-general-v2";
+const chatHistoryEnabled = () => Deno.env.get("CHAT_HISTORY_ENABLED") === "true";
 const CHAT_OUTPUT_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -185,6 +187,59 @@ async function authenticateUserRoute(
     queryUserId: url.searchParams.get("user_id"),
     body: await bodyForAccessControl(request),
   }));
+}
+
+async function handleBetaLogin(request: Request, db: SupabaseClient): Promise<Response> {
+  if (request.method !== "POST") return apiError(405, "method_not_allowed", "지원하지 않는 요청 방식이에요");
+  const body = await bodyAsObject(request);
+  const input = betaLoginInputSchema.safeParse(body);
+  if (!input.success) return apiError(400, "invalid_credentials", "닉네임과 숫자 4자리를 확인해 주세요");
+
+  const normalized = input.data.nickname.toLocaleLowerCase("ko-KR");
+  const { data: rows, error: verifyError } = await db.rpc("verify_beta_login", {
+    p_nickname_normalized: normalized,
+    p_pin: input.data.pin,
+  });
+  if (verifyError !== null) throw verifyError;
+  const verified = betaLoginResultSchema.safeParse(Array.isArray(rows) ? rows[0] : null);
+  if (!verified.success) return apiError(401, "invalid_credentials", "닉네임과 숫자 4자리를 확인해 주세요");
+
+  const { data: authUser, error: userError } = await db.auth.admin.getUserById(verified.data.auth_user_id);
+  const email = authUser.user?.email;
+  if (userError !== null || typeof email !== "string") throw new Error("beta_auth_user_missing");
+  const { data: link, error: linkError } = await db.auth.admin.generateLink({ type: "magiclink", email });
+  if (linkError !== null || typeof link.properties.hashed_token !== "string") throw new Error("beta_session_link_failed");
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !anonKey) throw new Error("beta_session_configuration_missing");
+  const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: sessionData, error: sessionError } = await authClient.auth.verifyOtp({
+    token_hash: link.properties.hashed_token,
+    type: "magiclink",
+  });
+  const session = sessionData.session;
+  if (sessionError !== null || session === null || session.user.id !== verified.data.auth_user_id) {
+    throw new Error("beta_session_issue_failed");
+  }
+
+  const [{ count: wardrobeCount }, { count: heartCount }, { data: preferences }] = await Promise.all([
+    db.from("wardrobe_items").select("id", { count: "exact", head: true }).eq("user_id", verified.data.auth_user_id),
+    db.from("hearts").select("style_image_id", { count: "exact", head: true }).eq("user_id", verified.data.auth_user_id),
+    db.from("user_style_preferences").select("styles").eq("user_id", verified.data.auth_user_id).maybeSingle(),
+  ]);
+  const styles = Array.isArray(preferences?.styles) ? preferences.styles : [];
+  const expiresAt = session.expires_at ?? Math.floor(Date.now() / 1_000) + session.expires_in;
+  return json({
+    user: { id: verified.data.auth_user_id, nickname: verified.data.nickname },
+    session: {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: expiresAt,
+    },
+    returning: (wardrobeCount ?? 0) > 0 || (heartCount ?? 0) > 0 || styles.length > 0,
+    styles,
+  });
 }
 
 async function styleImageExists(db: SupabaseClient, styleImageId: string): Promise<boolean> {
@@ -1079,6 +1134,7 @@ async function recentChatContext(
   userId: string,
   styleImageId: string,
 ): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  if (!chatHistoryEnabled()) return [];
   const { data: conversation, error: conversationError } = await db.from("chat_conversations")
     .select("id")
     .eq("user_id", userId)
@@ -1103,7 +1159,7 @@ async function persistedChatResponse(
   response: ActionChatResponse,
   answerSource: ChatAnswerSource,
 ): Promise<Response> {
-  if (input.style_image_id === undefined || input.style_image_id === null) {
+  if (!chatHistoryEnabled() || input.style_image_id === undefined || input.style_image_id === null) {
     return json({ ...response, answer_source: answerSource, conversation_id: null, history_persisted: false });
   }
   const { data: conversationId, error } = await db.rpc("append_chat_exchange", {
@@ -1634,6 +1690,7 @@ export default {
           },
         });
       }
+      if (path === "/beta-auth/login") return await handleBetaLogin(request, db);
       if (path === "/analyze") return await handleAnalyze(request, db);
       if (path === "/wardrobe") return await handleWardrobe(request, url, db);
       if (path === "/style-preferences") return await handleStylePreferences(request, url, db);
@@ -1647,6 +1704,7 @@ export default {
       if (path === "/chat") return await handleChat(request, db);
       if (path === "/chat/history") {
         if (authenticatedUserId === null) throw new AccessControlError(401, "authentication_required");
+        if (!chatHistoryEnabled()) return apiError(501, "chat_history_unavailable", "사진별 대화 기록은 현재 베타에서 지원하지 않아요");
         return await handleChatHistory(request, url, db, authenticatedUserId);
       }
       if (path === "/events") return await handleEvents(request, db);

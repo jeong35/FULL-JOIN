@@ -4,11 +4,20 @@
 import { Platform } from 'react-native';
 
 import { colorsForKind, fitsForKind, isKindOfSlot, isSlot, type Color, type Kind, type Slot, type Style, type VisualFit } from './catalog';
-import { getSession } from './session';
+import {
+  authExpiresAt,
+  currentAccessToken,
+  currentRefreshToken,
+  getSession,
+  logout,
+  updateAuthSession,
+} from './session';
 import type { ArchiveImage, ChatResult, HeartResult, ItemDecisionResult, Season, StyleImage, StyleImageDetail, WardrobeItem } from './types';
 
 const DEFAULT_API_URL = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/api';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, '');
+const SUPABASE_URL = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://gctbcanltqgcymdlplyr.supabase.co').replace(/\/+$/, '');
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 // 지금 로그인한 사용자(session.ts). 로그인 전에는 서버를 부르지 않는다.
 function userId(): string {
@@ -36,14 +45,48 @@ export class ApiError extends Error {
 
 type ErrorBody = { error?: { code?: string; message?: string; field?: string } };
 
-async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: object, timeoutMs = TIMEOUT_MS): Promise<T> {
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function accessToken(forceRefresh = false): Promise<string | null> {
+  const token = currentAccessToken();
+  if (!forceRefresh && token !== null && authExpiresAt() > Math.floor(Date.now() / 1000) + 60) return token;
+  const refreshToken = currentRefreshToken();
+  if (refreshToken === null || SUPABASE_ANON_KEY === '') return token;
+  if (refreshInFlight !== null) return await refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, 'content-type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      const data = await response.json().catch(() => null) as null | {
+        access_token?: string; refresh_token?: string; expires_at?: number;
+      };
+      if (!response.ok || typeof data?.access_token !== 'string' || typeof data.refresh_token !== 'string' || typeof data.expires_at !== 'number') return null;
+      updateAuthSession(data.access_token, data.refresh_token, data.expires_at);
+      return data.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return await refreshInFlight;
+}
+
+async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: object, timeoutMs = TIMEOUT_MS, retried = false): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
+    const token = await accessToken();
     response = await fetch(`${API_URL}${path}`, {
       method,
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      headers: {
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
@@ -58,6 +101,11 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
     data = await response.json();
   } catch {
     // 본문이 JSON이 아니면 아래에서 상태 코드로만 판단한다.
+  }
+  if (response.status === 401 && !retried && currentRefreshToken() !== null) {
+    const refreshed = await accessToken(true);
+    if (refreshed !== null) return await request<T>(method, path, body, timeoutMs, true);
+    logout();
   }
   if (!response.ok) {
     const error = (data as ErrorBody | null)?.error;
@@ -80,7 +128,39 @@ export function errorMessage(error: unknown): string {
 
 // ── 로그인 ──────────────────────────────────────────
 
-// 로그인하기 전에, 이 계정으로 저장한 사진이나 옷장 옷이 이미 있는지(이미 쓰던 사람인지) 본다.
+export type BetaLoginResult = {
+  user: { id: string; nickname: string };
+  session: { access_token: string; refresh_token: string; expires_at: number };
+  returning: boolean;
+  styles: Style[];
+};
+
+export async function betaLogin(nickname: string, pin: string): Promise<BetaLoginResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/beta-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nickname, pin }),
+    });
+  } catch {
+    throw new ApiError(0, 'network_error', '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요');
+  }
+  const data = await response.json().catch(() => null) as BetaLoginResult | ErrorBody | null;
+  if (!response.ok) {
+    const error = (data as ErrorBody | null)?.error;
+    throw new ApiError(response.status, error?.code ?? 'login_failed', error?.message ?? '닉네임과 숫자 4자리를 확인해 주세요');
+  }
+  const result = data as Partial<BetaLoginResult>;
+  if (typeof result.user?.id !== 'string' || typeof result.user.nickname !== 'string' ||
+      typeof result.session?.access_token !== 'string' || typeof result.session.refresh_token !== 'string' ||
+      typeof result.session.expires_at !== 'number' || typeof result.returning !== 'boolean' || !Array.isArray(result.styles)) {
+    throw new ApiError(502, 'invalid_login_response', SERVER_ERROR_MESSAGE);
+  }
+  return result as BetaLoginResult;
+}
+
+// 이전 클라이언트 호환용 조회. 로그인 화면은 betaLogin 응답의 returning을 사용한다.
 export async function accountHasData(id: string): Promise<boolean> {
   const query = `user_id=${encodeURIComponent(id)}`;
   const [archive, wardrobe] = await Promise.all([
@@ -181,7 +261,11 @@ export async function cutoutPhoto(dataUrl: string): Promise<CutoutResult> {
   const timer = setTimeout(() => controller.abort(), 40_000);
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/wardrobe/cutout`, { method: 'POST', body: form, signal: controller.signal });
+    const token = await accessToken();
+    response = await fetch(`${API_URL}/wardrobe/cutout`, {
+      method: 'POST', body: form, signal: controller.signal,
+      headers: token === null ? undefined : { authorization: `Bearer ${token}` },
+    });
   } catch {
     throw new ApiError(0, 'network_error', '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요');
   } finally {

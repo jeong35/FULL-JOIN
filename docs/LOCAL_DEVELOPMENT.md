@@ -1,5 +1,7 @@
 # 로컬 Supabase 개발 환경
 
+> Private Beta 인증 개발은 `PRIVATE_BETA_POLICY.md`와 synthetic Auth 계정을 사용한다. URL `?user=`나 무토큰 demo 계정은 사용하지 않는다.
+
 이 문서는 운영 프로젝트와 분리된 로컬 Docker 환경에서 DB, Storage, Auth, Edge Function과 관리자 대시보드를 재현하는 절차다. 운영 사용자 데이터는 복제하지 않으며 `supabase/seed.sql`의 합성 데이터만 사용한다.
 
 ## 전제 조건
@@ -25,7 +27,7 @@ npm ci
 ./node_modules/.bin/supabase start
 ```
 
-`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. CHAT-02 브랜치 기준은 기존 15개, `202611230001_auth_access_control.sql`, `202611230003_chat_conversations.sql`을 합친 17개다. `202611230002`는 사진 옷장 브랜치와의 번호 충돌을 피하려고 비워 둔다.
+`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. Private Beta 후보는 production 적용 16개에 Auth `202611230001`과 베타 계정 `202611270001`을 더한 18개다. CHAT-02는 `docs/deferred-migrations/`로 분리했다.
 
 로컬 주소는 CLI가 출력한다. 기본값은 다음과 같다.
 
@@ -65,7 +67,7 @@ curl -i http://127.0.0.1:54321/functions/v1/api/health
 
 성공 조건:
 
-- `202611040001`부터 `202611230003`까지 파일로 존재하는 17개가 local target에 모두 표시된다.
+- active migration 18개가 local target에 모두 표시되고 CHAT-02가 pending 목록에 포함되지 않아야 한다.
 - `supabase/seed.sql`이 오류 없이 적용된다.
 - seed는 `demo-analytics-*`, `smoke-*` 합성 사용자만 포함하며 사용자 사진·대화 원문·운영 데이터는 포함하지 않는다.
 

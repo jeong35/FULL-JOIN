@@ -1,5 +1,7 @@
 # Edge Function release metadata 및 배포 절차
 
+> 현재 단계는 `PRIVATE_BETA_POLICY.md`를 따른다. 정식 출시 체크리스트 미완료는 독립 기능 배포 금지 사유가 아니지만 격리·migration 승인·롤백 근거는 필수다.
+
 ## 목적
 
 운영 `api` 함수가 어느 Git commit에서 배포됐는지 health 응답과 배포 기록으로 추적한다. 이 문서는 절차 설계이며 현재 작업에서는 secrets 설정이나 배포를 실행하지 않는다.

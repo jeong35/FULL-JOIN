@@ -149,7 +149,13 @@ jobs:
       - name: Export Expo web
         if: inputs.deploy_web
         working-directory: mobile
-        run: npx expo export --platform web
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$EXPO_PUBLIC_SUPABASE_URL"
+          test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          npx expo export --platform web
       - name: Deploy Expo web
         if: inputs.deploy_web
         working-directory: mobile

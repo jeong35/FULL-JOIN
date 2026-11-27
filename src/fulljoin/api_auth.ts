@@ -14,8 +14,13 @@ const USER_ROUTE_PATTERNS: readonly RegExp[] = [
   /^\/style-images\/[^/]+\/items\/[^/]+\/decision$/,
 ];
 
+export function publicAuthRoute(path: string, method: string): boolean {
+  return path === "/beta-auth/login" && method === "POST";
+}
+
 export function userRouteRequiresAuth(path: string, method: string): boolean {
   if (method === "OPTIONS") return false;
+  if (publicAuthRoute(path, method)) return false;
   return USER_ROUTE_PATTERNS.some((pattern) => pattern.test(path));
 }
 

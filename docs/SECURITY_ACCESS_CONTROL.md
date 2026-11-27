@@ -1,5 +1,7 @@
 # API 접근 제어 검토
 
+> 현재 Private Beta 인증 결정은 `PRIVATE_BETA_POLICY.md`가 우선한다. client `user_id` 신뢰 금지와 JWT `sub` 일치는 유지한다.
+
 ## 결론
 
 개발 브랜치는 사용자 경로마다 Supabase access token을 `auth.getUser`로 검증하고 JWT subject와 요청 `user_id`의 일치를 강제한다. 옷장·취향·하트에는 owner RLS도 추가했다. 로컬 A/B 사용자 실제 API 및 RLS 격리는 통과했지만 이 변경은 운영에 배포되지 않았고, 정식 로그인 UI·기존 데모 데이터 이전·계정 삭제 job은 미확정이다.

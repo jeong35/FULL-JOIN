@@ -1,5 +1,11 @@
 # MVP 서버 API 계약
 
+> 사용자 API의 현재 인증 계약은 `PRIVATE_BETA_POLICY.md`를 따른다. `POST /beta-auth/login` 외 사용자 route는 Bearer JWT가 필요하고 요청 `user_id`는 JWT `sub`와 같아야 한다.
+
+## Private Beta 로그인
+
+`POST /beta-auth/login`은 팀이 사전 provisioning한 계정의 `{nickname, pin}`을 검증한다. 성공하면 `{user, session, returning, styles}`를 반환한다. PIN은 Auth 비밀번호가 아니며 응답·로그·이벤트에 남기지 않는다. 실패와 잠금은 모두 `401 invalid_credentials`로 동일하게 응답한다. 이후 사용자 API는 Bearer access token을 보내며 refresh token은 Supabase Auth 공개 endpoint에서 회전한다.
+
 이 문서는 `docs/SPEC.md` 5절을 구현할 때 필요한 호출 예시와 현재 데모 제한을 기록한다. 제품 판정의 정본은 `docs/SPEC.md`다.
 
 ## 공통

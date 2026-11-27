@@ -1,5 +1,7 @@
 # 승인형 staging/production 배포
 
+> 현재 단계와 최소 보안선은 `PRIVATE_BETA_POLICY.md`가 정본이다. 정식 소셜 로그인 미완료만으로 독립 기능을 차단하지 않지만 JWT 사용자 격리와 SHA 승인은 필수다.
+
 ## 현재 범위
 
 `.github/workflows/release.yml`은 `workflow_dispatch`로만 실행된다. push·PR·main merge만으로 운영 배포하지 않는다. 대상 commit SHA를 40자리로 직접 입력하고, GitHub Environment 승인과 환경별 가드 secret을 모두 통과해야 한다.
@@ -20,6 +22,8 @@ Repository Settings → Environments에서 `staging`, `production`을 만든다.
   - `SUPABASE_PROJECT_REF`
   - `SUPABASE_DB_PASSWORD`
   - `EXPO_TOKEN`
+  - `EXPO_PUBLIC_SUPABASE_URL`
+  - `EXPO_PUBLIC_SUPABASE_ANON_KEY` (공개 key지만 환경별 오배포 방지를 위해 Environment 값으로 관리)
 
 값은 저장소 파일·workflow log·Expo 공개 환경변수에 넣지 않는다. production 환경의 Supabase/Expo 대상은 staging과 달라야 한다.
 
@@ -47,7 +51,7 @@ workflow는 다음 순서를 지킨다.
 
 ## 아직 자동화하지 않은 항목
 
-- Auth 전환은 gateway 구조와 로그인 UI가 확정되기 전까지 배포하지 않는다.
+- Private Beta Auth 후보는 구현됐지만 migration·운영 설정은 별도 승인 전 배포하지 않는다.
 - 운영 smoke에서 실제 사용자 데이터를 생성·삭제하지 않는다.
 - EAS deployment ID를 별도 release registry에 적재하지 않는다. 현재 Actions summary와 Expo deployment history가 근거다.
 - 자동 rollback은 없다. 이전 승인 SHA를 같은 절차로 다시 배포한다.

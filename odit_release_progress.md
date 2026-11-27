@@ -1,5 +1,7 @@
 # 오딧(FULL-JOIN) 출시 준비 및 전체 작업 현황
 
+> 2026-11-27 현재 정책은 `docs/PRIVATE_BETA_POLICY.md`가 정본이다. 아래 항목은 당시 릴리스 이력이며 CHAT-02는 active migration에서 후속 범위로 분리됐다.
+
 > 기준 시각: 2026-11-24 (Asia/Seoul)<br>
 > Git 기준: `origin/main@8cb01a5bd376d00fa430a4cb68acea04d4e038ca`<br>
 > 목적: 이 문서 하나로 완료 기능, 진행 중 작업, 대기열, 출시 차단 사항과 권장 개발 순서를 파악한다.<br>
@@ -188,7 +190,7 @@
 ### P0-2. main과 production 정합화
 
 - [ ] 병합할 홈 검색, 추천 계측, PR #30의 범위를 먼저 확정한다.
-- [ ] production pending migration `202611230001_auth_access_control.sql`, `202611230003_chat_conversations.sql`을 리뷰한다.
+- [ ] production pending migration `202611230001_auth_access_control.sql`, `202611270001_private_beta_accounts.sql`을 Private Beta 후보로 리뷰한다. CHAT-02는 후속 범위다.
 - [ ] 승인된 정확한 main SHA로 migration dry-run을 수행한다.
 - [ ] Edge Function, 필요한 migration, Expo를 승인형 workflow로 순서대로 배포한다.
 - [ ] `/health.release.git_sha`와 배포 SHA 일치를 확인한다.
