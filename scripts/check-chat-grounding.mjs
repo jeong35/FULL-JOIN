@@ -19,6 +19,11 @@ assert.deepEqual(classifyChatIntents("내 옷으로 코디하고 비슷한 상�
   "product_search",
   "mixed",
 ]);
+assert.deepEqual(classifyChatIntents("이 사진이랑 비슷한 옷 내 옷장에서 찾아줘"), [
+  "wardrobe_outfit",
+  "saved_photo_outfit",
+  "mixed",
+]);
 
 const mixed = buildChatResponse("STYLE-1", "내 옷으로 코디하고 비슷한 상품도 찾아줘", items, cottonPants);
 assert.deepEqual(mixed.claimed_owned_item_ids, ["W-COTTON"]);
