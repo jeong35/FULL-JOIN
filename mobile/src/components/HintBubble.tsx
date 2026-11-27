@@ -2,12 +2,13 @@
 // 글라스 느낌: 반투명 바탕(위가 조금 더 밝은 그러데이션) + 반투명 흰 테두리 + 위쪽 빛 반사 선 + 뒤 흐림(웹) + 옅은 그림자.
 // 말풍선 몸통과 꼬리를 한 모양(SVG)으로 그려서, 반투명이어도 이음새가 겹쳐 보이지 않는다.
 // 말풍선을 누르면 그 다음 할 일로 가고(onPress), ×를 누르면 닫는다. 둘 다 다시 띄우지 않는다(data/hints.ts).
+import { useIsFocused } from 'expo-router';
 import { useEffect, useId, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import { track } from '@/data/events';
-import { markHintDone, type HintId } from '@/data/hints';
+import { markHintDone, useShowingHint, type HintId } from '@/data/hints';
 import { colors, fonts, glass } from '@/theme';
 
 const RADIUS = 16;
@@ -78,6 +79,9 @@ export function HintBubble({ id, text, actionLabel, tail, tailX = 28, onPress, d
   const [size, setSize] = useState({ width: 0, height: 0 });
   const gradientId = `hint-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`;
   const palette = PALETTE;
+  // 챗봇 버튼 말풍선은 다른 말풍선이 없을 때만 뜬다(11/27). 탭은 안 보이는 화면도 살아 있어서 보이는 화면 것만 센다.
+  const focused = useIsFocused();
+  useShowingHint(focused && id !== 'chat_button');
 
   useEffect(() => {
     track('hint_view', { hint: id });

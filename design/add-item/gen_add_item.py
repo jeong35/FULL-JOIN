@@ -57,6 +57,44 @@ for name in ('모자', '벨트'):
         _borrow('소재', '여러 개 골라도 돼요'), _borrow('무늬'), _borrow('계절')]
     SPECS.append({'name': name, 'slot': '잡화', 'baseIcon': 'x_' + name, 'combos': [], 'groups': groups})
 
+# 11/27 은재 님: 신발·가방 소재는 옷 기준 문구가 안 맞는다.
+# - '면'은 신발·가방에서 '천'으로 보이게(저장 값은 '면' 그대로 — 서버·판정 값은 안 바뀜).
+# - 신발·가방은 소재를 골라도 그림이 안 바뀌어서 '데님 · 니트 · 퍼는 그림이 바뀌어요' 안내를 뺀다.
+# - 누르면 나오는 소재 설명도 부위용으로('신발|면'처럼 부위를 앞에 붙인 열쇠, 앱이 먼저 찾고 없으면 공통 설명).
+SLOT_MDESC = {
+    '신발': {
+        '가죽': '매끈한 가죽 신발 · 인조 가죽 포함',
+        '스웨이드': '겉이 보들보들한 무광 가죽 · 어그 · 스웨이드 로퍼',
+        '면': '캔버스 운동화처럼 천으로 된 신발',
+        '퍼': '털이 달리거나 안에 털이 든 신발 · 털 슬리퍼',
+    },
+    '가방': {
+        '가죽': '매끈한 가죽 가방 · 인조 가죽 포함',
+        '스웨이드': '겉이 보들보들한 무광 가죽 가방',
+        '면': '에코백처럼 천(캔버스)으로 된 가방',
+        '니트': '실로 짜거나 뜨개질한 가방',
+        '퍼': '털로 덮인 가방 · 퍼 백',
+    },
+}
+for s in SPECS:
+    if s['slot'] not in SLOT_MDESC:
+        continue
+    for g in s['groups']:
+        if g['title'] != '소재':
+            continue
+        g['note'] = ''
+        for o in g['options']:
+            if o['v'] == '면':
+                o['label'] = '천'
+for slot, notes in SLOT_MDESC.items():
+    MDESC.update({f'{slot}|{k}': v for k, v in notes.items()})
+
+# 11/27: 계절을 안 고르면 '사계절'이 아니라 옷 종류 기온표로 판단한다(코디 탭 '추울 수도·더울 수도'). 안내를 실제 동작에 맞춘다.
+for s in SPECS:
+    for g in s['groups']:
+        if g['title'] == '계절':
+            g['note'] = '여러 개 골라도 돼요 · 안 고르면 옷 종류에 맞춰 골라요'
+
 V12 = json.load(open(os.path.join(ROOT, 'design/kind-icons/icons_v12.json'), encoding='utf-8'))
 
 # 시안 화면 이름 → 서버 kind 값(친구분 서버 catalog.ts). 나머지는 이름 그대로.

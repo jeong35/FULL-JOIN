@@ -15,7 +15,7 @@ type Props = {
 };
 
 // design/DESIGN.md 5절: BlurView를 뒤에 깔고, 위에 반투명 흰 배경 + 흰 테두리 1px + 옅은 그림자.
-// 11/26: 유리처럼 반짝이게 — 위 왼쪽에서 비스듬히 빛이 들어오는 흰 그라데이션을 한 겹 더 얹는다.
+// 11/26: 유리처럼 반짝이게 — 위 가장자리의 빛과 비스듬한 빛줄기를 한 겹 더 얹는다.
 export function GlassView({ radius, tint, style, children }: Props) {
   const shine = `shine${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
@@ -23,14 +23,13 @@ export function GlassView({ radius, tint, style, children }: Props) {
       <View style={[StyleSheet.absoluteFill, styles.layer, { borderRadius: radius, overflow: 'hidden' }]}>
         <BlurView intensity={glass.blurIntensity} tint="light" style={StyleSheet.absoluteFill} />
         <View style={[StyleSheet.absoluteFill, styles.tint, tint !== undefined && { backgroundColor: tint }]} />
-        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" pointerEvents="none">
+        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
           <Defs>
-            {/* 위는 밝고 아래로 갈수록 살짝 어두워지는 볼록한 면 */}
-            <LinearGradient id={shine} x1="0" y1="0" x2="0.35" y2="1">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.95} />
-              <Stop offset="0.28" stopColor="#FFFFFF" stopOpacity={0.35} />
-              <Stop offset="0.7" stopColor="#E9E5F5" stopOpacity={0.25} />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.5} />
+            {/* 위 가장자리에만 빛이 들고 그 아래는 고르게. 11/27: 카드 높이에 맞춰 늘어나는 그라데이션이라
+                오늘의 룩처럼 긴 카드는 위는 하얗고 아래는 회보랏빛으로 바탕색이 달라 보였다 → 위 72px만, 나머지는 같은 색. */}
+            <LinearGradient id={shine} x1="0" y1="0" x2="0" y2="72" gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.9} />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.4} />
             </LinearGradient>
             {/* 비스듬한 빛줄기 하나 — 유리에 빛이 스친 것처럼 */}
             <LinearGradient id={`${shine}g`} x1="0" y1="0" x2="1" y2="1">
@@ -39,8 +38,8 @@ export function GlassView({ radius, tint, style, children }: Props) {
               <Stop offset="0.3" stopColor="#FFFFFF" stopOpacity={0} />
             </LinearGradient>
           </Defs>
-          <Rect x="0" y="0" width="100" height="100" fill={`url(#${shine})`} />
-          <Rect x="0" y="0" width="100" height="100" fill={`url(#${shine}g)`} />
+          <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${shine})`} />
+          <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${shine}g)`} />
         </Svg>
       </View>
       {children}

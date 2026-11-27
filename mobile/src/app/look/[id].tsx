@@ -10,7 +10,7 @@ import { ItemIcon } from '@/components/WardrobeIcon';
 import { MatchBadge, pieceNote } from '@/components/LookParts';
 import { BackButton } from '@/components/ui';
 import { kindLabel, type Slot } from '@/data/catalog';
-import { dayOfMonth, todayKey, weekday } from '@/data/dates';
+import { codiDayLabel, dayOfMonth, todayKey, weekday } from '@/data/dates';
 import { lookTips, matchOf, sortPieces, type OwnedPiece } from '@/data/recommend';
 import { loadArchive, loadWardrobe } from '@/data/store';
 import { useRecommendation } from '@/data/useRecommendation';
@@ -102,7 +102,7 @@ export default function LookDetailScreen() {
 
           <View style={styles.actions}>
             <Pressable onPress={() => setChosen(true)} disabled={chosen} accessibilityRole="button" style={[styles.choose, chosen && styles.chooseDone]}>
-              <Text style={styles.chooseText}>{chosen ? '이 룩으로 입기로 했어요' : '이 룩으로 입을래요'}</Text>
+              <Text style={styles.chooseText}>{chosen ? `${codiDayLabel(date)} 코디로 정했어요` : `${codiDayLabel(date)} 코디로 정하기`}</Text>
             </Pressable>
             {view.looks.length > 1 && (
               <Pressable
