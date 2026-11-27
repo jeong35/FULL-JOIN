@@ -19,6 +19,26 @@ cases:
     message: "오늘 뭐 입을까?"
     expected_intents: [today_outfit]
     expected_action: OPEN_RECOMMENDATION
+  - id: today_outfit_find_phrase
+    message: "오늘 입을 수 있는 코디 찾아줘."
+    expected_intents: [today_outfit]
+    expected_action: OPEN_RECOMMENDATION
+    forbidden_intents: [find_similar_item, wardrobe_outfit_search, find_style]
+  - id: selected_photo_wardrobe_match
+    message: "이 사진이랑 비슷한 옷 내 옷장에서 찾아줘."
+    context: selected_photo
+    expected_intents: [compare_saved_style]
+    expected_action: OPEN_COMPARISON
+    forbidden_intents: [find_similar_item, wardrobe_outfit_search, find_style]
+  - id: selected_photo_missing_items
+    message: "이 코디에서 부족한 옷 알려줘."
+    context: selected_photo
+    expected_intents: [compare_saved_style]
+    expected_action: OPEN_COMPARISON
+  - id: today_weather_short_sleeves
+    message: "오늘 날씨에 반팔 괜찮을까?"
+    expected_intents: [today_outfit]
+    expected_action: OPEN_RECOMMENDATION
   - id: saved_style_compare
     message: "전에 저장한 코디 중 지금 입을 수 있는 거 있어?"
     expected_intents: [compare_saved_style]

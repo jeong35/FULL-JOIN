@@ -122,6 +122,13 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
   return data as T;
 }
 
+// 날씨처럼 별도 data 모듈이 소유한 응답 타입은 api.ts에 중복 선언하지 않는다.
+// 대신 모든 인증·refresh·오류 처리는 이 공통 request를 반드시 통과시킨다.
+export async function getWeatherData<T>(lat: number, lon: number, days: number): Promise<T> {
+  const query = new URLSearchParams({ lat: String(lat), lon: String(lon), days: String(days) });
+  return await request<T>('GET', `/weather?${query.toString()}`);
+}
+
 export function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : '알 수 없는 문제가 생겼어요';
 }

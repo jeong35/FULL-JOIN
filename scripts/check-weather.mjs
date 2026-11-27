@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   buildWeather,
@@ -16,6 +17,13 @@ import {
   wfToSky,
   windChill,
 } from "../src/fulljoin/weather.ts";
+
+const mobileWeatherSource = readFileSync(new URL("../mobile/src/data/weather.ts", import.meta.url), "utf8");
+const mobileApiSource = readFileSync(new URL("../mobile/src/data/api.ts", import.meta.url), "utf8");
+assert.match(mobileWeatherSource, /getWeatherData<WeatherResponse>/u);
+assert.doesNotMatch(mobileWeatherSource, /fetch\(`\$\{API_URL\}\/weather/u);
+assert.match(mobileApiSource, /request<T>\('GET', `\/weather\?/u);
+assert.match(mobileApiSource, /authorization: `Bearer \$\{token\}`/u);
 
 // 격자: 기상청 안내서의 서울(시청) 좌표는 60, 127이다.
 assert.deepEqual(toGrid(37.5665, 126.978), { nx: 60, ny: 127 });

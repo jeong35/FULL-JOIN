@@ -3,7 +3,7 @@
 // 아래 WeatherResponse 모양으로 바꿔 준다(서버: src/fulljoin/weather.ts). 받지 못하면 '날씨를 불러오지 못했어요'.
 import { useSyncExternalStore } from 'react';
 
-import { API_URL } from './api';
+import { ApiError, getWeatherData } from './api';
 import { KINDS_BY_SLOT, type Kind, type Slot } from './catalog';
 import type { Season, WardrobeItem } from './types';
 import { SIDO_LIST, type Sido, type Sigungu } from './regions';
@@ -227,10 +227,26 @@ export type DayWeather = {
 export type WeatherResponse = { days: DayWeather[]; issued_at: string; source?: string };
 
 export async function fetchWeather(at: Region, days = 7): Promise<WeatherResponse> {
-  const query = `lat=${at.lat}&lon=${at.lon}&days=${days}`;
-  const response = await fetch(`${API_URL}/weather?${query}`);
-  if (!response.ok) throw new Error('weather_unavailable');
-  return (await response.json()) as WeatherResponse;
+  try {
+    return await getWeatherData<WeatherResponse>(at.lat, at.lon, days);
+  } catch (error) {
+    const diagnostic = error instanceof ApiError
+      ? {
+          stage: error.status === 401
+            ? 'authentication'
+            : error.code === 'weather_not_configured'
+              ? 'configuration'
+              : error.code === 'weather_unavailable'
+                ? 'provider'
+                : 'api',
+          status: error.status,
+          code: error.code,
+        }
+      : { stage: 'client', status: 0, code: 'weather_request_failed' };
+    // 좌표, 토큰, 기상청 키는 로그에 남기지 않는다.
+    console.warn('[weather] request failed', diagnostic);
+    throw error;
+  }
 }
 
 // 지역마다 받아 둔 날씨. 추천 탭과 룩 자세히 화면이 같이 쓴다. 30분이 지나면 새로 받는다.

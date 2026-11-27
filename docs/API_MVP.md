@@ -99,7 +99,7 @@
 
 ## 추천 탭 날씨
 
-`GET /weather?lat=37.2596&lon=127.0465&days=7`은 한국 안 좌표만 받는다(위도 32.5~39, 경도 124~132, 1~10일, 기본 7일). 서버가 공공데이터포털의 기상청 단기예보(`VilageFcstInfoService_2.0/getVilageFcst`, 오늘~4일 뒤)와 중기예보(`MidFcstInfoService/getMidLandFcst`·`getMidTa`, 4~10일 뒤)를 서비스 키 `KMA_SERVICE_KEY`(Supabase Secrets)로 받아 `{ "days": [{ "date", "min", "max", "sky", "pop", "feels_like"?, "hourly": [{ "time", "temp", "sky", "pop" }] }], "issued_at", "source": "기상청" }`으로 돌려준다. `sky`는 `맑음`·`구름 많음`·`흐림`·`비`·`비/눈`·`눈`·`소나기` 중 하나, `hourly`는 단기예보 범위의 08~20시 2시간 간격이다. 위경도는 기상청 격자(nx, ny)로, 중기예보는 가장 가까운 대표 도시의 기온 구역과 그 도의 육상 구역으로 바꾼다. 중기예보를 받지 못하면 단기예보 날짜만 준다. 키가 없으면 `503 weather_not_configured`, 기상청이 답하지 않으면 `502 weather_unavailable`. 계산 규칙과 시험은 `src/fulljoin/weather.ts`, `scripts/check-weather.mjs`.
+`GET /weather?lat=37.2596&lon=127.0465&days=7`은 로그인 사용자의 Bearer access token이 필요한 API다. 한국 안 좌표만 받으며(위도 32.5~39, 경도 124~132, 1~10일, 기본 7일), 모바일은 공통 API request의 token refresh·1회 재시도 경로를 사용한다. 서버가 공공데이터포털의 기상청 단기예보(`VilageFcstInfoService_2.0/getVilageFcst`, 오늘~4일 뒤)와 중기예보(`MidFcstInfoService/getMidLandFcst`·`MidFcstInfoService/getMidTa`, 4~10일 뒤)를 서비스 키 `KMA_SERVICE_KEY`(Supabase Secrets)로 받아 `{ "days": [{ "date", "min", "max", "sky", "pop", "feels_like"?, "hourly": [{ "time", "temp", "sky", "pop" }] }], "issued_at", "source": "기상청" }`으로 돌려준다. `sky`는 `맑음`·`구름 많음`·`흐림`·`비`·`비/눈`·`눈`·`소나기` 중 하나, `hourly`는 단기예보 범위의 08~20시 2시간 간격이다. 위경도는 기상청 격자(nx, ny)로, 중기예보는 가장 가까운 대표 도시의 기온 구역과 그 도의 육상 구역으로 바꾼다. 중기예보를 받지 못하면 단기예보 날짜만 준다. 인증이 없으면 `401 authentication_required`, 키가 없으면 `503 weather_not_configured`, 기상청이 답하지 않으면 `502 weather_unavailable`. 계산과 모바일 인증 경로 검증은 `scripts/check-weather.mjs`에서 수행한다.
 
 ## 사진 분석과 CSV 일괄 등록
 

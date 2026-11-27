@@ -141,7 +141,9 @@ function ChatScreen({ session }: { session: Session }) {
       if (serial !== requestSerial.current) return;
       const actions = (result.actions ?? []).filter(validChatAction)
         .filter((action) => action.type !== 'OFFER_DAILY_REMINDER' || notificationSupported);
-      const intent = result.intents?.[0] ?? 'out_of_scope';
+      // 신규 Action 분류가 실제 노출 행동을 결정하므로 이벤트에도 같은 분류를 기록한다.
+      // 기존 intents는 구버전 사진 상담 응답 호환을 위해 서버에 남아 있다.
+      const intent = result.action_intents?.[0] ?? result.intents?.[0] ?? 'out_of_scope';
       setMessages((current) => [...current, {
         id: nextMessageId.current++,
         role: 'assistant',

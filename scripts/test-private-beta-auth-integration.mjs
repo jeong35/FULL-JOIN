@@ -99,10 +99,24 @@ try {
   assert.equal(login.body.user.id, owner.id);
   assert.equal(typeof login.body.session.access_token, "string");
   const ownerToken = login.body.session.access_token;
+  const weather = await api("/weather?lat=37.2749&lon=127.0567&days=3", { token: ownerToken });
+  const weatherConfigured = weather.status !== 503;
+  if (weatherConfigured) {
+    assert.equal(weather.status, 200);
+    assert.equal(Array.isArray(weather.body.days), true);
+    assert.equal(weather.body.days.length > 0, true);
+    assert.equal(weather.body.source, "기상청");
+  } else {
+    assert.equal(weather.body.error.code, "weather_not_configured");
+    console.log("Staging weather provider is not configured; authenticated 503 was distinguished from auth failure.");
+  }
+  assert.equal((await api("/weather?lat=37.2749&lon=127.0567&days=1")).status, 401);
   const sessionClient = createClient(apiUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: refreshed, error: refreshError } = await sessionClient.auth.refreshSession({ refresh_token: login.body.session.refresh_token });
   assert.equal(refreshError, null);
   assert.equal(refreshed.session?.user.id, owner.id);
+  const refreshedWeather = await api("/weather?lat=37.2749&lon=127.0567&days=1", { token: refreshed.session.access_token });
+  assert.equal(refreshedWeather.status, weatherConfigured ? 200 : 503);
 
   const attackerLogin = await api("/beta-auth/login", { method: "POST", body: { nickname: attacker.nickname, pin: attacker.pin } });
   assert.equal(attackerLogin.status, 200);

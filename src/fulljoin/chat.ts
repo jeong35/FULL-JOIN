@@ -87,9 +87,10 @@ function mentionedWardrobeKinds(message: string, wardrobe: readonly ChatWardrobe
 
 export function classifyChatIntents(message: string): ChatIntent[] {
   const intents: ChatIntent[] = [];
-  const hasProductSearch = /(찾|구매|살|사고|쇼핑|상품|링크|비슷한\s*제품|다른\s*색)/u.test(message);
   const hasWardrobe = /(내\s*옷|옷장|가지고|보유|등록한|있는\s*옷|내\s*[가-힣A-Za-z0-9]{1,12}(?:이랑|랑|하고|과|와).*(?:입|코디|어울))/u.test(message);
   const hasSavedPhoto = /(저장한\s*사진|저장\s*사진|사진\s*속|이\s*사진|이\s*코디|이\s*옷|무슨\s*옷|아이템|분석)/u.test(message);
+  const hasProductSearch = /(구매|사고\s*싶|살\s*옷|쇼핑|상품|제품|링크|다른\s*색)/u.test(message) ||
+    (/(찾아?\s*줘|찾아?\s*주세요)/u.test(message) && !hasWardrobe && !hasSavedPhoto);
   const hasGeneralContext = /(패션|스타일링|색\s*조합|컬러\s*조합|출근|면접|데이트|결혼식|하객|계절|체형|키가)/u.test(message);
   const hasStandaloneAdvice = hasGeneralContext || /(어떻게\s*입|뭐\s*입|어떤\s*(?:상의|하의|아우터|신발)|어울리는\s*색)/u.test(message);
 

@@ -76,33 +76,90 @@ export function extractChatFilters(message: string): ChatFilters {
   return { styles: [...styles], kind, color };
 }
 
-export function classifyActionChatIntents(message: string): ActionChatIntent[] {
+export function classifyActionChatIntents(message: string, context: { hasSelectedPhoto?: boolean } = {}): ActionChatIntent[] {
   const intents: ActionChatIntent[] = [];
   const normalized = message.replace(/\s+/g, " ").trim();
-  const wantsNotification = /(알림|알려\s*줘|알려\s*주세요|추천받)/u.test(normalized);
-  const wantsToday = /(오늘|지금).*(뭐\s*입|코디|옷)|오늘의\s*룩/u.test(normalized);
+  const wantsNotification = /(알림|추천받|(?:매일|내일|아침|저녁).*(?:알려\s*줘|알려\s*주세요))/u.test(normalized);
+  const wantsToday = /오늘.*(뭐\s*입|입을|코디|옷)|오늘.*날씨.*(반팔|긴팔|아우터|겉옷|재킷|코트|패딩)|지금.*뭐\s*입|오늘의\s*룩/u.test(normalized);
   const wantsOwned = /(내\s*옷|옷장|가지고\s*있는|등록한).*(코디|입을|추천|찾)/u.test(normalized);
-  const wantsSimilar = /(비슷한|유사한).*(상품|제품|옷)|상품.*찾/u.test(normalized);
+  const hasExplicitShoppingTarget = /(상품|제품|쇼핑몰|구매|사고\s*싶|살\s*(?:옷|곳)|링크)/u.test(normalized);
+  const wantsSimilar = hasExplicitShoppingTarget && /(비슷한|유사한|찾|추천|보여|알려|살\s*곳)/u.test(normalized);
   const wantsPhotoAnalysis = /(이\s*사진|사진\s*속).*(무슨\s*옷|아이템|분석)/u.test(normalized);
+  const wantsPhotoWardrobeMatch = context.hasSelectedPhoto === true && (
+    (wantsOwned && /(이\s*사진|사진\s*속|비슷한|유사한|비교|활용|입을\s*수)/u.test(normalized)) ||
+    (/(이\s*사진|사진\s*속|이\s*코디)/u.test(normalized) && /(비슷한|유사한|부족한|필요한|비교|활용|입을\s*수|찾)/u.test(normalized))
+  );
   const wantsAdd = /(등록|추가|옷장에\s*넣)/u.test(normalized) && /(옷|상의|하의|아우터|신발|가방|카디건|가디건|니트|팬츠|스커트)/u.test(normalized);
   const wantsSaved = /(저장한|전에\s*저장|아카이브)/u.test(normalized);
-  const wantsCompare = /(비교|처럼\s*입|활용|입을\s*수)/u.test(normalized) && /(사진|코디|저장)/u.test(normalized);
+  const wantsCompare = /(비교|처럼\s*입|활용|입을\s*수)/u.test(normalized) && /(사진|저장)/u.test(normalized);
   const hasStyleFilter = extractChatFilters(normalized).styles.length > 0;
   const wantsStyle = hasStyleFilter && /(코디|스타일|룩|보여|찾|추천)/u.test(normalized);
   const wantsNewStyle = wantsNotification && /(새로운|새\s*코디|나오면)/u.test(normalized);
   const general = /(관리|세탁|보관|어울리는\s*색|패션|스타일링|면접|데이트|하객|어떻게\s*입)/u.test(normalized);
 
   if (wantsToday) intents.push("today_outfit");
-  if (wantsOwned) intents.push("wardrobe_outfit_search");
+  if (wantsOwned && !wantsToday && !wantsPhotoWardrobeMatch) intents.push("wardrobe_outfit_search");
   if (wantsStyle && !wantsOwned) intents.push("find_style");
   if (wantsSimilar) intents.push("find_similar_item");
   if (wantsAdd) intents.push("add_wardrobe_item");
-  if (wantsCompare || wantsPhotoAnalysis) intents.push("compare_saved_style");
+  if (wantsCompare || wantsPhotoAnalysis || wantsPhotoWardrobeMatch) intents.push("compare_saved_style");
   if (wantsSaved && !wantsCompare) intents.push("browse_saved_styles");
   if (wantsNotification && !wantsNewStyle && (wantsToday || /매일|아침|코디/u.test(normalized))) intents.push("notify_today_outfit");
   if (wantsNewStyle) intents.push("notify_new_style");
   if (general && intents.length === 0) intents.push("general_question");
   return unique(intents.length > 0 ? intents : ["out_of_scope"]);
+}
+
+const ACTION_PRIORITY: Readonly<Record<ActionChatIntent, readonly ChatAction["type"][]>> = {
+  today_outfit: ["OPEN_RECOMMENDATION", "OFFER_DAILY_REMINDER"],
+  wardrobe_outfit_search: ["OPEN_COMPARISON", "OPEN_STYLE_DETAIL", "OPEN_PHOTO_ADD", "OPEN_WARDROBE_ADD", "OPEN_WARDROBE"],
+  find_style: ["OPEN_FILTERED_FEED", "OPEN_STYLE_DETAIL"],
+  find_similar_item: ["OPEN_PRODUCT_SEARCH", "OPEN_ARCHIVE"],
+  add_wardrobe_item: ["OPEN_WARDROBE_ADD", "OPEN_PHOTO_ADD"],
+  compare_saved_style: ["OPEN_COMPARISON", "OPEN_ARCHIVE"],
+  browse_saved_styles: ["OPEN_ARCHIVE"],
+  notify_today_outfit: ["OFFER_DAILY_REMINDER", "OPEN_RECOMMENDATION"],
+  notify_new_style: [],
+  general_question: [],
+  out_of_scope: [],
+};
+
+// 메시지 하단 CTA는 결과 수가 아니라 사용자의 목적을 기준으로 고른다.
+// 같은 type+params는 하나만 남기며, 비교 요청에서는 비교 화면 접근을 항상 우선한다.
+export function selectChatActionDrafts(
+  drafts: readonly ChatActionDraft[],
+  intents: readonly ActionChatIntent[],
+  limit = 2,
+): ChatActionDraft[] {
+  const uniqueDrafts = unique(drafts.map((draft) => `${draft.type}:${JSON.stringify(draft.params)}`))
+    .map((key) => drafts.find((draft) => `${draft.type}:${JSON.stringify(draft.params)}` === key))
+    .filter((draft): draft is ChatActionDraft => draft !== undefined);
+  const orderedTypes = unique(intents.flatMap((intent) => ACTION_PRIORITY[intent]));
+  const selected: ChatActionDraft[] = [];
+  for (const type of orderedTypes) {
+    const candidate = uniqueDrafts.find((draft) => draft.type === type);
+    if (candidate !== undefined) selected.push(candidate);
+    if (selected.length === limit) return selected;
+  }
+  // 상품 탐색만 여러 제공처가 각각 의미가 있으므로 남는 자리에 두 번째 링크를 허용한다.
+  if (intents.includes("find_similar_item")) {
+    for (const draft of uniqueDrafts.filter((candidate) => candidate.type === "OPEN_PRODUCT_SEARCH")) {
+      if (!selected.includes(draft)) selected.push(draft);
+      if (selected.length === limit) return selected;
+    }
+  }
+  return selected;
+}
+
+export function selectedPhotoComparisonAnswer(statuses: readonly ("활용" | "비슷함" | "구매")[]): string {
+  if (statuses.length === 0) return "선택한 사진에서 비교할 옷 정보를 찾지 못했어요.";
+  const reusable = statuses.filter((status) => status === "활용").length;
+  const similar = statuses.filter((status) => status === "비슷함").length;
+  const needed = statuses.filter((status) => status === "구매").length;
+  return [
+    "선택한 사진과 내 옷장을 비교했어요.",
+    `바로 활용 가능한 옷 ${reusable}개, 비슷한 옷 ${similar}개, 새로 필요한 옷 ${needed}개로 확인했어요.`,
+  ].join(" ");
 }
 
 export function actionChatRequiresLlm(intents: readonly ActionChatIntent[]): boolean {
