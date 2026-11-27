@@ -1,5 +1,7 @@
 # Action-oriented Chatbot
 
+> 2026-11-27 이후 배포 경계는 `PRIVATE_BETA_POLICY.md`를 따른다. 사진별 영구 기록은 기본 비활성이며 일반 챗봇·Action과 분리한다.
+
 기준일: 2026-11-26
 
 ## 제품 결정
@@ -37,7 +39,7 @@ Result → 사용자 실측 전이므로 미측정이다.
 
 ## 배포 경계
 
-production API SHA `2d0369bb629a5396c0534aad474d63ac1ea81070`은 nickname+PIN `user_id` 계약이다. main의 Auth/RLS 및 CHAT-02 migration은 운영 미배포이므로 main Edge Function 전체를 그대로 배포하면 안 된다. Action 챗봇 API는 기존 인증 계약을 유지한 호환 후보로 배포하고, CHAT-02가 없는 환경에서는 `history_persisted=false`를 명시한다. 이 개편 자체는 신규 DB migration이 필요 없다.
+production API SHA `2d0369bb629a5396c0534aad474d63ac1ea81070`은 과거 nickname+PIN `user_id` 계약이다. 신규 후보는 Private Beta Auth migration과 함께 staging에서 검증하며, CHAT-02는 active migration에서 분리되어 기본적으로 `history_persisted=false`를 명시한다.
 
 결정적 fixture는 `evals/action_chat_cases.yaml`과 `npm run test:action-chat`에 있다. 승인된 Golden Case와 `tests/`는 수정하지 않았다. 비교 후보가 없을 때는 종류명 뒤에 잘못된 조사를 붙이지 않고 `비교할 미니스커트 후보가 없어요`처럼 표시한다.
 

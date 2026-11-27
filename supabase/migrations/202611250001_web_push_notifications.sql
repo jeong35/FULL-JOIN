@@ -38,6 +38,10 @@ create unique index if not exists notification_schedules_one_pending_per_user
 create table if not exists public.notification_dispatch_config (
   singleton boolean primary key default true check (singleton),
   token uuid not null default gen_random_uuid(),
+  endpoint_url text check (
+    endpoint_url is null
+    or endpoint_url ~ '^https://[a-z]{20}\.supabase\.co/functions/v1/notifications/dispatch$'
+  ),
   created_at timestamptz not null default now()
 );
 insert into public.notification_dispatch_config (singleton) values (true) on conflict (singleton) do nothing;
@@ -73,13 +77,15 @@ begin
     '* * * * *',
     $cron$
       select net.http_post(
-        url := 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/notifications/dispatch',
+        url := endpoint_url,
         headers := jsonb_build_object('content-type', 'application/json'),
         body := jsonb_build_object(
-          'token', (select token::text from public.notification_dispatch_config where singleton = true)
+          'token', token::text
         ),
         timeout_milliseconds := 10000
-      );
+      )
+      from public.notification_dispatch_config
+      where singleton = true and endpoint_url is not null;
     $cron$
   );
 end
@@ -87,3 +93,6 @@ $$;
 
 comment on table public.notification_schedules is
   'Daily recommendation reminders. provider_accepted_at does not prove device delivery.';
+
+comment on column public.notification_dispatch_config.endpoint_url is
+  'Environment-specific notifications dispatch URL. Cron remains inert until configured.';

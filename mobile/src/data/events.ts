@@ -350,9 +350,11 @@ async function sendPendingEvents(): Promise<void> {
   const events = queued.map(({ session_id: _sessionId, event_id: _eventId, enqueued_at: _enqueuedAt, attempts: _attempts, ...event }) => event);
   sending = true;
   try {
+    const accessToken = getSession()?.accessToken;
+    if (!accessToken) throw new Error('analytics_auth_unavailable');
     const response = await fetch(`${API_URL}/events`, {
       method: 'POST',
-      headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      headers: { 'content-type': 'text/plain;charset=UTF-8', authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ device_id: deviceId, session_id: firstSessionId, platform, events }),
       keepalive: true,
     });

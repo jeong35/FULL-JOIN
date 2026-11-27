@@ -1,7 +1,7 @@
 # AGENTS.md — FULL JOIN (추구미 앱)
 
 > 코딩 에이전트가 **작업 중 상시 준수할 규칙**. 도구에 관계없이 이 파일 한 벌이 원천이다 — Claude Code는 `CLAUDE.md`의 `@AGENTS.md` 임포트로 읽는다.
-> 정본: **무엇을 만드는가** = `docs/SPEC.md`, **도메인 구조** = `docs/ontology.yaml`. 이 문서는 그 정의를 복제하지 않고 어휘와 불변 규칙만 추린다.
+> 정본: **무엇을 만드는가** = `docs/SPEC.md`, **도메인 구조** = `docs/ontology.yaml`, **현재 개발·배포 단계** = `docs/PRIVATE_BETA_POLICY.md`. 이 문서는 그 정의를 복제하지 않고 어휘와 불변 규칙만 추린다.
 
 ## 1. 제품 맥락
 
@@ -37,6 +37,7 @@
 3. **근거 없는 결과를 내놓지 않는다.** 통과했다면 각 케이스가 왜 통과하는지 한 줄씩 설명한다.
 4. **커밋·PR에 에이전트를 공동 작성자로 넣지 않는다.** 커밋은 팀원이 자기 계정으로 한다.
 5. **비밀키를 코드·저장소에 넣지 않는다.** LLM API 키는 서버(Edge Function) 환경변수에만 둔다.
+6. **Private Beta에서도 사용자 격리를 약화하지 않는다.** 검증된 JWT `sub`만 사용자 ID로 쓰며 body/query `user_id`, URL 전환, 인증 비활성 플래그로 대체하지 않는다.
 
 ## 5. 코딩 컨벤션
 
@@ -74,6 +75,7 @@
 3. 구현 중에는 `tests/`와 `tests/harness/`의 판정 코드·골든 케이스를 수정하지 않는다. 변경이 필요하면 구현을 중단하고 사람의 승인을 요청한다.
 4. 같은 원인으로 검증에 두 번 실패하거나, SPEC에 없는 판정·규칙 충돌·완료 기준 변경이 필요하면 더 수정하지 말고 원인과 선택지를 보고한다.
 5. 완료 전 `npm run check`를 실행한다. 통과 결과는 자동 수용이 아니며 최종 수용은 사람이 한다.
+6. 브라우저 E2E 전에 `docs/LOCAL_DEVELOPMENT.md`의 환경별 export 경로를 사용하고 `npm run e2e:preflight`의 artifact·browser 두 단계를 모두 통과한다. commit SHA, 실제 제공 artifact, 내장 Supabase URL, 브라우저 Network 목적지, Edge Function release SHA, Service Worker·Cache Storage가 일치하지 않으면 기능 결함으로 수정하지 말고 환경 불일치로 중단·보고한다.
 
 허용된 기본 검증 명령은 `npm run check:harness`, `npm run check:syntax`, `npm run check:types`, `npm run test:golden`, `npm run check`이다. **에이전트는 사용자가 현재 작업에 대해 명시적으로 커밋 또는 push를 요청하기 전에는 커밋·push하지 않는다.** 외부 API 호출과 테스트 기준 변경도 사람의 지시나 승인이 있어야 한다.
 

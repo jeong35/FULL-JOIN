@@ -1,5 +1,6 @@
 import { cancelWithAdapter, scheduleWithAdapter, webNotificationSupport, type ScheduledNotification, type ScheduleResult } from './notificationCore';
 import { saveNotificationSettings } from './notificationSettings';
+import { getSession } from './session';
 
 const BASE = 'https://gctbcanltqgcymdlplyr.supabase.co/functions/v1/notifications';
 const ACCOUNT_KEY = 'odit-notification-account-v1';
@@ -11,7 +12,11 @@ function applicationServerKey(value: string): Uint8Array<ArrayBuffer> {
 }
 
 async function jsonRequest(path: string, init?: RequestInit): Promise<Record<string, unknown>> {
-  const response = await fetch(`${BASE}${path}`, init);
+  const accessToken = getSession()?.accessToken;
+  const response = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}) },
+  });
   const body = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) throw new Error(typeof body.error === 'object' ? 'notification_request_failed' : `notification_http_${response.status}`);
   return body;

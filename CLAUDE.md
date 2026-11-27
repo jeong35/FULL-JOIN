@@ -5,6 +5,8 @@
 
 @AGENTS.md
 
+현재 개발·배포 단계의 정본은 `docs/PRIVATE_BETA_POLICY.md`다.
+
 ## Claude Code에서만 해당하는 것
 
 - 로드 확인: 새 세션에서 `/context` — 목록에 `CLAUDE.md`와 `AGENTS.md`가 함께 있어야 정상. `docs/SPEC.md`는 요청 시 읽는 파일이라 목록에 없는 것이 정상.

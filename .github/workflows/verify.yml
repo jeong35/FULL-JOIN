@@ -32,6 +32,8 @@ jobs:
         run: npm ci
       - name: Run agent and test harness checks
         run: npm run check
+      - name: Verify Private Beta authentication boundary
+        run: npm run check:private-beta-auth
       - name: Install locked mobile dependencies
         run: npm ci --prefix mobile
       - name: Run mobile type and lint checks
@@ -59,6 +61,8 @@ jobs:
         run: npx supabase db reset --local
       - name: Run DB and Edge Function integration flows
         run: npm run test:integration:local
+      - name: Run Private Beta authentication integration
+        run: npm run test:private-beta-auth-integration
       - name: Stop local Supabase
         if: always()
         run: npx supabase stop --no-backup

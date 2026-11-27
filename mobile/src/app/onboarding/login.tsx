@@ -5,9 +5,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GlassView } from '@/components/GlassView';
 import { DetailHeader, PrimaryButton } from '@/components/ui';
-import { accountHasData, fetchStylePreferences } from '@/data/api';
+import { betaLogin, errorMessage } from '@/data/api';
 import { track } from '@/data/events';
-import { NICKNAME_MAX, login, nicknameProblem, pinProblem, userIdFor } from '@/data/session';
+import { NICKNAME_MAX, loginWithBetaSession, nicknameProblem, pinProblem } from '@/data/session';
 import { colors, fonts, layout } from '@/theme';
 
 // 튜토리얼 ②: 로그인. 닉네임 + 숫자 4자리.
@@ -43,25 +43,29 @@ export default function LoginScreen() {
     if (checking) return;
     setChecking(true);
     const startedAt = Date.now();
-    const userId = userIdFor(nickname, pin);
-    let returning = false;
-    let savedStyles = [] as Awaited<ReturnType<typeof fetchStylePreferences>>;
-    const [dataResult, stylesResult] = await Promise.allSettled([
-      accountHasData(userId),
-      fetchStylePreferences(userId),
-    ]);
-    if (dataResult.status === 'rejected' && stylesResult.status === 'rejected') {
-      track('login_failed', { error_code: 'lookup_failed', latency_ms: Date.now() - startedAt });
-      track('error_shown', { screen: 'login', error_code: 'lookup_failed' });
+    try {
+      const result = await betaLogin(nickname, pin);
+      loginWithBetaSession({
+        userId: result.user.id,
+        nickname: result.user.nickname,
+        accessToken: result.session.access_token,
+        refreshToken: result.session.refresh_token,
+        expiresAt: result.session.expires_at,
+        returning: result.returning,
+        styles: result.styles,
+      });
+      track('login_success', { returning: result.returning });
+      router.replace(result.returning ? '/' : '/onboarding/taste');
+    } catch (error) {
+      const message = errorMessage(error);
+      track('login_failed', { error_code: 'invalid_credentials', latency_ms: Date.now() - startedAt });
+      track('error_shown', { screen: 'login', error_code: 'invalid_credentials' });
+      setTried(true);
+      // 동일한 문구로 존재 여부와 잠금 상태를 노출하지 않는다.
+      alert(message);
+    } finally {
+      setChecking(false);
     }
-    if (dataResult.status === 'fulfilled') returning = dataResult.value;
-    if (stylesResult.status === 'fulfilled') {
-      savedStyles = stylesResult.value;
-      returning ||= savedStyles.length > 0;
-    }
-    login(nickname, pin, returning, savedStyles);
-    track('login_success', { returning });
-    router.replace(returning ? '/' : '/onboarding/taste');
   }
 
   return (
@@ -122,9 +126,9 @@ export default function LoginScreen() {
           {tried && pinError !== null && <Text style={styles.error}>{pinError}</Text>}
 
           <View style={styles.notes}>
-            <Text style={styles.note}>· 처음이면 새 옷장이 만들어져요.</Text>
+            <Text style={styles.note}>· 베타 테스트용으로 전달받은 닉네임과 숫자를 입력해 주세요.</Text>
             <Text style={styles.note}>· 다른 폰이나 브라우저에서도 같은 닉네임과 숫자로 들어오면 내 옷장이 그대로 열려요.</Text>
-            <Text style={styles.note}>· 숫자를 잊으면 옷장을 다시 찾을 수 없어요. 다른 곳에서 쓰는 비밀번호는 넣지 마세요.</Text>
+            <Text style={styles.note}>· 다른 곳에서 쓰는 비밀번호는 넣지 마세요.</Text>
           </View>
         </ScrollView>
 

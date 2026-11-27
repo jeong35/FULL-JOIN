@@ -3,7 +3,7 @@ import webpush from "web-push";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type",
+  "access-control-allow-headers": "authorization, content-type",
   "access-control-allow-methods": "GET,POST,OPTIONS",
 };
 
@@ -53,13 +53,23 @@ async function bodyOf(request: Request): Promise<Record<string, unknown> | null>
   return record(await request.json().catch(() => null));
 }
 
+async function authenticatedUserId(request: Request): Promise<string | null> {
+  const match = /^Bearer\s+([^\s]+)$/iu.exec(request.headers.get("authorization")?.trim() ?? "");
+  if (!match?.[1]) return null;
+  const { data, error: authError } = await supabase.auth.getUser(match[1]);
+  return authError === null ? data.user?.id ?? null : null;
+}
+
 async function handleSubscribe(request: Request): Promise<Response> {
   const body = await bodyOf(request);
   if (body === null) return error(400, "invalid_request", "알림 구독 정보를 확인해 주세요");
   const id = userId(body);
+  const authenticatedId = await authenticatedUserId(request);
   const subscription = record(body.subscription);
   const keys = record(subscription?.keys);
-  if (id === null || typeof subscription?.endpoint !== "string" || subscription.endpoint.length > 2_048 || !validPushEndpoint(subscription.endpoint) ||
+  if (authenticatedId === null) return error(401, "authentication_required", "로그인이 필요해요");
+  if (id === null || authenticatedId !== id) return error(403, "user_id_mismatch", "인증된 사용자와 요청 사용자가 일치하지 않아요");
+  if (typeof subscription?.endpoint !== "string" || subscription.endpoint.length > 2_048 || !validPushEndpoint(subscription.endpoint) ||
       typeof keys?.p256dh !== "string" || typeof keys?.auth !== "string") {
     return error(400, "invalid_subscription", "알림 구독 정보를 확인해 주세요");
   }
@@ -87,12 +97,15 @@ async function handleSchedule(request: Request): Promise<Response> {
   const body = await bodyOf(request);
   if (body === null) return error(400, "invalid_request", "알림 예약 정보를 확인해 주세요");
   const id = userId(body);
+  const authenticatedId = await authenticatedUserId(request);
   const token = accessToken(body.access_token);
   const scheduledFor = typeof body.scheduled_for === "string" ? Date.parse(body.scheduled_for) : Number.NaN;
   const now = Date.now();
   const timezone = typeof body.timezone === 'string' ? body.timezone : 'Asia/Seoul';
   try { new Intl.DateTimeFormat('en', { timeZone: timezone }).format(); } catch { return error(400, 'invalid_timezone', '시간대를 확인해 주세요'); }
-  if (id === null || token === null || typeof body.subscription_id !== "string" || typeof body.look_id !== "string" ||
+  if (authenticatedId === null) return error(401, "authentication_required", "로그인이 필요해요");
+  if (id === null || authenticatedId !== id) return error(403, "user_id_mismatch", "인증된 사용자와 요청 사용자가 일치하지 않아요");
+  if (token === null || typeof body.subscription_id !== "string" || typeof body.look_id !== "string" ||
       body.look_id.length < 1 || body.look_id.length > 128 || !Number.isFinite(scheduledFor) ||
       scheduledFor <= now || scheduledFor > now + 48 * 60 * 60 * 1_000) {
     return error(400, "invalid_schedule", "내일 같은 시간의 알림만 예약할 수 있어요");
@@ -114,8 +127,9 @@ async function handleCancel(request: Request): Promise<Response> {
   const body = await bodyOf(request);
   if (body === null) return error(400, "invalid_request", "취소 정보를 확인해 주세요");
   const id = userId(body);
+  const authenticatedId = await authenticatedUserId(request);
   const token = accessToken(body.access_token);
-  if (id === null || token === null) return error(400, "invalid_user", "사용자 식별자를 확인해 주세요");
+  if (id === null || authenticatedId !== id || token === null) return error(401, "invalid_user", "로그인 정보를 확인해 주세요");
   const { data: owned } = await supabase.from("notification_subscriptions")
     .select("id").eq("user_id", id).eq("access_token", token).maybeSingle();
   if (owned === null) return error(404, "subscription_not_found", "알림 구독을 다시 설정해 주세요");
@@ -127,10 +141,11 @@ async function handleCancel(request: Request): Promise<Response> {
   return json({ cancelled: true });
 }
 
-async function handleStatus(url: URL): Promise<Response> {
+async function handleStatus(request: Request, url: URL): Promise<Response> {
   const id = url.searchParams.get("user_id") ?? "";
+  const authenticatedId = await authenticatedUserId(request);
   const token = accessToken(url.searchParams.get("access_token"));
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || token === null) return error(400, "invalid_user", "사용자 식별자를 확인해 주세요");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || authenticatedId !== id || token === null) return error(401, "invalid_user", "로그인 정보를 확인해 주세요");
   const { data: owned } = await supabase.from("notification_subscriptions")
     .select("id").eq("user_id", id).eq("access_token", token).maybeSingle();
   if (owned === null) return json({ schedule: null });
@@ -223,7 +238,7 @@ Deno.serve(async (request: Request) => {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/notifications/, "") || "/";
     if (request.method === "GET" && path === "/config") return json({ vapid_public_key: requiredEnvironment("VAPID_PUBLIC_KEY") });
-    if (request.method === "GET" && path === "/status") return await handleStatus(url);
+    if (request.method === "GET" && path === "/status") return await handleStatus(request, url);
     if (request.method === "POST" && path === "/subscribe") return await handleSubscribe(request);
     if (request.method === "POST" && path === "/schedule") return await handleSchedule(request);
     if (request.method === "POST" && path === "/cancel") return await handleCancel(request);

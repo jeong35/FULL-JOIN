@@ -178,6 +178,16 @@ async function run() {
   );
   ok("홈 피드 검색 요약", "공개 사진의 종류·색·부위 요약을 item_id 순서로 반환");
 
+  const preferenceUpdate = await api("/style-preferences", {
+    method: "PUT", body: JSON.stringify({ user_id: owner, styles: ["미니멀", "캐주얼"] }),
+  });
+  assert.equal(preferenceUpdate.status, 200);
+  assert.deepEqual(preferenceUpdate.body.styles, ["미니멀", "캐주얼"]);
+  const preferenceRead = await api(`/style-preferences?user_id=${encodeURIComponent(owner)}`, { method: "GET" });
+  assert.equal(preferenceRead.status, 200);
+  assert.deepEqual(preferenceRead.body.styles, ["미니멀", "캐주얼"]);
+  ok("추구미 설정", "인증 사용자 설정 저장·재조회");
+
   const wardrobeInputs = [
     { user_id: owner, slot: "하의", kind: "데님팬츠", color: "진청", visual_fit: "와이드" },
     { user_id: owner, slot: "하의", kind: "데님팬츠", color: "진청", visual_fit: "일자" },
@@ -217,7 +227,8 @@ async function run() {
   });
   assert.equal(groundedChat.status, 200);
   assert.equal(groundedChat.body.answer_source, "grounded");
-  assert.equal(typeof groundedChat.body.conversation_id, "string");
+  assert.equal(groundedChat.body.conversation_id, null);
+  assert.equal(groundedChat.body.history_persisted, false);
   assert.ok(groundedChat.body.claimed_owned_item_ids.every((id) => afterDelete.body.wardrobe_items.some((item) => item.id === id)));
   ok("보유 옷 상담", "응답의 소유 주장 ID가 실제 옷장 ID에 한정됨");
 
@@ -228,7 +239,7 @@ async function run() {
   assert.equal(generalChat.status, 200);
   assert.equal(generalChat.body.intents.includes("general_advice"), true);
   assert.equal(["fallback", "openai"].includes(generalChat.body.answer_source), true);
-  assert.equal(generalChat.body.conversation_id, groundedChat.body.conversation_id);
+  assert.equal(generalChat.body.history_persisted, false);
   ok("일반 패션 상담", `${generalChat.body.answer_source} 경로로 안전한 응답 반환`);
 
   const mixedChat = await api("/chat", {
@@ -239,28 +250,67 @@ async function run() {
   assert.equal(mixedChat.body.intents.includes("mixed"), true);
   assert.equal(mixedChat.body.answer_sections.some((section) => section.source === "wardrobe"), true);
   assert.equal(mixedChat.body.answer_sections.some((section) => section.source === "general_advice"), true);
-  assert.equal(mixedChat.body.conversation_id, groundedChat.body.conversation_id);
+  assert.equal(mixedChat.body.history_persisted, false);
   ok("복합 상담", "내 옷장 근거와 일반 조언이 별도 section으로 분리됨");
 
-  const historyPage = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}&limit=2`, { method: "GET" });
-  assert.equal(historyPage.status, 200);
-  assert.equal(historyPage.body.conversation_id, groundedChat.body.conversation_id);
-  assert.equal(historyPage.body.messages.length, 2);
-  assert.equal(typeof historyPage.body.next_before, "number");
-  const olderHistoryPage = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}&limit=2&before=${historyPage.body.next_before}`, { method: "GET" });
-  assert.equal(olderHistoryPage.status, 200);
-  assert.equal(olderHistoryPage.body.messages.length, 2);
-  assert.ok(olderHistoryPage.body.messages.every((message) => message.ordinal < historyPage.body.next_before));
-  ok("사진별 대화 복원·페이지네이션", "같은 conversation ID에서 최근 2개와 이전 2개를 결정적으로 조회");
+  const styleSearch = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: owner, message: "미니멀 코디 보여줘" }),
+  });
+  assert.equal(styleSearch.status, 200);
+  assert.equal(styleSearch.body.action_intents.includes("find_style"), true);
+  assert.equal(styleSearch.body.history_persisted, false);
+  assert.ok(styleSearch.body.results.some((result) => result.style_image_id === styleImageId));
+  const styleAction = styleSearch.body.actions.find((action) => action.type === "OPEN_FILTERED_FEED");
+  assert.ok(styleAction);
+  ok("사진 없는 챗봇 검색", "실제 피드 결과와 필터 Action을 반환");
 
-  const attackerHistory = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "GET" }, attackerToken);
-  assert.equal(attackerHistory.status, 200);
-  assert.equal(attackerHistory.body.conversation_id, null);
-  const attackerDelete = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "DELETE" }, attackerToken);
-  assert.equal(attackerDelete.status, 200);
-  const historyAfterAttack = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "GET" });
-  assert.equal(historyAfterAttack.body.conversation_id, groundedChat.body.conversation_id);
-  ok("대화 API 사용자 격리", "타 사용자 조회는 빈 결과이며 삭제 요청도 소유자 대화에 영향 없음");
+  const emptyWardrobeChat = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: attacker, message: "내 옷으로 입을 수 있는 코디 찾아줘" }),
+  }, attackerToken);
+  assert.equal(emptyWardrobeChat.status, 200);
+  assert.equal(emptyWardrobeChat.body.action_intents.includes("wardrobe_outfit_search"), true);
+  assert.equal(emptyWardrobeChat.body.actions.some((action) => action.type === "OPEN_PHOTO_ADD"), true);
+  ok("빈 옷장 Action", "등록되지 않았음을 구분하고 사진 등록 Action을 반환");
+
+  const similarProductChat = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: attacker, message: "아이보리 카디건과 비슷한 상품 찾아줘" }),
+  }, attackerToken);
+  assert.equal(similarProductChat.status, 200);
+  assert.equal(similarProductChat.body.action_intents.includes("find_similar_item"), true);
+  assert.ok(similarProductChat.body.actions.some((action) => action.type === "OPEN_PRODUCT_SEARCH"));
+  ok("옷장 없는 유사 상품 탐색", "검증된 쇼핑몰 검색 Action을 반환");
+
+  const todayOutfit = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: owner, message: "오늘 뭐 입을까?" }),
+  });
+  assert.equal(todayOutfit.status, 200);
+  assert.equal(todayOutfit.body.actions.some((action) => action.type === "OPEN_RECOMMENDATION"), true);
+  ok("오늘의 룩 연결", "추천 알고리즘을 복제하지 않고 추천 탭 Action을 반환");
+
+  const missingContext = await api("/chat", {
+    method: "POST",
+    body: JSON.stringify({ user_id: owner, style_image_id: `missing-${suffix}`, message: "이 사진처럼 입고 싶어" }),
+  });
+  assert.equal(missingContext.status, 404);
+  ok("존재하지 않는 사진 차단", "없는 컨텍스트 ID를 grounded 결과로 사용하지 않음");
+
+  const unheart = await api(`/style-images/${styleImageId}/heart`, {
+    method: "DELETE", body: JSON.stringify({ user_id: owner }),
+  });
+  assert.equal(unheart.status, 200);
+  const archiveAfterUnheart = await api(`/archive?user_id=${encodeURIComponent(owner)}`, { method: "GET" });
+  assert.equal(archiveAfterUnheart.status, 200);
+  assert.equal(archiveAfterUnheart.body.style_images.some((image) => image.id === styleImageId), false);
+  ok("사진 저장 취소", "저장 취소 뒤 아카이브에서 제거");
+
+  const historyPage = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}&limit=2`, { method: "GET" });
+  assert.equal(historyPage.status, 501);
+  assert.equal(historyPage.body.error.code, "chat_history_unavailable");
+  ok("사진별 대화 기록 분리", "Private Beta에서는 명시적으로 미지원이며 일반 챗봇 응답은 정상 동작");
 
   const events = await api("/events", {
     method: "POST",
@@ -271,16 +321,18 @@ async function run() {
       events: [
         { name: "photo_save_done", user_id: owner, props: { style_image_id: styleImageId, place: "compare" } },
         { name: "result_view", user_id: owner, props: { style_image_id: styleImageId, items: 2 } },
+        { name: "chat_action_clicked", user_id: owner, props: { action_id: styleAction.action_id, action_type: styleAction.type, request_id: styleSearch.body.request_id } },
+        { name: "chat_action_completed", user_id: owner, props: { action_id: styleAction.action_id, action_type: styleAction.type, success: true } },
       ],
     }),
   });
   assert.equal(events.status, 200);
-  assert.equal(events.body.accepted, 2);
+  assert.equal(events.body.accepted, 4);
   const { count: storedEvents, error: eventsError } = await db.from("user_events")
     .select("id", { count: "exact", head: true }).eq("user_id", owner);
   assert.equal(eventsError, null);
-  assert.equal(storedEvents, 2);
-  ok("사용자 이벤트 배치", "2건 수락 및 DB 2건 저장");
+  assert.equal(storedEvents, 4);
+  ok("사용자 이벤트 배치", "기존 행동 2건과 챗봇 Action 연결 2건을 수락·저장");
 
   const { data: metrics, error: metricError } = await db.from("llm_operation_metrics")
     .select("response_mode,status,error_type,fallback_used,input_tokens,output_tokens")
@@ -310,28 +362,6 @@ async function run() {
   assert.equal(attackerRows?.length, 0);
   ok("DB RLS 사용자 격리", "authenticated 클라이언트는 자기 user_id 행만 조회");
 
-  const { data: ownerConversations, error: ownerConversationError } = await ownerAuth.client.from("chat_conversations").select("id,user_id");
-  assert.equal(ownerConversationError, null);
-  assert.equal(ownerConversations?.length, 1);
-  assert.ok((ownerConversations ?? []).every((row) => row.user_id === owner));
-  const { data: attackerConversations, error: attackerConversationError } = await attackerAuth.client.from("chat_conversations").select("id,user_id");
-  assert.equal(attackerConversationError, null);
-  assert.equal(attackerConversations?.length, 0);
-  const { data: ownerMessages, error: ownerMessagesError } = await ownerAuth.client.from("chat_messages").select("id,user_id");
-  assert.equal(ownerMessagesError, null);
-  assert.equal(ownerMessages?.length, 6);
-  const { data: attackerMessages, error: attackerMessagesError } = await attackerAuth.client.from("chat_messages").select("id,user_id");
-  assert.equal(attackerMessagesError, null);
-  assert.equal(attackerMessages?.length, 0);
-  ok("대화 DB RLS 격리", "authenticated 사용자는 자기 conversation과 메시지만 조회");
-
-  const deletedHistory = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "DELETE" });
-  assert.equal(deletedHistory.status, 200);
-  const emptyHistory = await api(`/chat/history?style_image_id=${encodeURIComponent(styleImageId)}`, { method: "GET" });
-  assert.equal(emptyHistory.body.conversation_id, null);
-  assert.deepEqual(emptyHistory.body.messages, []);
-  ok("대화 삭제", "사진별 conversation 삭제 시 메시지도 cascade 삭제");
-
   console.log(`\n${integrationTarget === "staging" ? "Staging" : "Local"} integration summary`);
   console.log("- Mock/grounded/fallback paths: executed without paid external calls");
   console.log("- Live OpenAI call: not executed; no cost incurred");
@@ -340,9 +370,9 @@ async function run() {
 
 async function cleanup() {
   await db.from("user_events").delete().eq("device_id", `device_${suffix}`);
-  await db.from("chat_conversations").delete().eq("style_image_id", styleImageId);
   if (owner || attacker) {
     await db.from("wardrobe_items").delete().in("user_id", [owner, attacker].filter(Boolean));
+    await db.from("user_style_preferences").delete().in("user_id", [owner, attacker].filter(Boolean));
   }
   await db.from("style_images").delete().eq("id", styleImageId);
   await db.storage.from("feed-images").remove([styleImagePath, ...localSeedStoragePaths]);

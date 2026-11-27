@@ -1,5 +1,7 @@
 # 로컬 Supabase 개발 환경
 
+> Private Beta 인증 개발은 `PRIVATE_BETA_POLICY.md`와 synthetic Auth 계정을 사용한다. URL `?user=`나 무토큰 demo 계정은 사용하지 않는다.
+
 이 문서는 운영 프로젝트와 분리된 로컬 Docker 환경에서 DB, Storage, Auth, Edge Function과 관리자 대시보드를 재현하는 절차다. 운영 사용자 데이터는 복제하지 않으며 `supabase/seed.sql`의 합성 데이터만 사용한다.
 
 ## 전제 조건
@@ -25,7 +27,7 @@ npm ci
 ./node_modules/.bin/supabase start
 ```
 
-`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. CHAT-02 브랜치 기준은 기존 15개, `202611230001_auth_access_control.sql`, `202611230003_chat_conversations.sql`을 합친 17개다. `202611230002`는 사진 옷장 브랜치와의 번호 충돌을 피하려고 비워 둔다.
+`supabase start`는 로컬 Docker 컨테이너를 만들고 `supabase/migrations/`를 순서대로 적용한 뒤 `supabase/seed.sql`을 실행한다. Private Beta 후보는 production 적용 16개에 Auth `202611230001`, CHAT-02 history 정합용 no-op `202611230003`, 베타 계정 `202611270001`을 더한 19개 파일이다. 실제 CHAT-02 DDL은 `docs/deferred-migrations/`로 분리했다.
 
 로컬 주소는 CLI가 출력한다. 기본값은 다음과 같다.
 
@@ -65,7 +67,7 @@ curl -i http://127.0.0.1:54321/functions/v1/api/health
 
 성공 조건:
 
-- `202611040001`부터 `202611230003`까지 파일로 존재하는 17개가 local target에 모두 표시된다.
+- active migration 19개가 local target에 표시되고 `202611230003`은 테이블을 만들지 않는 no-op이어야 한다.
 - `supabase/seed.sql`이 오류 없이 적용된다.
 - seed는 `demo-analytics-*`, `smoke-*` 합성 사용자만 포함하며 사용자 사진·대화 원문·운영 데이터는 포함하지 않는다.
 
@@ -101,6 +103,91 @@ npm run test:integration:staging
 ```
 
 이 모드는 synthetic 이메일 Auth 사용자 A/B와 fixture를 생성하고 종료 시 정리한다. 익명 로그인 설정은 변경하지 않는다.
+
+## 브라우저 E2E preflight
+
+브라우저 기능 테스트 전에 환경 정합성을 먼저 확인한다. 환경 불일치가 확인되면 인증 로직·API schema·DB migration을 수정하지 않고 테스트를 중단한다.
+
+### 1. 환경별 export와 포트 분리
+
+`mobile/dist`는 E2E에 직접 제공하지 않는다. 현재 commit별로 별도 디렉터리에 새로 export한다.
+
+```bash
+E2E_GIT_SHA="$(git rev-parse HEAD)"
+STAGING_EXPORT="/private/tmp/full-join-e2e/staging/$E2E_GIT_SHA/dist"
+PRODUCTION_EXPORT="/private/tmp/full-join-e2e/production/$E2E_GIT_SHA/dist"
+
+# staging 예시
+cd mobile
+EXPO_PUBLIC_API_URL="https://STAGING_REF.supabase.co/functions/v1/api" \
+EXPO_PUBLIC_SUPABASE_URL="https://STAGING_REF.supabase.co" \
+EXPO_PUBLIC_SUPABASE_ANON_KEY="..." \
+npx expo export --platform web --output-dir "$STAGING_EXPORT"
+```
+
+- staging preview: `127.0.0.1:4174`
+- production preview: `127.0.0.1:4175`
+- 같은 export 디렉터리나 포트를 두 환경에서 재사용하지 않는다.
+- service-role key, 내부 Auth 비밀번호, VAPID private key는 export 환경변수에 넣지 않는다.
+
+### 2. Artifact preflight
+
+브라우저를 열기 전에 다음을 실행한다. dirty worktree를 staging 진단에 사용해야 한다면 `E2E_ALLOW_DIRTY=1`을 명시하되 production 후보에서는 허용하지 않는다.
+
+```bash
+E2E_ENVIRONMENT=staging \
+E2E_PREFLIGHT_PHASE=artifact \
+E2E_ARTIFACT_DIR="$STAGING_EXPORT" \
+E2E_EXPECTED_GIT_SHA="$E2E_GIT_SHA" \
+E2E_EXPECTED_SUPABASE_URL="https://STAGING_REF.supabase.co" \
+E2E_EXPECTED_RELEASE_SHA="APPROVED_EDGE_GIT_SHA" \
+npm run e2e:preflight
+```
+
+이 단계는 현재 Git SHA, 절대 artifact 경로, 번들에 포함된 Supabase/API URL, 호출 대상 `/health`의 release SHA, artifact의 Service Worker 해시를 출력한다. production 기본 URL 문자열이 fallback으로 번들에 남을 수 있으므로 URL 문자열 존재만으로 실제 요청 목적지를 단정하지 않는다. 실제 목적지는 다음 browser 단계에서 확인한다.
+
+### 3. Browser Network·cache preflight
+
+선택한 artifact 디렉터리만 preview 서버의 root로 제공한다. DevTools에서 **Disable cache**를 켜고 Application에서 기존 site data와 예상하지 않은 Service Worker를 지운 뒤 hard reload한다. 기능 조작 전에 Console에서 아래 스크립트를 실행해 결과를 `/private/tmp/e2e-browser-state.json`으로 저장한다. `EXPECTED_API_URL`은 이번 환경의 실제 URL로 바꾼다.
+
+```js
+const EXPECTED_API_URL = 'https://STAGING_REF.supabase.co/functions/v1/api';
+await fetch(`${EXPECTED_API_URL}/health`, { cache: 'no-store' });
+const registrations = await navigator.serviceWorker.getRegistrations();
+const serviceWorkers = [];
+for (const registration of registrations) {
+  const scriptUrl = (registration.active || registration.waiting || registration.installing)?.scriptURL;
+  if (!scriptUrl) continue;
+  const bytes = await fetch(scriptUrl, { cache: 'no-store' }).then((response) => response.arrayBuffer());
+  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+    .map((value) => value.toString(16).padStart(2, '0')).join('');
+  serviceWorkers.push({ script_url: scriptUrl, scope: registration.scope, sha256: hash });
+}
+const state = {
+  page_url: location.href,
+  network_urls: performance.getEntriesByType('resource').map((entry) => entry.name),
+  loaded_scripts: [...document.scripts].map((script) => script.src).filter(Boolean),
+  service_workers: serviceWorkers,
+  cache_names: await caches.keys(),
+};
+copy(JSON.stringify(state, null, 2));
+```
+
+저장한 상태를 검증한다.
+
+```bash
+E2E_ENVIRONMENT=staging \
+E2E_PREFLIGHT_PHASE=browser \
+E2E_ARTIFACT_DIR="$STAGING_EXPORT" \
+E2E_EXPECTED_GIT_SHA="$E2E_GIT_SHA" \
+E2E_EXPECTED_SUPABASE_URL="https://STAGING_REF.supabase.co" \
+E2E_EXPECTED_RELEASE_SHA="APPROVED_EDGE_GIT_SHA" \
+E2E_PREVIEW_URL="http://127.0.0.1:4174" \
+E2E_BROWSER_STATE_FILE="/private/tmp/e2e-browser-state.json" \
+npm run e2e:preflight
+```
+
+browser 단계는 실제 Network에 예상 API 요청이 있는지, 다른 Supabase API로 요청하지 않았는지, 로드된 JS가 선택한 artifact에 속하는지, Service Worker 파일 해시가 artifact와 같은지, Cache Storage가 비어 있는지 확인한다. 두 단계가 모두 통과한 뒤에만 로그인·챗봇 등 E2E 동작을 시작한다.
 
 ## 로컬 관리자 대시보드
 
