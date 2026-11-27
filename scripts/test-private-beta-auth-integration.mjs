@@ -5,14 +5,36 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const output = execFileSync(`${root}/node_modules/.bin/supabase`, ["status", "-o", "env"], { cwd: root, encoding: "utf8" });
-const env = new Map([...output.matchAll(/^([A-Z_]+)="([^"]*)"$/gmu)].map((match) => [match[1], match[2]]));
-const apiUrl = env.get("API_URL");
-const serviceRoleKey = env.get("SERVICE_ROLE_KEY");
-const anonKey = env.get("ANON_KEY");
-if (!apiUrl || !serviceRoleKey || !anonKey || !["127.0.0.1", "localhost"].includes(new URL(apiUrl).hostname)) {
-  throw new Error("Private Beta integration requires a local Supabase stack");
+const target = process.env.FULL_JOIN_INTEGRATION_TARGET ?? "local";
+
+function environment() {
+  if (target === "staging") {
+    const projectRef = process.env.FULL_JOIN_STAGING_PROJECT_REF;
+    const apiUrl = process.env.FULL_JOIN_STAGING_URL;
+    const serviceRoleKey = process.env.FULL_JOIN_STAGING_SERVICE_ROLE_KEY;
+    const anonKey = process.env.FULL_JOIN_STAGING_ANON_KEY;
+    if (!projectRef || !apiUrl || !serviceRoleKey || !anonKey) {
+      throw new Error("Staging integration requires the FULL_JOIN_STAGING_* environment variables");
+    }
+    if (projectRef === "gctbcanltqgcymdlplyr" || new URL(apiUrl).hostname !== `${projectRef}.supabase.co`) {
+      throw new Error("Refusing to run Private Beta fixtures outside the configured staging project");
+    }
+    return { apiUrl, serviceRoleKey, anonKey };
+  }
+  const output = execFileSync(`${root}/node_modules/.bin/supabase`, ["status", "-o", "env"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+  });
+  const values = new Map([...output.matchAll(/^([A-Z_]+)="([^"]*)"$/gmu)].map((match) => [match[1], match[2]]));
+  const apiUrl = values.get("API_URL");
+  const serviceRoleKey = values.get("SERVICE_ROLE_KEY");
+  const anonKey = values.get("ANON_KEY");
+  if (!apiUrl || !serviceRoleKey || !anonKey || !["127.0.0.1", "localhost"].includes(new URL(apiUrl).hostname)) {
+    throw new Error("Private Beta integration requires a local Supabase stack");
+  }
+  return { apiUrl, serviceRoleKey, anonKey };
 }
+
+const { apiUrl, serviceRoleKey, anonKey } = environment();
 const admin = createClient(apiUrl, serviceRoleKey, { auth: { persistSession: false } });
 const suffix = randomUUID().slice(0, 8);
 const functionUrl = `${apiUrl}/functions/v1/api`;
@@ -23,14 +45,14 @@ const accounts = [];
 async function api(path, { token, body, method = "GET" } = {}) {
   const response = await fetch(`${functionUrl}${path}`, {
     method,
-    headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { apikey: anonKey, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: response.status, body: await response.json().catch(() => null) };
 }
 
 async function provision(label, pin) {
-  const email = `beta-${label}-${suffix}@accounts.odit.invalid`;
+  const email = `beta-${accounts.length}-${suffix}@accounts.odit.test`;
   const password = randomBytes(32).toString("base64url");
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   assert.equal(error, null);
@@ -51,13 +73,36 @@ async function provision(label, pin) {
 try {
   const owner = await provision("주인", "0427");
   const attacker = await provision("공격", "7319");
+  const lockedAccount = await provision("잠금", "2580");
+  const concurrentAccount = await provision("동시", "8642");
+  assert.equal((await api("/beta-auth/login", { method: "POST", body: { nickname: `미등록${suffix.slice(0, 2)}`, pin: "1111" } })).status, 401);
   const invalid = await api("/beta-auth/login", { method: "POST", body: { nickname: owner.nickname, pin: "0000" } });
   assert.equal(invalid.status, 401);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    assert.equal((await api("/beta-auth/login", { method: "POST", body: { nickname: lockedAccount.nickname, pin: "0000" } })).status, 401);
+  }
+  assert.equal((await api("/beta-auth/login", { method: "POST", body: { nickname: lockedAccount.nickname, pin: lockedAccount.pin } })).status, 401);
+  const { error: unlockError } = await admin.from("beta_accounts").update({ locked_until: new Date(Date.now() - 1_000).toISOString() })
+    .eq("auth_user_id", lockedAccount.id);
+  assert.equal(unlockError, null);
+  assert.equal((await api("/beta-auth/login", { method: "POST", body: { nickname: lockedAccount.nickname, pin: lockedAccount.pin } })).status, 200);
+
+  const concurrentFailures = await Promise.all(Array.from({ length: 5 }, () => api("/beta-auth/login", {
+    method: "POST", body: { nickname: concurrentAccount.nickname, pin: "0000" },
+  })));
+  assert.ok(concurrentFailures.every((result) => result.status === 401));
+  assert.equal((await api("/beta-auth/login", { method: "POST", body: { nickname: concurrentAccount.nickname, pin: concurrentAccount.pin } })).status, 401);
+
   const login = await api("/beta-auth/login", { method: "POST", body: { nickname: owner.nickname, pin: owner.pin } });
   assert.equal(login.status, 200);
   assert.equal(login.body.user.id, owner.id);
   assert.equal(typeof login.body.session.access_token, "string");
   const ownerToken = login.body.session.access_token;
+  const sessionClient = createClient(apiUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: refreshed, error: refreshError } = await sessionClient.auth.refreshSession({ refresh_token: login.body.session.refresh_token });
+  assert.equal(refreshError, null);
+  assert.equal(refreshed.session?.user.id, owner.id);
 
   const attackerLogin = await api("/beta-auth/login", { method: "POST", body: { nickname: attacker.nickname, pin: attacker.pin } });
   assert.equal(attackerLogin.status, 200);
@@ -83,19 +128,61 @@ try {
   assert.equal(eventResult.status, 200);
   const subscribe = await fetch(`${notificationUrl}/subscribe`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${ownerToken}` },
+    headers: { apikey: anonKey, "content-type": "application/json", authorization: `Bearer ${ownerToken}` },
     body: JSON.stringify({ user_id: owner.id, subscription: { endpoint: pushEndpoint, keys: { p256dh: "test-p256dh", auth: "test-auth" } } }),
   });
   assert.equal(subscribe.status, 200);
+  const subscription = await subscribe.json();
+  const schedule = await fetch(`${notificationUrl}/schedule`, {
+    method: "POST",
+    headers: { apikey: anonKey, "content-type": "application/json", authorization: `Bearer ${ownerToken}` },
+    body: JSON.stringify({
+      user_id: owner.id,
+      subscription_id: subscription.subscription_id,
+      access_token: subscription.access_token,
+      look_id: "synthetic-private-beta-look",
+      scheduled_for: new Date(Date.now() + 25 * 60 * 60 * 1_000).toISOString(),
+      timezone: "Asia/Seoul",
+    }),
+  });
+  assert.equal(schedule.status, 201);
+  const scheduleBody = await schedule.json();
+  const status = await fetch(`${notificationUrl}/status?user_id=${owner.id}&access_token=${subscription.access_token}`, {
+    headers: { apikey: anonKey, authorization: `Bearer ${ownerToken}` },
+  });
+  assert.equal(status.status, 200);
+  assert.equal((await status.json()).schedule.id, scheduleBody.schedule.id);
   const crossSubscribe = await fetch(`${notificationUrl}/subscribe`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${attackerToken}` },
+    headers: { apikey: anonKey, "content-type": "application/json", authorization: `Bearer ${attackerToken}` },
     body: JSON.stringify({ user_id: owner.id, subscription: { endpoint: `${pushEndpoint}-cross`, keys: { p256dh: "test-p256dh", auth: "test-auth" } } }),
   });
   assert.equal(crossSubscribe.status, 403);
-  console.log("Private Beta auth integration passed: login/session, PIN separation, A/B isolation, invalid token, wardrobe, events, and notification ownership.");
+  const crossCancel = await fetch(`${notificationUrl}/cancel`, {
+    method: "POST",
+    headers: { apikey: anonKey, "content-type": "application/json", authorization: `Bearer ${attackerToken}` },
+    body: JSON.stringify({ user_id: owner.id, access_token: subscription.access_token, schedule_id: scheduleBody.schedule.id }),
+  });
+  assert.notEqual(crossCancel.status, 200);
+  const cancelled = await fetch(`${notificationUrl}/cancel`, {
+    method: "POST",
+    headers: { apikey: anonKey, "content-type": "application/json", authorization: `Bearer ${ownerToken}` },
+    body: JSON.stringify({ user_id: owner.id, access_token: subscription.access_token, schedule_id: scheduleBody.schedule.id }),
+  });
+  assert.equal(cancelled.status, 200);
+  const invalidDispatch = await fetch(`${notificationUrl}/dispatch`, {
+    method: "POST", headers: { apikey: anonKey, "content-type": "application/json" }, body: JSON.stringify({ token: "invalid" }),
+  });
+  assert.equal(invalidDispatch.status, 401);
+
+  assert.equal((await sessionClient.auth.setSession({ access_token: refreshed.session.access_token, refresh_token: refreshed.session.refresh_token })).error, null);
+  assert.equal((await sessionClient.auth.signOut({ scope: "global" })).error, null);
+  const afterLogout = await sessionClient.auth.refreshSession({ refresh_token: refreshed.session.refresh_token });
+  assert.notEqual(afterLogout.error, null);
+  console.log(`Private Beta ${target} integration passed: provisioning, login, lock/unlock, concurrent failures, refresh/logout, A/B isolation, wardrobe, events, and notification schedule/cancel ownership.`);
 } finally {
-  await admin.from("notification_subscriptions").delete().eq("endpoint", pushEndpoint);
+  await admin.from("notification_schedules").delete().in("user_id", accounts);
+  await admin.from("notification_subscriptions").delete().in("user_id", accounts);
   for (const id of accounts) {
     await admin.from("user_events").delete().eq("user_id", id);
     await admin.from("wardrobe_items").delete().eq("user_id", id);

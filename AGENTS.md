@@ -75,6 +75,7 @@
 3. 구현 중에는 `tests/`와 `tests/harness/`의 판정 코드·골든 케이스를 수정하지 않는다. 변경이 필요하면 구현을 중단하고 사람의 승인을 요청한다.
 4. 같은 원인으로 검증에 두 번 실패하거나, SPEC에 없는 판정·규칙 충돌·완료 기준 변경이 필요하면 더 수정하지 말고 원인과 선택지를 보고한다.
 5. 완료 전 `npm run check`를 실행한다. 통과 결과는 자동 수용이 아니며 최종 수용은 사람이 한다.
+6. 브라우저 E2E 전에 `docs/LOCAL_DEVELOPMENT.md`의 환경별 export 경로를 사용하고 `npm run e2e:preflight`의 artifact·browser 두 단계를 모두 통과한다. commit SHA, 실제 제공 artifact, 내장 Supabase URL, 브라우저 Network 목적지, Edge Function release SHA, Service Worker·Cache Storage가 일치하지 않으면 기능 결함으로 수정하지 말고 환경 불일치로 중단·보고한다.
 
 허용된 기본 검증 명령은 `npm run check:harness`, `npm run check:syntax`, `npm run check:types`, `npm run test:golden`, `npm run check`이다. **에이전트는 사용자가 현재 작업에 대해 명시적으로 커밋 또는 push를 요청하기 전에는 커밋·push하지 않는다.** 외부 API 호출과 테스트 기준 변경도 사람의 지시나 승인이 있어야 한다.
 

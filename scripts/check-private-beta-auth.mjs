@@ -20,8 +20,14 @@ assert.match(api, /grant_type=refresh_token/u);
 const events = await readFile(new URL("../mobile/src/data/events.ts", import.meta.url), "utf8");
 assert.match(events, /authorization: `Bearer \$\{accessToken\}`/u);
 const notifications = await readFile(new URL("../supabase/functions/notifications/index.ts", import.meta.url), "utf8");
+const notificationMigration = await readFile(
+  new URL("../supabase/migrations/202611250001_web_push_notifications.sql", import.meta.url),
+  "utf8",
+);
 assert.match(notifications, /supabase\.auth\.getUser/u);
 assert.match(notifications, /user_id_mismatch/u);
+assert.match(notificationMigration, /endpoint_url is not null/u);
+assert.doesNotMatch(notificationMigration, /gctbcanltqgcymdlplyr/u);
 const migration = await readFile(new URL("../supabase/migrations/202611270001_private_beta_accounts.sql", import.meta.url), "utf8");
 assert.match(migration, /crypt\(p_pin/u);
 assert.match(migration, /interval '15 minutes'/u);
