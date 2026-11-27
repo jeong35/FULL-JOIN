@@ -36,7 +36,10 @@ export default function TabLayout() {
   // 11/26: 홈의 추구미 안내 말풍선(feed_taste)을 빼서, 챗봇 말풍선은 그 말풍선을 기다리지 않는다.
   // 11/27: 화면에 다른 말풍선이 떠 있으면(옷장 '홈으로 가기' 등) 겹치지 않게 그게 닫힐 때까지 기다린다.
   const otherHintShown = useOtherHintShown();
-  const showChatHint = pathname !== '/chat' && chatHintOpen && !otherHintShown;
+  // 11/27(친구분 의견): 옷 넣기 → 사진 저장 → 비교 말풍선을 다 본 뒤에 챗봇을 알려 준다.
+  // 비교 결과를 한 번 열면(또는 '사진 눌러 비교' 말풍선을 닫으면) archive_open이 끝난 것으로 남는다.
+  const compareFlowDone = !useHintOpen('archive_open');
+  const showChatHint = pathname !== '/chat' && chatHintOpen && compareFlowDone && !otherHintShown;
 
   // 옷 추가·옷장의 시안 그림(약 880KB)을 앱이 뜨고 조금 뒤에 미리 불러 둔다 — 옷장에 들어갈 때 기다리지 않게(11/19).
   useEffect(() => {

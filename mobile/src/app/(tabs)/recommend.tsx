@@ -601,6 +601,8 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
 }) {
   const closet = look === undefined && closetLooks.length > 0 ? closetLooks[index % closetLooks.length] : undefined;
   const total = look !== undefined ? view.looks.length : closetLooks.length;
+  // 11/27: 룩 번호는 오른쪽 위·카드 아래 점 대신 '다음 룩' 버튼 안에(점은 페이지가 넘어가는 느낌이 강했다).
+  const position = total > 1 ? `${(index % total) + 1}/${total}` : undefined;
   const photos = useWardrobePhotos();
   const artView = useClosetView();
   // 이 룩에 사진 넣은 옷이 있으면 그림 | 사진 보기를 고를 수 있다(옷장과 같은 설정).
@@ -640,7 +642,6 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
       <View style={styles.sectionHead}>
         <Text style={[styles.h2, styles.flex]}>{title}</Text>
         {hasPhoto && <ViewToggle value={artView} onChange={setClosetView} label="룩 옷 보기" />}
-        {total > 0 && <Text style={styles.sub}>{(index % total) + 1} / {total}</Text>}
       </View>
       {anchor !== undefined && (
         <View style={styles.anchorRow}>
@@ -681,14 +682,12 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
                 <Text style={styles.tipRowText}>{tip.text}</Text>
               </View>
             ))}
-            <ChooseRow chosen={chosen} onChoose={() => onChoose(look.image.id)} onNext={total > 1 ? onNext : undefined} />
+            <ChooseRow chosen={chosen} onChoose={() => onChoose(look.image.id)} onNext={total > 1 ? onNext : undefined} position={position} />
           </GlassView>
-          {total > 1 && <Dots total={total} index={index % total} />}
         </>
       ) : closet !== undefined ? (
         <>
-          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} wearNote={wearNote} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} />
-          {total > 1 && <Dots total={total} index={index % total} />}
+          <ClosetLookCard combo={closet} date={date} day={near ? view.day : undefined} wearNote={wearNote} photos={photos} artView={artView} chosen={chosenId === closet.id} onChoose={() => onChoose(closet.id)} onNext={total > 1 ? onNext : undefined} position={position} />
         </>
       ) : feedLook !== undefined ? (
         <FeedLookCard image={feedLook} emptyCloset={view.wardrobe.length === 0} onAdd={addClothes.onPress} />
@@ -706,15 +705,16 @@ function LookSection({ title, view, look, closetLooks, near, anchor, onClearAnch
   );
 }
 
-function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: () => void; onNext?: () => void }) {
+function ChooseRow({ chosen, onChoose, onNext, position }: { chosen: boolean; onChoose: () => void; onNext?: () => void; position?: string }) {
   return (
     <View style={styles.actions}>
       <Pressable onPress={onChoose} disabled={chosen} accessibilityRole="button" accessibilityState={{ disabled: chosen }} style={[styles.choose, chosen && styles.chooseDone]}>
         <Text style={styles.chooseText}>{chosen ? '이 룩으로 입기로 했어요' : '이 룩으로 입을래요'}</Text>
       </Pressable>
       {onNext !== undefined && (
-        <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel="다른 조합 보기" style={styles.iconButton}>
-          <RefreshIcon />
+        <Pressable onPress={onNext} accessibilityRole="button" accessibilityLabel={position === undefined ? '다음 룩 보기' : `다음 룩 보기, 지금 ${position}`} style={styles.iconButton}>
+          <NextIcon />
+          {position !== undefined && <Text style={styles.nextCount}>{position}</Text>}
         </Pressable>
       )}
     </View>
@@ -723,7 +723,7 @@ function ChooseRow({ chosen, onChoose, onNext }: { chosen: boolean; onChoose: ()
 
 // 저장한 사진 없이 내 옷장 옷만으로 고른 룩(11/24 팀 결정 8번). 보통은 모두 그날 기온에 맞는 옷이다.
 // day가 있으면(③ 가장 가까운 조합) 기온에 딱 맞지 않는다는 안내를 붙인다.
-function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, chosen, onChoose, onNext }: {
+function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, chosen, onChoose, onNext, position }: {
   combo: Combo;
   date: string;
   day?: DayWeather;
@@ -733,6 +733,7 @@ function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, ch
   chosen: boolean;
   onChoose: () => void;
   onNext?: () => void;
+  position?: string;
 }) {
   const anchor = combo.items.find((item) => item.slot === '상의' || item.slot === '원피스') ?? combo.items[0];
   const gaps = day === undefined ? [] : combo.items.map((item) => tempGap(item, day));
@@ -773,7 +774,7 @@ function ClosetLookCard({ combo, date, day, wearNote = null, photos, artView, ch
           <Text style={styles.tipRowText}>{nearNote}</Text>
         </View>
       )}
-      <ChooseRow chosen={chosen} onChoose={onChoose} onNext={onNext} />
+      <ChooseRow chosen={chosen} onChoose={onChoose} onNext={onNext} position={position} />
     </GlassView>
   );
 }
@@ -964,13 +965,6 @@ function ComboMaker({ wardrobe, day, anchorId, onPick }: {
   );
 }
 
-function Dots({ total, index }: { total: number; index: number }) {
-  return (
-    <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {Array.from({ length: total }, (_, i) => <View key={i} style={[styles.dot, i === index && styles.dotActive]} />)}
-    </View>
-  );
-}
 
 // ── 선 아이콘 ──
 function PinIcon() {
@@ -988,9 +982,9 @@ function ChevronRight({ color = colors.textSecondary }: { color?: string }) {
 function TempIcon() {
   return <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M8 4v12M5 13l3 3 3-3M16 20V8M13 11l3-3 3 3" /></Svg>;
 }
-function RefreshIcon({ size = 20 }: { size?: number }) {
-  // 11/27: 화살표 끝이 꺾쇠처럼 떨어져 보이던 그림 → 흔히 쓰는 '다시' 모양(동그라미 + 오른쪽 위 화살촉).
-  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><Path d="M21 3v5h-5" /></Svg>;
+// 다음 룩(11/27: 새로고침 모양은 '다시 고르기'처럼 보여서 오른쪽 화살표로).
+function NextIcon() {
+  return <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={colors.textPurple} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 12h14" /><Path d="M13 6l6 6-6 6" /></Svg>;
 }
 
 const styles = StyleSheet.create({
@@ -1090,11 +1084,9 @@ const styles = StyleSheet.create({
   choose: { flex: 1, height: 50, borderRadius: 14, backgroundColor: colors.purpleFill, alignItems: 'center', justifyContent: 'center' },
   chooseDone: { opacity: 0.6 },
   chooseText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onPurpleFill },
-  iconButton: { width: 50, height: 50, borderRadius: 14, backgroundColor: colors.white, boxShadow: glass.selectedInnerShadow, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 50, height: 50, borderRadius: 14, backgroundColor: colors.white, boxShadow: glass.selectedInnerShadow, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  nextCount: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 12, color: colors.textSecondary },
   iconButtonSmall: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.white, boxShadow: glass.selectedInnerShadow, alignItems: 'center', justifyContent: 'center' },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.purpleFill },
-  dotActive: { width: 16, backgroundColor: colors.purpleStrong },
 
   bleed: { marginHorizontal: -layout.screenPaddingX },
   clothesRow: { gap: 8, paddingHorizontal: layout.screenPaddingX },
