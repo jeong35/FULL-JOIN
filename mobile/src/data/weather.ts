@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { API_URL } from './api';
-import type { Kind, Slot } from './catalog';
+import { KINDS_BY_SLOT, type Kind, type Slot } from './catalog';
 import type { Season, WardrobeItem } from './types';
 import { SIDO_LIST, type Sido, type Sigungu } from './regions';
 
@@ -328,8 +328,18 @@ const KIND_TEMP: Partial<Record<Kind, readonly [number, number]>> = {
 };
 
 // 기온별 옷차림 표는 하루 평균 기온 기준이다. 아침이 쌀쌀한지는 needsOuter()로 따로 본다.
-export function dayTempFor(_slot: Slot, day: Pick<DayWeather, 'min' | 'max'>): number {
+// 11/27: 겉옷만은 아침(최저) 기온으로 본다 — 아침에 입고 나가니까. 평균으로 보면 7~16°(평균 12°) 날에
+// 롱코트가 '더울 수도'로 빠지고, 겨울로 고른 롱패딩이 맞는 옷으로 남았다.
+export function dayTempFor(slot: Slot, day: Pick<DayWeather, 'min' | 'max'>): number {
+  if (slot === '아우터') return day.min;
   return Math.round((day.min + day.max) / 2);
+}
+
+// 겉옷으로만 입는 종류(카디건·후드집업·베스트처럼 상의로도 입는 것은 빼고).
+const TOPS: readonly string[] = KINDS_BY_SLOT.상의;
+const OUTER_ONLY: ReadonlySet<string> = new Set(KINDS_BY_SLOT.아우터.filter((kind) => !TOPS.includes(kind)));
+function tempSlotOf(item: TempItem): Slot {
+  return OUTER_ONLY.has(item.kind) ? '아우터' : '상의';
 }
 
 // ── 옷 하나가 그날 입기 좋은지(11/25 팀 결정) ──
@@ -366,7 +376,13 @@ export function tempRangeOf(item: TempItem): readonly [number, number] | undefin
   const seasons = chosenSeasons(item);
   if (seasons.length > 0) {
     const ranges = seasons.map((season) => SEASON_TEMP[season]);
-    return [Math.min(...ranges.map((r) => r[0])), Math.max(...ranges.map((r) => r[1]))];
+    const low = Math.min(...ranges.map((r) => r[0]));
+    const high = Math.max(...ranges.map((r) => r[1]));
+    // 겉옷의 따뜻함은 종류가 정한다(11/27): 겨울로 고른 롱패딩도 11°까지 맞는 옷이 되지 않게, 더운 쪽은 종류 기온표를 넘지 않게.
+    // 추운 쪽은 고른 계절대로 넓혀 준다(얇은 겉옷을 겨울에 겹쳐 입는 사람도 있으니).
+    const kindRange = KIND_TEMP[item.kind];
+    if (kindRange !== undefined && OUTER_ONLY.has(item.kind)) return [Math.min(low, kindRange[0]), Math.min(high, kindRange[1])];
+    return [low, high];
   }
   // 스타킹 두께(옷 추가에서 고른 것, details.두께): 기모는 한겨울까지, 비침은 늦봄·초가을까지.
   if (item.kind === '스타킹' && item.details?.두께 === '기모') return [-20, 12];
@@ -388,7 +404,7 @@ export function fitsTemp(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>, t
 export function tempGap(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>, tolerance = 2): '추움' | '더움' | null {
   const range = tempRangeOf(item);
   if (range === undefined) return null;
-  const t = dayTempFor('상의', day);
+  const t = dayTempFor(tempSlotOf(item), day);
   if (t < range[0] - tolerance) return '추움';
   if (t > range[1] + tolerance) return '더움';
   return null;
@@ -398,7 +414,7 @@ export function tempGap(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>, to
 export function tempDistance(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>): number {
   const range = tempRangeOf(item);
   if (range === undefined) return 0;
-  const t = dayTempFor('상의', day);
+  const t = dayTempFor(tempSlotOf(item), day);
   return t < range[0] ? range[0] - t : t > range[1] ? t - range[1] : 0;
 }
 
