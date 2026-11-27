@@ -59,13 +59,13 @@ export const PATTERNS = ["무지", "스트라이프", "체크", "도트", "호�
 export const SEASONS = ["봄", "여름", "가을", "겨울"] as const;
 
 const detailsSchema = z.object({
-  "목 모양": z.enum(["라운드", "U넥", "딥 U넥", "V넥", "딥 V넥", "스퀘어넥", "보트넥", "하프넥", "터틀넥", "오프숄더", "원숄더", "셔츠 카라", "라운드 카라"]).optional(),
+  "목 모양": z.enum(["라운드", "U넥", "딥 U넥", "V넥", "딥 V넥", "스퀘어넥", "보트넥", "하프넥", "하프집업", "터틀넥", "오프숄더", "원숄더", "셔츠 카라", "라운드 카라"]).optional(),
   "기장": z.enum(["기본", "크롭", "긴", "9부", "7부", "숏", "하프", "롱"]).optional(),
   "카라": z.enum(["없음", "셔츠", "라운드", "빅카라", "세일러", "프릴", "스탠드"]).optional(),
   "칼라": z.enum(["테일러드", "숄", "노카라", "스탠드", "퍼", "후드", "셔츠 카라", "큰 칼라"]).optional(),
   "디테일": z.array(z.enum(["허리 끈", "목 끈", "카고 주머니", "더블 버튼", "벨트", "떡볶이 단추"])).optional(),
   "꾸밈": z.array(z.enum(["레이스", "시스루"])).optional(),
-  "짜임": z.enum(["민자", "골지", "꽈배기 가운데", "꽈배기 전체", "아가일"]).optional(),
+  "짜임": z.enum(["민자", "골지", "꽈배기 가운데", "꽈배기 전체", "아가일", "노르딕 가로", "노르딕 목둘레"]).optional(),
   "팔": z.enum(["같이", "무지"]).optional(),
   "털": z.enum(["짧은 털", "긴 털", "뽀글"]).optional(),
   "어깨": z.enum(["민소매", "끈", "끈 없음"]).optional(),
@@ -73,7 +73,14 @@ const detailsSchema = z.object({
   "모양": z.enum(["블루종", "바람막이", "캡", "비니", "베레모"]).optional(),
   "길이": z.enum(["발목", "숏", "앵클", "미들", "롱", "중목", "긴 양말"]).optional(),
   "두께": z.enum(["비침", "기모"]).optional(),
-  "무늬 모양": z.enum(["깅엄", "타탄", "버팔로", "윈도페인", "글렌", "하운드투스", "단가라", "굵은줄", "멀티줄", "세로줄", "핀스트라이프"]).optional(),
+  "무늬 모양": z.enum([
+    "깅엄", "타탄", "버팔로", "윈도페인", "글렌", "하운드투스", "단가라", "굵은줄", "멀티줄", "세로줄", "핀스트라이프",
+    "정석", "큰 아가일", "가슴 띠", "세로 띠",
+  ]).optional(),
+  "프린팅": z.enum(["레터링", "작은 로고"]).optional(),
+  "프린팅 색": z.enum(COLORS).optional(),
+  "노르딕 색": z.enum(COLORS).optional(),
+  "아가일 색": z.enum(COLORS).optional(),
 }).strict();
 
 const UPPER_FITS = ["슬림", "레귤러", "오버사이즈"] as const;
@@ -159,13 +166,25 @@ export const wardrobeInputSchema = z.object({
   if (patternDetail !== undefined) {
     const checkDetails = ["깅엄", "타탄", "버팔로", "윈도페인", "글렌", "하운드투스"];
     const stripeDetails = ["단가라", "굵은줄", "멀티줄", "세로줄", "핀스트라이프"];
+    const argyleDetails = ["정석", "큰 아가일", "가슴 띠", "세로 띠"];
     if ((value.pattern !== "체크" || !checkDetails.includes(patternDetail)) &&
-        (value.pattern !== "스트라이프" || !stripeDetails.includes(patternDetail))) {
+        (value.pattern !== "스트라이프" || !stripeDetails.includes(patternDetail)) &&
+        (value.pattern !== "아가일" || !argyleDetails.includes(patternDetail))) {
       context.addIssue({ code: "custom", path: ["details", "무늬 모양"], message: "무늬에 맞는 세부 모양을 골라 주세요" });
     }
   }
-  if (value.details["팔"] !== undefined && value.details["짜임"] === undefined) {
-    context.addIssue({ code: "custom", path: ["details", "팔"], message: "팔 모양은 짜임과 함께 골라 주세요" });
+  // 팔(팔까지 · 몸통만)은 11/27부터 아가일 무늬에서 고른다. 전에 짜임과 같이 저장한 옷도 그대로 받는다.
+  if (value.details["팔"] !== undefined && value.details["짜임"] === undefined && value.pattern !== "아가일") {
+    context.addIssue({ code: "custom", path: ["details", "팔"], message: "팔 모양은 아가일 무늬와 함께 골라 주세요" });
+  }
+  if (value.details["아가일 색"] !== undefined && value.pattern !== "아가일") {
+    context.addIssue({ code: "custom", path: ["details", "아가일 색"], message: "아가일 색은 아가일 무늬와 함께 골라 주세요" });
+  }
+  if (value.details["프린팅 색"] !== undefined && value.details["프린팅"] === undefined) {
+    context.addIssue({ code: "custom", path: ["details", "프린팅 색"], message: "프린팅 색은 프린팅과 함께 골라 주세요" });
+  }
+  if (value.details["노르딕 색"] !== undefined && !String(value.details["짜임"] ?? "").startsWith("노르딕")) {
+    context.addIssue({ code: "custom", path: ["details", "노르딕 색"], message: "노르딕 색은 노르딕 짜임과 함께 골라 주세요" });
   }
 });
 

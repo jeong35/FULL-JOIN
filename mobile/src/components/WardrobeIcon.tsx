@@ -44,6 +44,9 @@ export function LookIcon({ look, kind, color, fit, size, tint }: LookIconProps) 
       overlay={look.overlay}
       pattern={look.pattern}
       tint={tint}
+      print={look.print ?? null}
+      overlayColor={look.overlayColor ?? null}
+      argyle={look.argyle ?? null}
     />
   );
 }

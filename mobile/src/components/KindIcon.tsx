@@ -11,7 +11,8 @@ import Svg, { Circle, ClipPath, Defs, G, LinearGradient, Path, Stop } from 'reac
 
 import { COLOR_HEX, MULTI_SWATCH, type Color, type Kind, type VisualFit } from '../data/catalog';
 import { KIND_ICONS } from '../data/kindIcons';
-import type { ArtIcon, Overlay } from '../data/wardrobeLook';
+import { toLab } from '../data/photoColor';
+import type { ArtIcon, Argyle, Overlay, Print } from '../data/wardrobeLook';
 import { ClothPattern } from './ClothPattern';
 
 // 테두리 기본 먹색. 옷 색을 조금 섞어서 쓴다.
@@ -48,6 +49,19 @@ const MULTI_TONES = {
 };
 // 이보다 어두운 옷은 안쪽 선을 밝은 같은 색으로, 밝은 옷은 진한 같은 색으로 긋는다.
 const DARK_LUMINANCE = 0.3;
+// 아가일(11/27): 마름모 색을 안 고르면 어두운 옷은 아이보리 쪽, 밝은 옷은 진한 같은 색. 점선 사선은 옷 색 · 마름모 색
+// 둘 다와 가장 다른 색(빨강 · 아이보리 · 먹색 · 겨자). 사선은 가늘게(11/27 은재 님 "빨간 선이 너무 굵어요" → 0.2).
+const ARGYLE_LIGHT = '#EFE9DF';
+const ARGYLE_ACCENTS = ['#B5443F', '#EFE9DF', '#3A3A40', '#D9A93B'];
+const ARGYLE_DASH_WIDTH = 0.2;
+// 하프집업 지퍼 이빨(11/27 "너무 지퍼가 눈에 띄는 것만 아니면"): 은색 대신 안쪽 선 색의 가는 점선.
+const ZIP_WIDTH = 0.5;
+const ARGYLE_LINE_WIDTH = 0.55;
+
+function labGap(a: string, b: string): number {
+  const [p, q] = [toLab(a), toLab(b)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+}
 
 function luminance(hex: string): number {
   const h = hex.replace('#', '');
@@ -104,9 +118,29 @@ type Props = {
   noWeave?: boolean;
   /** 옷 색 대신 칠할 색(#RRGGBB) — 사진이 있는 옷은 사진 색감으로(data/photoColor.ts photoTint). 멀티면 무시. */
   tint?: string | null;
+  /** 옷에 찍힌 프린팅(레터링 · 작은 로고). layers와 같은 좌표. 색을 안 고르면 안쪽 선 색. */
+  print?: Print | null;
+  /** 짜임 결 선 색(노르딕 색). 안 주면 안쪽 선 색. */
+  overlayColor?: Color | null;
+  /** 무늬 아가일(니트·카디건·베스트). layers와 같은 좌표. 멀티 색이면 무시. */
+  argyle?: Argyle | null;
 };
 
-export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place, pattern, overlay, noWeave, tint }: Props) {
+export function KindIcon({
+  kind,
+  color,
+  fit,
+  size = 64,
+  layers: artLayers,
+  place,
+  pattern,
+  overlay,
+  noWeave,
+  tint,
+  print,
+  overlayColor,
+  argyle,
+}: Props) {
   // 한 화면에 그림이 여러 개라 그라데이션·자르기 id가 겹치지 않게 그림마다 따로 만든다.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const icon = artLayers ?? KIND_ICONS[kind];
@@ -129,6 +163,25 @@ export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place
   const fill = isMulti ? `url(#${multiId})` : usePattern ? `url(#${patternId})` : base;
   const tone = tonesFor(base, isMulti);
   const metal = color === undefined || (color != null && SILVER_COLORS.has(color)) ? SILVER : GOLD;
+  // 프린팅 · 노르딕 선 색: 고른 색. 안 골랐거나 멀티·기타거나 옷과 같은 색이면(안 보이니) 안쪽 선 색.
+  const pickStroke = (c: Color | null | undefined) => {
+    const hex = c && c !== '멀티' && c !== '기타' ? COLOR_HEX[c] : null;
+    return hex === null || hex.toLowerCase() === base.toLowerCase() ? tone.detail : hex;
+  };
+  const printStroke = pickStroke(print?.color);
+  const overlayStroke = overlay?.soft ? tone.detail : pickStroke(overlayColor);
+  const shown = argyle != null && !isMulti ? argyle : null;
+  const argyleChosen = shown?.color && shown.color !== '멀티' && shown.color !== '기타' ? COLOR_HEX[shown.color] : null;
+  const argyleFill = shown
+    ? argyleChosen !== null && argyleChosen.toLowerCase() !== base.toLowerCase()
+      ? argyleChosen
+      : tone.dark
+        ? mix(ARGYLE_LIGHT, base, 0.12)
+        : mix(base, INK, 0.55)
+    : base;
+  const argyleLine = shown && !shown.solid
+    ? ARGYLE_ACCENTS.reduce((best, c) => (Math.min(labGap(c, base), labGap(c, argyleFill)) > Math.min(labGap(best, base), labGap(best, argyleFill)) ? c : best))
+    : argyleFill;
   const k = Math.max(1, CRISP_SIZE / size);
 
   // 핏 그림은 층을 다 갖고 있어서 통째로 바꿔 그린다(기본 그림의 층이 섞이지 않게).
@@ -199,6 +252,20 @@ export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place
           />
         ))}
         <G clipPath={`url(#${clipId})`}>
+          {/* 아가일: 마름모를 칠하고 사선(점선) 또는 테두리 · 지그재그(실선)를 긋는다. 그림자 · 목 시보리 · 안쪽 면 아래에 깔린다. */}
+          {shown?.fills.map((d, i) => <Path key={`af${i}`} d={d} fill={argyleFill} />)}
+          {shown?.lines.map((d, i) => (
+            <Path
+              key={`al${i}`}
+              d={d}
+              fill="none"
+              stroke={argyleLine}
+              strokeWidth={shown.solid ? ARGYLE_LINE_WIDTH * k : ARGYLE_DASH_WIDTH}
+              strokeDasharray={shown.solid ? undefined : '0.7 0.7'}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
           {shade.map((d, i) => (
             <Path key={`h${i}`} d={d} fill={`url(#${shadeId})`} />
           ))}
@@ -220,7 +287,7 @@ export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place
               key={`o${i}`}
               d={d}
               fill="none"
-              stroke={tone.detail}
+              stroke={overlayStroke}
               strokeWidth={(overlay?.soft ? 0.6 : DETAIL_WIDTH) * k}
               strokeOpacity={overlay?.soft ? 0.72 : 1}
               strokeLinecap="round"
@@ -228,6 +295,22 @@ export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place
             />
           ))}
         </G>
+        {/* 프린팅(레터링 · 작은 로고): 천 위에 찍힌 거라 목 시보리·안쪽 면 아래에 깔린다. */}
+        {print && print.lines.length > 0 && (
+          <G clipPath={`url(#${clipId})`}>
+            {print.lines.map((d, i) => (
+              <Path
+                key={`pr${i}`}
+                d={d}
+                fill="none"
+                stroke={printStroke}
+                strokeWidth={DETAIL_WIDTH * k}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
+          </G>
+        )}
         {/* 목 시보리처럼 결 없이 옷 색만 칠하는 면(무늬는 안 넣는다) */}
         {(layers.plain ?? []).map((d, i) => (
           <Path key={`pl${i}`} d={d} fill={usePattern ? base : fill} />
@@ -265,6 +348,9 @@ export function KindIcon({ kind, color, fit, size = 64, layers: artLayers, place
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+          ))}
+          {(layers.zips ?? []).map((d, i) => (
+            <Path key={`z${i}`} d={d} fill="none" stroke={tone.detail} strokeWidth={ZIP_WIDTH} strokeDasharray="0.32 0.3" strokeLinecap="round" />
           ))}
         </G>
         {/* 소매 구분선: 팔과 몸판이 갈려 보이게 안쪽 선보다 진하고 굵게 */}
