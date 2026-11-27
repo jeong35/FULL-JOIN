@@ -181,7 +181,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
     if (isFitGroup(group) && next[0]) track('wardrobe_fit_select', { kind, fit: next[0] });
     if (group.role === 'mat') {
       const label = option(group.options.find((o) => option(o).v === value) ?? value).label ?? value;
-      // 신발은 신발용 설명이 따로 있다('신발|면' — 11/27). 없으면 공통 설명.
+      // 신발·가방은 부위용 설명이 따로 있다('신발|면' — 11/27). 없으면 공통 설명.
       const note = art.materialNotes[`${slot}|${value}`] ?? art.materialNotes[value] ?? '';
       setMaterialNote(next.includes(value) ? `${label} — ${note}` : null);
     }
