@@ -303,24 +303,31 @@ const KIND_TEMP: Partial<Record<Kind, readonly [number, number]>> = {
   미니원피스: [19, 45],
   미디원피스: [14, 45],
   롱원피스: [14, 45],
-  재킷: [9, 19],
-  트위드자켓: [8, 17],
-  레더재킷: [5, 16],
-  데님재킷: [11, 20],
-  점퍼: [4, 16],
-  야상: [4, 15],
-  플리스: [-2, 12],
-  트렌치코트: [8, 17],
-  코트: [-6, 11],
-  숏코트: [-3, 12],
-  하프코트: [-5, 11],
-  롱코트: [-10, 8],
-  퍼자켓: [-10, 8],
-  퍼코트: [-20, 5],
-  무스탕: [-15, 6],
-  숏패딩: [-20, 6],
+  // 겉옷은 아침(최저) 기온 기준(11/27, dayTempFor). 흔히 쓰는 기온별 옷차림 표(은재 님이 준 참고 3장)에 맞춘 4단계 —
+  // 9~11° 트렌치·야상·자켓·바람막이 / 5~8° 코트·가죽자켓·플리스(뽀글이)·경량패딩 / 4° 이하 패딩·두꺼운 코트.
+  // 같은 단계 안에서는 길수록 더 추운 날까지. 앞뒤 2°는 tempGap의 여유로 봐준다.
+  // 가벼운 겉옷(아침 11° 이상)
+  데님재킷: [11, 18],
+  // 9~11°
+  재킷: [9, 16],
+  트위드자켓: [9, 15],
+  점퍼: [8, 15],
+  트렌치코트: [8, 14],
+  야상: [8, 14],
+  // 5~8°. 뽀글이는 소재 '플리스'로 고른다(아래 OUTER_FLEECE) — 코트와 같은 날부터, 참고 표대로 14°쯤까지.
+  레더재킷: [5, 10],
+  경량패딩: [3, 10],
+  플리스: [3, 12],
+  숏코트: [2, 9],
+  하프코트: [0, 8],
+  코트: [0, 8],
+  // 4° 이하. 롱코트는 '두꺼운 코트'라 5~8°와 4° 이하 둘 다.
+  롱코트: [-6, 8],
+  퍼자켓: [-10, 5],
+  무스탕: [-15, 5],
+  숏패딩: [-15, 4],
+  퍼코트: [-20, 4],
   롱패딩: [-20, 4],
-  경량패딩: [-1, 10],
   부츠: [-20, 15],
   스타킹: [-20, 18],
   샌들: [23, 45],
@@ -361,6 +368,8 @@ const DEFAULT_SEASONS: Partial<Record<Kind, readonly Season[]>> = {
   스타킹: ['가을', '겨울'], 모자: ['가을', '겨울'], 벨트: ['가을', '겨울'],
 };
 const WARM_MATERIALS: ReadonlySet<string> = new Set(['니트', '울', '캐시미어', '기모', '플리스', '퍼', '코듀로이']);
+// 뽀글이(소재 플리스) 겉옷: 코트와 같은 날(5~8°)부터 참고 표의 14°쯤까지.
+const OUTER_FLEECE: readonly [number, number] = [3, 12];
 
 export type TempItem = Pick<WardrobeItem, 'kind'> & Partial<Pick<WardrobeItem, 'seasons' | 'material' | 'details'>>;
 
@@ -389,8 +398,16 @@ export function tempRangeOf(item: TempItem): readonly [number, number] | undefin
   if (item.kind === '스타킹' && item.details?.두께 === '비침') return [5, 24];
   const range = KIND_TEMP[item.kind];
   if (range === undefined) return undefined;
+  const materials = item.material ?? [];
+  if (OUTER_ONLY.has(item.kind)) {
+    // 뽀글이(플리스) 겉옷은 종류와 상관없이 코트만큼 — 더 따뜻한 종류(무스탕 등)면 그대로.
+    if (materials.includes('플리스')) return [Math.min(range[0], OUTER_FLEECE[0]), Math.min(range[1], OUTER_FLEECE[1])];
+    // 울·기모 같은 소재 겉옷은 추운 쪽만 4° 넓힌다(코트 표는 이미 울 코트 기준이라 크게 넓히지 않음).
+    if (materials.some((material) => WARM_MATERIALS.has(material))) return [Math.max(-20, range[0] - 4), range[1]];
+    return range;
+  }
   // 니트·기모 같은 따뜻한 소재면 더 추운 날까지(8° 아래로), 대신 아주 더운 날은 빼고.
-  if ((item.material ?? []).some((material) => WARM_MATERIALS.has(material))) {
+  if (materials.some((material) => WARM_MATERIALS.has(material))) {
     return [Math.max(-20, range[0] - 8), Math.min(range[1], 24)];
   }
   return range;
