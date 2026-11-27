@@ -41,7 +41,7 @@ workflow는 다음 순서를 지킨다.
 1. SHA 고정과 production main 일치 확인
 2. 서버 전체 check, 승인 골든, 모바일 typecheck/lint
 3. GitHub Environment reviewer 승인과 가드 secret 확인
-4. remote migration 목록과 `db push --dry-run`
+4. remote migration 목록과 `db push --dry-run --include-all` (production 최신 번호보다 오래된 승인 Auth migration도 검토 목록에 포함)
 5. 선택한 경우에만 migration 적용
 6. release SHA/시각 설정 후 Edge Function 배포
 7. `/health` SHA 일치 검증

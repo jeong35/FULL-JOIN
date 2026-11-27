@@ -120,13 +120,13 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           npx supabase migration list --remote
-          npx supabase db push --remote --dry-run
+          npx supabase db push --remote --dry-run --include-all
       - name: Apply approved migrations
         if: inputs.apply_migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: npx supabase db push --remote --yes
+        run: npx supabase db push --remote --yes --include-all
       - name: Deploy Edge Function with release metadata
         if: inputs.deploy_backend
         env:
