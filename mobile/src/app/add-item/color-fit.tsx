@@ -99,7 +99,7 @@ const COLOR_COLUMN_GAP = 10;
 const TILE_GAP = 8;
 const NEUTRAL_HEX = '#D9D3E3';
 const UNKNOWN_FIT = '모르겠어요';
-const MATERIAL_HINT = '누르면 어떤 천인지 알려 줘요 · 여러 개 골라도 돼요';
+const MATERIAL_HINT = '누르면 어떤 소재인지 알려 줘요 · 여러 개 골라도 돼요';
 
 function toggle(group: AddItemGroup, current: readonly string[], value: string): string[] {
   if (group.multi) return current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
@@ -181,7 +181,9 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
     if (isFitGroup(group) && next[0]) track('wardrobe_fit_select', { kind, fit: next[0] });
     if (group.role === 'mat') {
       const label = option(group.options.find((o) => option(o).v === value) ?? value).label ?? value;
-      setMaterialNote(next.includes(value) ? `${label} — ${art.materialNotes[value] ?? ''}` : null);
+      // 신발은 신발용 설명이 따로 있다('신발|면' — 11/27). 없으면 공통 설명.
+      const note = art.materialNotes[`${slot}|${value}`] ?? art.materialNotes[value] ?? '';
+      setMaterialNote(next.includes(value) ? `${label} — ${note}` : null);
     }
   }
 
