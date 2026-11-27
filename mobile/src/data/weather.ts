@@ -435,6 +435,23 @@ export function tempDistance(item: TempItem, day: Pick<DayWeather, 'min' | 'max'
   return t < range[0] ? range[0] - t : t > range[1] ? t - range[1] : 0;
 }
 
+// ── 계절을 고른 옷의 순서(11/27) ──
+// 사계절로 고른 옷도 늘 맞는 옷으로 보이지만, 그날에 딱 맞는 계절로 고른 옷(지금은 가을·겨울)을 먼저 쓴다.
+// 그날의 계절 = 하루 평균 기온이 그 계절 범위(앞뒤 2°)에 드는 계절. 예: 7~16°(평균 12°) → 봄·가을·겨울.
+export function seasonsFor(day: Pick<DayWeather, 'min' | 'max'>, tolerance = 2): Season[] {
+  const t = dayTempFor('상의', day);
+  return (Object.keys(SEASON_TEMP) as Season[]).filter((season) => t >= SEASON_TEMP[season][0] - tolerance && t <= SEASON_TEMP[season][1] + tolerance);
+}
+
+// 사람이 고른 계절 중 그날과 안 맞는 계절 수. 0이면 그날에 딱 맞게 고른 옷, 사계절 옷은 여름(또는 겨울) 몫만큼 뒤로.
+// 계절을 안 고른 옷은 종류 기온표로 이미 그날에 맞춰 골랐으니 0.
+export function seasonMismatch(item: TempItem, day: Pick<DayWeather, 'min' | 'max'>): number {
+  const chosen = chosenSeasons(item);
+  if (chosen.length === 0) return 0;
+  const today = seasonsFor(day);
+  return chosen.filter((season) => !today.includes(season)).length;
+}
+
 // 겉옷이 있어야 하는 날(아침이 쌀쌀함).
 export function needsOuter(day: Pick<DayWeather, 'min'>): boolean {
   return day.min <= 14;

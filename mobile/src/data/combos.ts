@@ -7,7 +7,7 @@
 import { kindLabel, type Color } from './catalog';
 import type { WardrobeItem } from './types';
 import { NO_RECENT_WEAR, wearPenalty, type RecentWear } from './recentWear';
-import { fitsTemp, needsOuter, type DayWeather } from './weather';
+import { fitsTemp, needsOuter, seasonMismatch, type DayWeather } from './weather';
 
 // 어디에나 받쳐 입기 쉬운 색(데님 포함).
 const NEUTRALS: ReadonlySet<Color> = new Set<Color>([
@@ -109,6 +109,11 @@ function addBest(items: WardrobeItem[], candidates: readonly WardrobeItem[]): Wa
   return best;
 }
 
+// 조합 안 옷들의 '그날과 안 맞게 고른 계절' 수 합(weather.ts seasonMismatch). 날씨를 모르면 0.
+function seasonOff(items: readonly WardrobeItem[], day: DayWeather | undefined): number {
+  return day === undefined ? 0 : items.reduce((sum, item) => sum + seasonMismatch(item, day), 0);
+}
+
 type BuildInput = {
   wardrobe: readonly WardrobeItem[];
   day?: DayWeather | undefined;
@@ -157,9 +162,12 @@ export function buildCombos({ wardrobe, day, anchor, max = 6, maxUses = 2, recen
     if (day !== undefined) tags.push('기온 맞춤');
     combos.push({ id: sorted.map((item) => item.id).join('+'), items: sorted, tags, score: result.score });
   }
-  // 최근에 입은 옷이 적은 조합 → 어울림 점수 → id 순서(11/27).
+  // 최근에 입은 옷이 적은 조합 → 그날 계절에 딱 맞게 고른 옷이 많은 조합(사계절 옷은 뒤로) → 어울림 점수 → id 순서(11/27).
   const penalty = new Map(combos.map((combo) => [combo.id, wearPenalty(combo.items, combo.id, recent)]));
-  combos.sort((a, b) => (penalty.get(a.id) ?? 0) - (penalty.get(b.id) ?? 0) || b.score - a.score || a.id.localeCompare(b.id));
+  const offSeason = new Map(combos.map((combo) => [combo.id, seasonOff(combo.items, day)]));
+  combos.sort((a, b) => (penalty.get(a.id) ?? 0) - (penalty.get(b.id) ?? 0)
+    || (offSeason.get(a.id) ?? 0) - (offSeason.get(b.id) ?? 0)
+    || b.score - a.score || a.id.localeCompare(b.id));
 
   // 3) 같은 옷만 계속 나오지 않게(상의·하의·원피스 하나당 최대 maxUses번) 고른다. 겉옷·신발·가방은 세지 않는다.
   const uses = new Map<string, number>();
@@ -229,7 +237,8 @@ export function combosFromSet(selected: readonly WardrobeItem[], day: DayWeather
       combos.push({ id: sorted.map((item) => item.id).join('+'), items: sorted, tags, score: result.score + (tags.includes('기온 맞춤') ? 1 : 0) });
     }
   }
-  return combos.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  const offSeason = new Map(combos.map((combo) => [combo.id, seasonOff(combo.items, day)]));
+  return combos.sort((a, b) => (offSeason.get(a.id) ?? 0) - (offSeason.get(b.id) ?? 0) || b.score - a.score || a.id.localeCompare(b.id));
 }
 
 // 고른 옷으로 조합이 하나도 안 나올 때 무엇이 모자란지.
