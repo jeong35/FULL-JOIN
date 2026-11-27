@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import type { ElementRef } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -16,13 +16,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '@/components/ui';
 import { errorMessage, postChat } from '@/data/api';
 import { actionTarget, chatClock, safeProductUrl, validChatAction } from '@/data/chatActions';
 import { track } from '@/data/events';
 import { markHintDone } from '@/data/hints';
 import { webNotificationSupport } from '@/data/notificationCore';
 import { trackScheduleResult } from '@/data/reminder';
-import { useSession } from '@/data/session';
+import { hasLoggedInBefore, hasSeenIntro, useSession, type Session } from '@/data/session';
 import { loadArchive, useArchiveState } from '@/data/store';
 import type { ArchiveImage, ChatAction, ChatStyleResult, Product } from '@/data/types';
 import { scheduleRecommendationNotification } from '@/data/webNotifications';
@@ -48,9 +49,17 @@ const EXAMPLE_QUESTIONS = [
   { question: '비슷한 상품을 찾아줘.', help: '사진이나 옷 조건으로 검증된 검색 링크를 열어요' },
 ] as const;
 
-export default function ChatScreen() {
-  const archive = useArchiveState();
+export default function ChatRoute() {
   const session = useSession();
+  if (session === null) {
+    return <Redirect href={hasSeenIntro() || hasLoggedInBefore() ? '/onboarding/login' : '/onboarding'} />;
+  }
+  if (!session.onboarded) return <Redirect href="/onboarding/taste" />;
+  return <ChatScreen session={session} />;
+}
+
+function ChatScreen({ session }: { session: Session }) {
+  const archive = useArchiveState();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [input, setInput] = useState('');
@@ -242,6 +251,11 @@ export default function ChatScreen() {
     } else throw new Error('unsupported_action');
   }
 
+  function closeChat() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }
+
   // 폰 위쪽 상태 표시줄(시간·배터리)과 제목이 겹치지 않게 다른 탭처럼 안전 영역 안에 그린다.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -250,11 +264,14 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={76}>
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} accessibilityRole="header">챗봇</Text>
-            <View style={styles.betaBadge}><Text style={styles.betaText}>베타</Text></View>
+          <BackButton onPress={closeChat} size={40} style={styles.closeButton} />
+          <View style={styles.headerCopy}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} accessibilityRole="header">챗봇</Text>
+              <View style={styles.betaBadge}><Text style={styles.betaText}>베타</Text></View>
+            </View>
+            <Text style={styles.subtitle}>원하는 코디와 다음 행동을 빠르게 찾아 드려요</Text>
           </View>
-          <Text style={styles.subtitle}>원하는 코디와 다음 행동을 빠르게 찾아 드려요</Text>
         </View>
 
         {selected !== null ? (
@@ -479,7 +496,9 @@ function ResultCard({ result }: { result: ChatStyleResult }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  header: { paddingTop: 28, paddingBottom: 12, paddingHorizontal: layout.screenPaddingX },
+  header: { paddingTop: 18, paddingBottom: 12, paddingHorizontal: layout.screenPaddingX, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  closeButton: { marginTop: 2 },
+  headerCopy: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontFamily: fonts.extraBold, fontSize: 24, letterSpacing: -0.4, color: colors.text },
   betaBadge: { height: 22, paddingHorizontal: 8, borderRadius: 999, justifyContent: 'center', backgroundColor: colors.photoPlaceholder },

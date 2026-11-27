@@ -382,7 +382,7 @@ function ResultBody({ imageId, result }: { imageId: string; result: HeartResult 
             text="더 궁금한 건 챗봇에게 이 사진으로 물어볼 수 있어요"
             actionLabel="챗봇에 물어보기"
             tail="none"
-            onPress={() => router.navigate({ pathname: '/chat', params: { image: imageId } })}
+            onPress={() => router.push({ pathname: '/chat', params: { image: imageId } })}
             style={styles.hint}
           />
         )}

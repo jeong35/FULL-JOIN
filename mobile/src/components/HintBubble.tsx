@@ -85,9 +85,12 @@ export function HintBubble({ id, text, actionLabel, tail, tailX = 28, onPress, d
   }, [appear, id]);
 
   function press() {
-    track('hint_click', { hint: id });
-    if (doneOnPress && remember) markHintDone(id);
-    onPress?.();
+    // 화면 이동 같은 주 동작을 먼저 실행한다. 힌트 저장·계측 실패가 이동을 막으면 안 된다.
+    try { onPress?.(); } catch { /* the caller owns any visible fallback */ }
+    try { track('hint_click', { hint: id }); } catch { /* analytics is non-blocking */ }
+    if (doneOnPress && remember) {
+      try { markHintDone(id); } catch { /* keep the current visit usable */ }
+    }
   }
 
   function close() {

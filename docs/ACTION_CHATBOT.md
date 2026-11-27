@@ -41,9 +41,9 @@ production API SHA `2d0369bb629a5396c0534aad474d63ac1ea81070`은 nickname+PIN `u
 
 결정적 fixture는 `evals/action_chat_cases.yaml`과 `npm run test:action-chat`에 있다. 승인된 Golden Case와 `tests/`는 수정하지 않았다. 비교 후보가 없을 때는 종류명 뒤에 잘못된 조사를 붙이지 않고 `비교할 미니스커트 후보가 없어요`처럼 표시한다.
 
-## 2026-11-26 배포 상태
+## 2026-11-27 배포 상태
 
 - main `bfba9fca3717575184bf05fa9a8c0cc6d14bebba`, GitHub Actions Verify run `45834567326`의 `check`와 `local-supabase-integration`이 모두 성공했다.
 - 신규 DB migration은 없다. production DB에는 기존 Web Push migration `202611250001`까지만 적용된 상태를 유지한다.
 - 챗봇 알림 클릭 출처를 연결하는 `notifications` Edge Function v2를 production에 배포하고 공개 config 응답을 smoke test했다.
-- `api`와 Expo는 아직 배포하지 않았다. main의 미배포 Auth/RLS·CHAT-02를 그대로 배포하면 기존 nickname+PIN 앱이 Bearer token 없이 401을 받으므로, 기존 인증 계약을 유지하는 API 후보 없이는 모바일을 먼저 배포할 수 없다.
+- Expo는 현재 production 사이트를 기준으로 챗봇 관련 모바일 파일만 선별한 호환 후보를 배포할 수 있다. 모바일 챗봇은 운영 nickname+PIN API 응답과 backward-compatible하게 동작하며, 미배포 Auth/RLS·CHAT-02 서버 파일이나 migration은 Expo 후보에 포함하지 않는다.

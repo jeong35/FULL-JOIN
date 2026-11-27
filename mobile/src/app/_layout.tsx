@@ -147,8 +147,9 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
-        }}
-      />
+        }}>
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
+      </Stack>
       <PurchaseCheck />
     </>
   );
