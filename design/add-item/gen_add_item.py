@@ -89,6 +89,12 @@ for s in SPECS:
 for slot, notes in SLOT_MDESC.items():
     MDESC.update({f'{slot}|{k}': v for k, v in notes.items()})
 
+# 11/27: 계절을 안 고르면 '사계절'이 아니라 옷 종류 기온표로 판단한다(코디 탭 '추울 수도·더울 수도'). 안내를 실제 동작에 맞춘다.
+for s in SPECS:
+    for g in s['groups']:
+        if g['title'] == '계절':
+            g['note'] = '여러 개 골라도 돼요 · 안 고르면 옷 종류에 맞춰 골라요'
+
 V12 = json.load(open(os.path.join(ROOT, 'design/kind-icons/icons_v12.json'), encoding='utf-8'))
 
 # 시안 화면 이름 → 서버 kind 값(친구분 서버 catalog.ts). 나머지는 이름 그대로.

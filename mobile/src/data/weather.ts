@@ -368,6 +368,7 @@ const DEFAULT_SEASONS: Partial<Record<Kind, readonly Season[]>> = {
   스타킹: ['가을', '겨울'], 모자: ['가을', '겨울'], 벨트: ['가을', '겨울'],
 };
 const WARM_MATERIALS: ReadonlySet<string> = new Set(['니트', '울', '캐시미어', '기모', '플리스', '퍼', '코듀로이']);
+const DRESS_OR_SKIRT: ReadonlySet<string> = new Set(['미니원피스', '미디원피스', '롱원피스', '미니스커트', '미디스커트', '롱스커트']);
 // 뽀글이(소재 플리스) 겉옷: 코트와 같은 날(5~8°)부터 참고 표의 14°쯤까지.
 const OUTER_FLEECE: readonly [number, number] = [3, 12];
 
@@ -407,6 +408,10 @@ export function tempRangeOf(item: TempItem): readonly [number, number] | undefin
     return range;
   }
   // 니트·기모 같은 따뜻한 소재면 더 추운 날까지(8° 아래로), 대신 아주 더운 날은 빼고.
+  // 11/27: 니트·울·기모 원피스·스커트(니트 미니원피스 등)는 스타킹과 한겨울에도 입는다 → 추운 쪽은 끝까지.
+  if (materials.some((material) => WARM_MATERIALS.has(material)) && DRESS_OR_SKIRT.has(item.kind)) {
+    return [-20, Math.min(range[1], 24)];
+  }
   if (materials.some((material) => WARM_MATERIALS.has(material))) {
     return [Math.max(-20, range[0] - 8), Math.min(range[1], 24)];
   }
