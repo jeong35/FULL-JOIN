@@ -14,6 +14,7 @@ import { DetailHeader, InfoBar, PrimaryButton, ProgressSteps, SegmentedControl, 
 import {
   COLOR_HEX,
   colorsForKind,
+  DENIM_COLORS,
   isKindOfSlot,
   isSlot,
   kindLabel,
@@ -36,8 +37,13 @@ import {
   option,
   overlayKey,
   PATTERN_SHAPE_GROUP,
+  argyleFor,
   patternFill,
+  pickIcon,
+  shapesFor,
   patternLabel,
+  overlayTint,
+  PRINT_COLOR_GROUP,
   selectionFromItem,
   specFor,
   useWardrobeArt,
@@ -150,6 +156,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
 
   const colorGroup = spec.groups.find((g) => g.role === 'color');
   const color = (sel[colorGroup?.title ?? '색']?.[0] as Color | undefined) ?? null;
+  const denimFirst = (sel['소재'] ?? []).includes('데님');
   const fitGroup = spec.groups.find(isFitGroup);
   const fitValue = fitGroup ? (sel[fitGroup.title]?.[0] ?? null) : null;
   const fit = fitValue === null || fitValue === UNKNOWN_FIT ? null : (fitValue as VisualFit);
@@ -160,7 +167,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
   const lookSel = weaveGroup && !touched.has(weaveGroup.title) ? { ...sel, [weaveGroup.title]: [] } : sel;
   const look = lookFor(art, spec, lookSel, kind, fit);
   const ovKey = overlayKey(spec, sel);
-  const pattern = patternFill(sel);
+  const pattern = patternFill(sel, spec);
 
   const draft: NewWardrobeItem = { slot, kind, color: color ?? '기타', visual_fit: fit, ...wardrobeFields(spec, sel, touched) };
   const blocked = color !== null && needsWardrobeUpdate(draft);
@@ -172,7 +179,8 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
     const updated: Record<string, string[]> = { ...sel, [group.title]: next };
     if (group.title === '무늬') {
       const p = next[0];
-      updated[PATTERN_SHAPE_GROUP] = p && p in PATTERN_SHAPES ? [PATTERN_SHAPES[p as keyof typeof PATTERN_SHAPES][0]] : [];
+      const shapes = shapesFor(spec, p);
+      updated[PATTERN_SHAPE_GROUP] = shapes ? [shapes[0]] : [];
     }
     setSel(updated);
     setTouched(new Set([...touched, group.title]));
@@ -269,10 +277,15 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
         {colorGroup && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              색{colorGroup.note ? <Text style={styles.note}> · {colorGroup.note}</Text> : null}
+              색
+              {denimFirst ? (
+                <Text style={styles.note}> · 데님을 골라서 청 색(연청·중청·진청·흑청)이 앞에 나와요</Text>
+              ) : colorGroup.note ? (
+                <Text style={styles.note}> · {colorGroup.note}</Text>
+              ) : null}
             </Text>
             <ColorGrid
-              colors={colorGroup.options.map((o) => option(o).v as Color)}
+              colors={withDenim(colorGroup.options.map((o) => option(o).v as Color), denimFirst || isDenimColor(color))}
               fallback={colorsForKind(kind)}
               value={color}
               onChange={(c) => choose(colorGroup, c)}
@@ -283,7 +296,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
         {mainGroups.map((g) => (
           <View key={g.title} style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {g.title}
+              {g.label ?? g.title}
               {g.note ? <Text style={styles.note}> · {g.note}</Text> : null}
             </Text>
             <GroupOptions group={g} {...groupProps} />
@@ -301,7 +314,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
                 <Text style={styles.moreTitle}>
                   더 자세히<Text style={styles.note}> · 안 골라도 돼요</Text>
                 </Text>
-                <Text style={styles.moreNames}>{moreGroups.map((g) => g.title).join(' · ')}</Text>
+                <Text style={styles.moreNames}>{moreGroups.map((g) => g.label ?? g.title).join(' · ')}</Text>
               </View>
               <Text style={styles.moreToggle}>{open ? '접기 ▴' : '펼치기 ▾'}</Text>
             </Pressable>
@@ -311,7 +324,7 @@ function AddItemForm({ art, spec, slot, kind, preset, from, editing, actionId, c
                 .map((g) => (
                   <View key={g.title} style={styles.moreGroup}>
                     <Text style={styles.moreGroupTitle}>
-                      {g.title}
+                      {g.label ?? g.title}
                       {g.note ? <Text style={styles.note}> · {g.note}</Text> : null}
                     </Text>
                     <GroupOptions group={g} {...groupProps} />
@@ -359,7 +372,7 @@ type GroupProps = {
 function GroupOptions({ group, art, spec, sel, kind, color, ovKey, pattern, onChoose }: GroupProps) {
   const { width } = useWindowDimensions();
   const chosen = sel[group.title] ?? [];
-  const options = group.options.map(option);
+  const options = group.options.map(option).filter((o) => !o.hide);
 
   if (group.ui === 'seg') {
     return (
@@ -372,6 +385,24 @@ function GroupOptions({ group, art, spec, sel, kind, color, ovKey, pattern, onCh
     );
   }
 
+  // 색 칸(색 · 프린팅 색 같은 고르는 색): 옷 색과 같은 색 칩.
+  if (group.ui === 'swg') {
+    return (
+      <ColorGrid
+        colors={options.map((o) => o.v as Color)}
+        fallback={[]}
+        value={(chosen[0] as Color | undefined) ?? null}
+        onChange={(c) => onChoose(group, c)}
+        inset={group.more ? 26 : 0}
+      />
+    );
+  }
+
+  const tintGroup = spec.groups.find((g) => g.tint);
+  const tintSel = tintGroup ? ((sel[tintGroup.title]?.[0] as Color | undefined) ?? null) : null;
+  // 아가일: 다른 칸 그림은 지금 고른 아가일을, 아가일 모양 칸은 보기마다 제 모양을 지금 고른 옷 그림 위에.
+  const argyleNow = argyleFor(art, spec, sel, null);
+
   if (group.ui === 'grid') {
     const columns = options.length === 5 ? 5 : 4;
     // '더 자세히' 카드 안은 카드 테두리(양쪽 1)와 안쪽 여백(양쪽 12)만큼 좁다.
@@ -380,9 +411,15 @@ function GroupOptions({ group, art, spec, sel, kind, color, ovKey, pattern, onCh
     return (
       <View style={styles.tileGrid}>
         {options.map((o) => {
-          const layers = o.icon ? art.icons[o.icon] : undefined;
+          const layers = o.ag ? art.icons[pickIcon(spec, sel)] : o.icon ? art.icons[o.icon] : undefined;
+          const argyle = o.ag ? argyleFor(art, spec, { ...sel, [PATTERN_SHAPE_GROUP]: [o.v] }, null) : argyleNow;
           // 그림 칸은 지금 고른 색 · 무늬로 칠한다. 짜임 칸은 보기마다 제 결을, 나머지 칸은 지금 고른 결을 덮는다.
           const ov = o.ov ? art.weaves[o.ov] : group.nooverlay || !ovKey ? null : art.weaves[ovKey];
+          // 프린팅 칸은 보기마다 제 프린팅을 지금 고른 프린팅 색으로
+          const pr = o.pr ? art.weaves[o.pr] : undefined;
+          const prColor = (sel[PRINT_COLOR_GROUP]?.[0] as Color | undefined) ?? null;
+          // 짜임 칸의 노르딕 보기는 고른 노르딕 색으로, 다른 칸 그림은 지금 고른 노르딕이면 그 색으로
+          const ovTint = !tintGroup ? null : o.ov ? (tintGroup.cond?.in?.includes(o.v) ? tintSel : null) : ov ? overlayTint(spec, sel) : null;
           return (
             <Tile
               key={o.v}
@@ -400,6 +437,9 @@ function GroupOptions({ group, art, spec, sel, kind, color, ovKey, pattern, onCh
                   place={spec.place}
                   overlay={ov ?? null}
                   pattern={pattern}
+                  print={pr ? { lines: pr.lines, color: prColor } : null}
+                  overlayColor={ovTint}
+                  argyle={argyle}
                 />
               ) : null}
             </Tile>
@@ -509,14 +549,17 @@ function ColorGrid({
   fallback,
   value,
   onChange,
+  inset = 0,
 }: {
   colors: readonly Color[];
   fallback: readonly Color[];
   value: Color | null;
   onChange: (color: Color) => void;
+  /** '더 자세히' 카드 안처럼 좁은 곳이면 줄어든 폭 */
+  inset?: number;
 }) {
   const { width } = useWindowDimensions();
-  const chipWidth = (width - layout.screenPaddingX * 2 - COLOR_COLUMN_GAP * (COLOR_COLUMNS - 1)) / COLOR_COLUMNS;
+  const chipWidth = (width - layout.screenPaddingX * 2 - inset - COLOR_COLUMN_GAP * (COLOR_COLUMNS - 1)) / COLOR_COLUMNS;
   return (
     <View style={styles.colorGrid}>
       {(list.length ? list : fallback).map((c) => (
@@ -813,3 +856,14 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
   },
 });
+
+// 소재에서 데님을 고르면(데님 스커트·데님 셔츠 등) 색 칸 앞에 청 색을 놓는다(11/27 은재 님).
+// 데님 종류(데님팬츠·데님재킷)는 원래 앞에 있다. 청 색을 고른 채 데님을 빼도 고른 색이 보이게 남긴다.
+function isDenimColor(c: Color | null): boolean {
+  return c !== null && (DENIM_COLORS as readonly Color[]).includes(c);
+}
+
+function withDenim(list: readonly Color[], denim: boolean): readonly Color[] {
+  if (!denim || list.some((c) => isDenimColor(c))) return list;
+  return [...DENIM_COLORS, ...list];
+}

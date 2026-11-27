@@ -168,6 +168,9 @@ export const PATTERN_SHAPES = {
   스트라이프: ['단가라', '굵은줄', '멀티줄', '세로줄', '핀스트라이프'],
 } as const;
 export type PatternShape = (typeof PATTERN_SHAPES)[keyof typeof PATTERN_SHAPES][number];
+// 아가일 모양(11/27): 니트·카디건·베스트만 고른다(세로 띠는 카디건만). 다른 종류의 아가일은 모양 없이 무늬 칸으로 칠한다.
+export const ARGYLE_SHAPES = ['정석', '큰 아가일', '가슴 띠', '세로 띠'] as const;
+export type ArgyleShape = (typeof ARGYLE_SHAPES)[number];
 
 export const SEASONS = ['봄', '여름', '가을', '겨울'] as const;
 
@@ -187,7 +190,14 @@ export type WardrobeDetails = Partial<{
   모양: string;
   길이: string;
   두께: string;
-  '무늬 모양': PatternShape;
+  '무늬 모양': PatternShape | ArgyleShape;
+  /** 아가일 마름모 색(11/27) */
+  '아가일 색': Color;
+  /** 레터링 · 작은 로고(11/23) */
+  프린팅: string;
+  '프린팅 색': Color;
+  /** 노르딕 짜임 무늬 색(11/23) */
+  '노르딕 색': Color;
 }>;
 
 // 피드 사진 스타일 11개(스키마 style 값).
